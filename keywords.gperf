@@ -1,0 +1,23 @@
+%{
+#include "common.h"
+%}
+%compare-strncmp
+%language=C++
+%struct-type
+struct tok { const char* name; TokenType type; };
+%%
+u8,     KW_U8
+u16,    KW_U16 
+u32,    KW_U32 
+u64,    KW_U64
+i8,     KW_I8
+i16,    KW_I16 
+i32,    KW_I32 
+i64,    KW_I64
+bool,   KW_BOOL
+f32,    KW_F32
+f64,    KW_F64
+fn,     KW_FN
+struct, KW_STRUCT
+true,   KW_TRUE
+false,  KW_FALSE
