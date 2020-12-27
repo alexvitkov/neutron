@@ -1,5 +1,8 @@
 
+let x = 3;
+
 fn foo(x: i32, y: i32) {
+    let x = 3;
 }
 
 fn bar(x: u64, y: u64) {

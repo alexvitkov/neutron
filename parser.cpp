@@ -79,7 +79,7 @@ CharTraits ctt[128] {
 /* 58  - :   */ CT_SINGLECHAR_OP,
 /* 59  - ;   */ CT_SINGLECHAR_OP,
 /* 60  - <   */ CT_ERROR,
-/* 61  - =   */ CT_ERROR,
+/* 61  - =   */ CT_SINGLECHAR_OP,
 /* 62  - >   */ CT_ERROR,
 /* 63  - ?   */ CT_ERROR,
 /* 64  - @   */ CT_ERROR,
@@ -230,7 +230,7 @@ bool tokenize(Context& global, SourceFile &s) {
 }
 
 struct TokenReader;
-void unexpected_token(TokenReader& r, Token tok);
+void unexpected_token(TokenReader& r, Token tok, TokenType expected);
 
 struct TokenReader {
 	int pos = 0;
@@ -250,9 +250,18 @@ struct TokenReader {
     Token expect(TokenType tt) {
 		Token t = pop();
 		if (t.type != tt) {
-			unexpected_token(*this, t);
+			unexpected_token(*this, t, tt);
 			return {};
 		}
+        return t;
+    }
+    Token pop_until(TokenType tt) {
+        Token t;
+        do {
+            t = pop();
+        } while (t.type && t.type != tt);
+        if (!t.type)
+            unexpected_token(*this, t, TOK(';')); // unexpected eof
         return t;
     }
 };
@@ -263,14 +272,25 @@ void print_tokens(const SourceFile& sf) {
 	}
 }
 
-void unexpected_token(TokenReader& r, Token tok) {
+void unexpected_token(TokenReader& r, Token tok, TokenType expected) {
     // raise(SIGINT);
 	char* err_msg = (char*)malloc(256);
+    char* w = err_msg;
+
+    w += sprintf(w, "unexpected ");
+
     if (tok.type)
-	    sprintf(err_msg, "unexpected token: %.*s", (int)tok.length, r.sf.buffer + tok.start);
+	    w += sprintf(w, "'%.*s'", (int)tok.length, r.sf.buffer + tok.start);
     else
-	    sprintf(err_msg, "unexpected eof");
-	r.ctx.global->errors.push_back({Error::TOKENIZER, Error::ERROR, err_msg});
+	    w += sprintf(err_msg, "eof");
+
+    if (expected) {
+        if (expected < 128)
+            w += sprintf(w, " while looking for '%c'", (char)expected);
+        else
+            w += sprintf(w, " while looking for TOK(%d)", (int)expected);
+    }
+    r.ctx.global->errors.push_back({Error::TOKENIZER, Error::ERROR, err_msg});
 }
 
 void print_token(TokenReader& r, Token t) {
@@ -311,29 +331,59 @@ bool skim(Context& ctx, TokenReader& r) {
                 decl->nodetype = AST_FN;
                 decl->name = malloc_token_name(r, name);
 
-                ctx.define(decl->name, (ASTNode*)decl);
+                if (!ctx.define(decl->name, (ASTNode*)decl))
+                    return false;
+                break;
+            }
+
+            case KW_LET: {
+                Token name = r.expect(TOK_ID);
+                if (!name.type)
+                    return false;
+                Token semicolon = r.pop_until(TOK(';'));
+                if (!semicolon.type)
+                    return false;
+
+                ASTVar* decl = (ASTVar*)malloc(sizeof(ASTVar));
+                decl->nodetype = AST_VAR;
+                decl->type = nullptr;
+                decl->value = nullptr;
+                decl->name = malloc_token_name(r, name);
+                if (!ctx.define(decl->name, (ASTNode*)decl))
+                    return false;
+
                 break;
             }
 
             case TOK('}'): {
                 if (ctx.is_global()) {
-                    unexpected_token(r, next);
+                    unexpected_token(r, next, TOK_NONE);
                     return false;
                 } else
                     return true;
             }
+
             case TOK_NONE: {
                 if (ctx.is_global())
                     return true;
                 else {
-                    unexpected_token(r, next);
+                    unexpected_token(r, next, TOK('}'));
                     return false;
                 }
             }
+
             default: {
-                unexpected_token(r, next);
-                return false;
+                if (ctx.is_global()) {
+                    unexpected_token(r, next, TOK_NONE);
+                    return false;
+                }
+                else {
+                    Token semicolon = r.pop_until(TOK(';'));
+                    if (!semicolon.type)
+                        return false;
+                }
             }
+
         }
     }
 
@@ -356,13 +406,13 @@ ASTType* parse_type(Context& ctx, TokenReader& r) {
         case KW_F32: return &t_f32;
         case KW_F64: return &t_f64;
         default:
-            unexpected_token(r, t);
+            unexpected_token(r, t, TOK_NONE);
             return nullptr;
     }
 }
 
 bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl) {
-    new (TypeList) (*tl);
+    new (tl) TypeList ();
 
     Token t = r.peek();
     if (t.type == delim) {
@@ -421,6 +471,8 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         return nullptr;
     }
 
+    fn->ctx = new Context();
+
     if (!r.expect(TOK('{')).type)
         return nullptr;
     if (!r.expect(TOK('}')).type)
@@ -429,44 +481,56 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     return fn;
 }
 
-// we're assuming the file has already been skimmed successfully
-// which means all the definitions in 'ctx' are known
-bool parse(Context& ctx, TokenReader& r) {
-    Token next;
-    while ((next = r.peek()).type) {
-        switch (next.type) {
-            case KW_FN: {
-                ASTFn* fn = parse_fn(ctx, r, true);
-                if (!fn)
-                    return false;
-                std::cout << fn << "\n";
-                break;
-            }
-            case TOK('}'): {
-                if (ctx.is_global()) {
-                    unexpected_token(r, next);
-                    return false;
-                } else {
-                    r.pop();
-                    return true;
-                }
-            }
-            case TOK_NONE: {
-                if (ctx.is_global()) {
-                    r.pop();
-                    return true;
-                } else {
-                    unexpected_token(r, next);
-                    return false;
-                }
-            }
-            default: {
-                unexpected_token(r, next);
+ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
+    r.pop_until(delim);
+    return (ASTNode*)&t_u32;
+}
+
+bool parse_let(Context& ctx, TokenReader& r) {
+    if (!r.expect(KW_LET).type)
+        return false;
+
+    Token name = r.expect(TOK_ID);
+    char* name_ = malloc_token_name(r, name);
+    ASTVar* var = (ASTVar*)ctx.resolve(name_);
+    free(name_);
+
+    if (r.peek().type == TOK(':')) {
+        r.pop();
+        var->type = parse_type(ctx, r);
+        if (!var->type)
+            return false;
+    }
+
+    if (r.peek().type == TOK('='))
+        return (var->value = parse_expr(ctx, r, TOK(';')));
+    else 
+        return r.expect(TOK(';')).type;
+}
+
+bool parse_decl_statement(Context& ctx, TokenReader& r) {
+    switch (r.peek().type) {
+        case KW_FN: {
+            ASTFn* fn = parse_fn(ctx, r, true);
+            if (!fn)
                 return false;
-            }
+            std::cout << fn << "\n";
+            break;
         }
+        case KW_LET: {
+            if (!parse_let(ctx, r))
+                return false;
+            break;
+        }
+        default:
+            return false;
     }
     return true;
+}
+
+bool parse_top_level(Context& ctx, TokenReader r) {
+    while (parse_decl_statement(ctx, r));
+    return r.peek().type == TOK_NONE;
 }
 
 bool parse_all_files(Context& global) {
@@ -479,7 +543,7 @@ bool parse_all_files(Context& global) {
     }
     for (int i = 0; i < sources.size(); i++) {
         TokenReader r { .sf = sources[i], .ctx = global };
-        if (!parse(global, r))
+        if (!parse_top_level(global, r))
             return false;
     }
     return true;

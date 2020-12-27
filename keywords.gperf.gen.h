@@ -35,12 +35,12 @@
 #line 7 "keywords.gperf"
 struct tok { const char* name; TokenType type; };
 
-#define TOTAL_KEYWORDS 15
+#define TOTAL_KEYWORDS 16
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 6
-#define MIN_HASH_VALUE 3
-#define MAX_HASH_VALUE 26
-/* maximum key range = 24, duplicates = 0 */
+#define MIN_HASH_VALUE 2
+#define MAX_HASH_VALUE 33
+/* maximum key range = 32, duplicates = 0 */
 
 class Perfect_Hash
 {
@@ -55,32 +55,32 @@ Perfect_Hash::hash (const char *str, size_t len)
 {
   static unsigned char asso_values[] =
     {
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 13,
-      27, 10, 27, 27,  0, 27,  4, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27,  0,  0, 27,
-      27, 27,  4, 27, 27,  5, 27, 27, 27, 27,
-       4,  0, 27, 27,  0, 10, 10,  0, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
-      27, 27, 27, 27, 27, 27
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34,  3,
+      34, 10, 34, 34,  0, 34,  0, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34,  0,  0, 34,
+      34, 15, 20, 34, 34,  5, 34, 34, 10, 34,
+       0,  0, 34, 34,  0,  5,  5,  0, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+      34, 34, 34, 34, 34, 34
     };
   return len + asso_values[static_cast<unsigned char>(str[1])] + asso_values[static_cast<unsigned char>(str[0])];
 }
@@ -90,42 +90,48 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
 {
   static struct tok wordlist[] =
     {
-      {""}, {""}, {""},
+      {""}, {""},
+#line 9 "keywords.gperf"
+      {"u8",     KW_U8},
 #line 12 "keywords.gperf"
       {"u64",    KW_U64},
 #line 17 "keywords.gperf"
       {"bool",   KW_BOOL},
       {""},
-#line 9 "keywords.gperf"
-      {"u8",     KW_U8},
-#line 19 "keywords.gperf"
-      {"f64",    KW_F64},
+#line 10 "keywords.gperf"
+      {"u16",    KW_U16 },
+#line 13 "keywords.gperf"
+      {"i8",     KW_I8},
 #line 16 "keywords.gperf"
       {"i64",    KW_I64},
 #line 23 "keywords.gperf"
-      {"false",  KW_FALSE},
-#line 20 "keywords.gperf"
-      {"fn",     KW_FN},
-#line 13 "keywords.gperf"
-      {"i8",     KW_I8},
+      {"true",   KW_TRUE},
+      {""},
+#line 14 "keywords.gperf"
+      {"i16",    KW_I16 },
       {""},
 #line 11 "keywords.gperf"
       {"u32",    KW_U32 },
-#line 22 "keywords.gperf"
-      {"true",   KW_TRUE},
+      {""}, {""},
+#line 21 "keywords.gperf"
+      {"struct", KW_STRUCT},
       {""},
-#line 10 "keywords.gperf"
-      {"u16",    KW_U16 },
-#line 18 "keywords.gperf"
-      {"f32",    KW_F32},
 #line 15 "keywords.gperf"
       {"i32",    KW_I32 },
+      {""}, {""}, {""},
+#line 20 "keywords.gperf"
+      {"fn",     KW_FN},
+#line 19 "keywords.gperf"
+      {"f64",    KW_F64},
+      {""},
+#line 24 "keywords.gperf"
+      {"false",  KW_FALSE},
       {""}, {""},
-#line 14 "keywords.gperf"
-      {"i16",    KW_I16 },
+#line 22 "keywords.gperf"
+      {"let",    KW_LET},
       {""}, {""}, {""}, {""},
-#line 21 "keywords.gperf"
-      {"struct", KW_STRUCT}
+#line 18 "keywords.gperf"
+      {"f32",    KW_F32}
     };
 
   if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)
