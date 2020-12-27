@@ -360,13 +360,15 @@ bool skim(Context& ctx, TokenReader& r) {
                     unexpected_token(r, next, TOK_NONE);
                     return false;
                 } else
+                    r.pos = start_pos;
                     return true;
             }
 
             case TOK_NONE: {
-                if (ctx.is_global())
+                if (ctx.is_global()) {
+                    r.pos = start_pos;
                     return true;
-                else {
+                } else {
                     unexpected_token(r, next, TOK('}'));
                     return false;
                 }
@@ -386,9 +388,6 @@ bool skim(Context& ctx, TokenReader& r) {
 
         }
     }
-
-    r.pos = start_pos;
-    return true;
 }
 
 ASTType* parse_type(Context& ctx, TokenReader& r) {
@@ -445,6 +444,42 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
     return true;
 }
 
+bool parse_decl_statement(Context& ctx, TokenReader& r);
+
+ASTBlock* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
+
+    if (!r.expect(TOK('{')).type)
+        return nullptr;
+
+    if (!ctx) {
+        ctx = new Context();
+        ctx->parent = &parent;
+        ctx->global = parent.global;
+    }
+    
+    if (!skim(*ctx, r))
+        return nullptr;
+
+    ASTBlock* block = new ASTBlock();
+    block->nodetype = AST_BLOCK;
+    block->ctx = ctx;
+
+    while (true) {
+        if (parse_decl_statement(*ctx, r))
+            continue;
+
+        if (r.peek().type == TOK('}')) {
+            r.pop();
+            break;
+        }
+        else {
+            r.expect(TOK('}'));
+            return nullptr;
+        }
+    }
+    return block;
+}
+
 ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     Token name;
     if (!r.expect(KW_FN).type)
@@ -471,11 +506,12 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         return nullptr;
     }
 
-    fn->ctx = new Context();
+    Context* fn_ctx = new Context();
+    fn_ctx->parent = &ctx;
+    fn_ctx->global = ctx.global;
 
-    if (!r.expect(TOK('{')).type)
-        return nullptr;
-    if (!r.expect(TOK('}')).type)
+    fn->block = parse_block(ctx, r, fn_ctx);
+    if (!fn->block)
         return nullptr;
 
     return fn;

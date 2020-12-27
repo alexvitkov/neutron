@@ -8,7 +8,8 @@ enum ASTNodeType {
 	AST_NONE = 0,
 	AST_TYPE,
     AST_FN,
-    AST_VAR
+    AST_VAR,
+    AST_BLOCK,
 };
 
 struct ASTNode {
@@ -27,6 +28,14 @@ struct ASTVar {
     ASTNode* value;
 };
 
+struct Context;
+
+struct ASTBlock {
+	ASTNodeType nodetype;
+    Context* ctx;
+    std::vector<ASTNode*> statements;
+};
+
 struct TypeList {
     struct Entry {
         const char* name;
@@ -41,7 +50,7 @@ struct ASTFn {
 	ASTNodeType nodetype;
     char* name;
     TypeList args;
-    Context* ctx;
+    ASTBlock* block;
 };
 
 std::ostream& operator<<(std::ostream& o, ASTNode* node);

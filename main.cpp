@@ -61,7 +61,7 @@ int main(int argc, const char** argv) {
 	}
 
 	if (!parse_all_files(global))
-        printf("parser failed:\n");
+        printf("parser failed\n");
 
 	for (auto& err : global.errors) {
 		err.print();

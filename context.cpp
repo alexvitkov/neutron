@@ -22,7 +22,7 @@ bool Context::define(const char* name, ASTNode* value) {
 
     auto it = defines.find(str);
     if (it != defines.end()) {
-        errors.push_back({ Error::PARSER, Error::ERROR, "redefinition" });
+        global->errors.push_back({ Error::PARSER, Error::ERROR, "redefinition" });
         return false;
     }
 
