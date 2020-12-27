@@ -1,4 +1,6 @@
 
-fn add(int a, int b) {
-	return a + b;
+fn foo(x: i32, y: i32) {
+}
+
+fn bar(x: u64, y: u64) {
 }

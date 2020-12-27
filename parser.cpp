@@ -1,7 +1,12 @@
 #include "parser.h"
 #include "sourcefile.h"
 
+#include <signal.h>
+
 #include "keywords.gperf.gen.h"
+
+
+#define TOK(c) ((TokenType)c)
 
 enum CharTraits : u8 {
 	CT_ERROR               = 0x00,
@@ -71,7 +76,7 @@ CharTraits ctt[128] {
 /* 55  - 7   */ CT_DIGIT,
 /* 56  - 8   */ CT_DIGIT,
 /* 57  - 9   */ CT_DIGIT,
-/* 58  - :   */ CT_ERROR,
+/* 58  - :   */ CT_SINGLECHAR_OP,
 /* 59  - ;   */ CT_SINGLECHAR_OP,
 /* 60  - <   */ CT_ERROR,
 /* 61  - =   */ CT_ERROR,
@@ -143,17 +148,25 @@ CharTraits ctt[128] {
 /* 127 -     */ CT_ERROR,
 };
 
-void tokenize(SourceFile &s) {
+bool tokenize(Context& global, SourceFile &s) {
 	u64 word_start;
 	enum { NONE, WORD, NUMBER } state = NONE;
+
+	struct BracketToken {
+		char tok;
+		u64 tokid;
+	};
+	std::vector<BracketToken> bracket_stack;
 
 	for (u64 i = 0; i < s.length; i++) {
 		char c = s.buffer[i];
 		CharTraits ct = ctt[c];
 
 		if (!ct) {
-			printf("unrecognized character %d: '%c'\n", c, c);
-			exit(1);
+			char* err_msg = (char*)malloc(256);
+			sprintf(err_msg, "unrecognized character 0x%x, or '%c'", c, c);
+			global.errors.push_back({Error::TOKENIZER, Error::ERROR, err_msg});
+			return false;
 		}
 
 		if (state) {
@@ -162,7 +175,7 @@ void tokenize(SourceFile &s) {
 
 				s.tokens.push_back({
 					.type = kw ? kw->type : (state == WORD ? TOK_ID : TOK_NUM),
-					.length = i - word_start,
+					.length = (u32)(i - word_start),
 					.start = word_start
 				});
 				state = NONE;
@@ -176,18 +189,53 @@ void tokenize(SourceFile &s) {
 		}
 
 		if (ct & CT_SINGLECHAR_OP) {
+			u64 match = 0;
+			switch (c) {
+				case '(':
+				case '[':
+				case '{':
+					bracket_stack.push_back({ c, s.tokens.size()});
+					break;
+				case ')':
+				case ']':
+				case '}': {
+					if (bracket_stack.size() == 0) {
+						global.errors.push_back({Error::TOKENIZER, Error::ERROR, "unbalanced brackets"});
+						return false;
+					}
+
+					BracketToken bt = bracket_stack.back();
+					bracket_stack.pop_back();
+					if ((c == ')' && bt.tok != '(') || (c == ']' && bt.tok != '[') || (c == '}' && bt.tok != '{')) {
+						global.errors.push_back({Error::TOKENIZER, Error::ERROR, "unbalanced brackets"});
+						return false;
+					}
+                    match = bt.tokid;
+                    s.tokens[match].match = s.tokens.size();
+				}
+			}
+
 			s.tokens.push_back({
-				.type = (TokenType)c,
+				.type = TOK(c),
+				.match = (u32)match,
 				.length = 1,
 				.start = i
 			});
 		}
 	}
+
+    if (bracket_stack.size() != 0)
+		global.errors.push_back({Error::TOKENIZER, Error::ERROR, "unbalanced brackets"});
+	return true;
 }
+
+struct TokenReader;
+void unexpected_token(TokenReader& r, Token tok);
 
 struct TokenReader {
 	int pos = 0;
 	const SourceFile& sf;
+	Context& ctx;
 
 	Token peek() {
 		if (pos >= sf.tokens.size())
@@ -199,6 +247,14 @@ struct TokenReader {
 		pos++;
 		return t;
 	}
+    Token expect(TokenType tt) {
+		Token t = pop();
+		if (t.type != tt) {
+			unexpected_token(*this, t);
+			return {};
+		}
+        return t;
+    }
 };
 
 void print_tokens(const SourceFile& sf) {
@@ -207,21 +263,224 @@ void print_tokens(const SourceFile& sf) {
 	}
 }
 
-void parse(int sf, Context* c) {
-	SourceFile& s = sources[sf];
-	tokenize(s);
-
-	//TokenReader r = { .sf = s };
-	print_tokens(s);
-
+void unexpected_token(TokenReader& r, Token tok) {
+    // raise(SIGINT);
+	char* err_msg = (char*)malloc(256);
+    if (tok.type)
+	    sprintf(err_msg, "unexpected token: %.*s", (int)tok.length, r.sf.buffer + tok.start);
+    else
+	    sprintf(err_msg, "unexpected eof");
+	r.ctx.global->errors.push_back({Error::TOKENIZER, Error::ERROR, err_msg});
 }
 
-/*
-void parse_top_level_decl(TokenReader& r) {
-	Token t = r.pop();
-	switch (t.type) {
-		case TOK_NONE:
-			return;
-	}
+void print_token(TokenReader& r, Token t) {
+    if (!t.type)
+        printf("[EOF]");
+    else
+		printf("[%d-%.*s]", t.type, (int)t.length, r.sf.buffer + t.start);
 }
-*/
+
+char* malloc_token_name(TokenReader& r, Token tok) {
+    char* buf = (char*)malloc(tok.length + 1);
+    memcpy(buf, r.sf.buffer + tok.start, tok.length);
+    buf[tok.length] = 0;
+    return buf;
+}
+
+bool skim(Context& ctx, TokenReader& r) {
+	int start_pos = r.pos;
+
+    while (true) {
+        Token next = r.pop();
+        switch (next.type) {
+
+            case KW_FN: {
+                Token name = r.expect(TOK_ID);
+                if (!name.type)
+                    return false;
+                Token openBracket = r.expect(TOK('('));
+                if (!openBracket.type)
+                    return false;
+                r.pos = openBracket.match + 1;
+                Token openCurly = r.expect(TOK('{'));
+                if (!openCurly.type)
+                    return false;
+                r.pos = openCurly.match + 1;
+
+                ASTFn* decl = (ASTFn*)malloc(sizeof(ASTFn));
+                decl->nodetype = AST_FN;
+                decl->name = malloc_token_name(r, name);
+
+                ctx.define(decl->name, (ASTNode*)decl);
+                break;
+            }
+
+            case TOK('}'): {
+                if (ctx.is_global()) {
+                    unexpected_token(r, next);
+                    return false;
+                } else
+                    return true;
+            }
+            case TOK_NONE: {
+                if (ctx.is_global())
+                    return true;
+                else {
+                    unexpected_token(r, next);
+                    return false;
+                }
+            }
+            default: {
+                unexpected_token(r, next);
+                return false;
+            }
+        }
+    }
+
+    r.pos = start_pos;
+    return true;
+}
+
+ASTType* parse_type(Context& ctx, TokenReader& r) {
+    Token t = r.pop();
+
+    switch (t.type) {
+        case KW_U8:  return &t_u8;
+        case KW_U16: return &t_u16;
+        case KW_U32: return &t_u32;
+        case KW_U64: return &t_u64;
+        case KW_I8:  return &t_i8;
+        case KW_I16: return &t_i16;
+        case KW_I32: return &t_i32;
+        case KW_I64: return &t_i64;
+        case KW_F32: return &t_f32;
+        case KW_F64: return &t_f64;
+        default:
+            unexpected_token(r, t);
+            return nullptr;
+    }
+}
+
+bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl) {
+    new (TypeList) (*tl);
+
+    Token t = r.peek();
+    if (t.type == delim) {
+        r.pop();
+        return true;
+    }
+
+    while (true) {
+        Token name = r.expect(TOK_ID);
+        if (!t.type)
+            return false;
+        if (!r.expect(TOK(':')).type)
+            return false;
+
+        ASTType* type = parse_type(ctx, r);
+        if (!type)
+            return false;
+
+        tl->entries.push_back(TypeList::Entry { .name = malloc_token_name(r, name), .value = type });
+
+        t = r.peek();
+        if (t.type == delim) {
+            r.pop();
+            return true;
+        } else {
+            if (!r.expect(TOK(',')).type)
+                return false;
+        }
+    }
+    return true;
+}
+
+ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
+    Token name;
+    if (!r.expect(KW_FN).type)
+        return nullptr;
+
+    ASTFn* fn;
+    if (decl) {
+        // we've already skimmed the scope, we know there's an identifier here
+        name = r.expect(TOK_ID);
+        char* name_ = malloc_token_name(r, name);
+        fn = (ASTFn*)ctx.resolve(name_);
+        free(name_);
+    }
+    else {
+        ASTFn* decl = (ASTFn*)malloc(sizeof(ASTFn));
+        decl->nodetype = AST_FN;
+        decl->name = nullptr;
+    }
+
+    if (!r.expect(TOK('(')).type)
+        return nullptr;
+
+    if (!parse_type_list(ctx, r, TOK(')'), &fn->args)) {
+        return nullptr;
+    }
+
+    if (!r.expect(TOK('{')).type)
+        return nullptr;
+    if (!r.expect(TOK('}')).type)
+        return nullptr;
+
+    return fn;
+}
+
+// we're assuming the file has already been skimmed successfully
+// which means all the definitions in 'ctx' are known
+bool parse(Context& ctx, TokenReader& r) {
+    Token next;
+    while ((next = r.peek()).type) {
+        switch (next.type) {
+            case KW_FN: {
+                ASTFn* fn = parse_fn(ctx, r, true);
+                if (!fn)
+                    return false;
+                std::cout << fn << "\n";
+                break;
+            }
+            case TOK('}'): {
+                if (ctx.is_global()) {
+                    unexpected_token(r, next);
+                    return false;
+                } else {
+                    r.pop();
+                    return true;
+                }
+            }
+            case TOK_NONE: {
+                if (ctx.is_global()) {
+                    r.pop();
+                    return true;
+                } else {
+                    unexpected_token(r, next);
+                    return false;
+                }
+            }
+            default: {
+                unexpected_token(r, next);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool parse_all_files(Context& global) {
+    for (int i = 0; i < sources.size(); i++) {
+        if (!tokenize(global, sources[i]))
+            return false;
+        TokenReader r { .sf = sources[i], .ctx = global };
+        if (!skim(global, r))
+            return false;
+    }
+    for (int i = 0; i < sources.size(); i++) {
+        TokenReader r { .sf = sources[i], .ctx = global };
+        if (!parse(global, r))
+            return false;
+    }
+    return true;
+}

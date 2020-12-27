@@ -32,10 +32,11 @@ void die() {
 	exit(1);
 }
 
-Context global;
+Context global { .global = &global };
 
 int main(int argc, const char** argv) {
 	init_typer();
+
 
 	bool dd = false;
 	for (int i = 1; i < argc; i++) {
@@ -59,8 +60,11 @@ int main(int argc, const char** argv) {
 		die();
 	}
 
-	for (int s = 0; s < sources.size(); s++) {
-		parse(s, &global);
+	if (!parse_all_files(global))
+        printf("parser failed:\n");
+
+	for (auto& err : global.errors) {
+		err.print();
 	}
 
 	return 0;

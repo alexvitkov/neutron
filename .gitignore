@@ -1,3 +1,4 @@
-a.out
 *.o
+ntr
+a.out
 run.sh

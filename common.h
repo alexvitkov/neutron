@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <vector>
+#include <unordered_map>
 
 #define u8  uint8_t
 #define u16 uint16_t
@@ -12,15 +14,6 @@
 #define i16 int16_t
 #define i32 int32_t
 #define i64 int64_t
-
-enum ASTNodeType {
-	AST_NONE = 0,
-	AST_TYPE,
-};
-
-struct ASTNode {
-	ASTNodeType nodetype;
-};
 
 enum TokenType : u8 {
 	TOK_NONE = 0,
