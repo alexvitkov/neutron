@@ -1,7 +1,7 @@
 #ifndef BYTECODE_H
 #define BYTECODE_H
 
-#include "common.h"
+#include "../../common.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +11,7 @@
 #define RES   (NREG - 2)
 #define IP    (NREG - 3)
 
-enum opcode : u8 {
+enum OpCode : u8 {
     // 0x00 EXITCODE(u1)
     OP_EXIT  = 0x00,
 
@@ -25,7 +25,6 @@ enum opcode : u8 {
 
     OP_CALL,
     OP_RET,
-
 
     // ADDRESSABLE
     OP_ADDRESSABLE = 0x80,
@@ -49,7 +48,7 @@ enum opcode : u8 {
     OP_LTEF,
 };
 
-enum addrmode : uint8_t {
+enum AddrMode : uint8_t {
     // ADDR is 4 bytes, REG is 1 byte, VAL is 8 bytes
 
     // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 0x00 0x00 |
@@ -68,16 +67,7 @@ enum addrmode : uint8_t {
     AM_VAL2MEM = 0x05,
 };
 
-
-void printreg(uint64_t* reg);
-void emitexit(uint8_t** c, uint8_t code);
-void emitcall(uint8_t** c, uint64_t ptr);
-void emitret(uint8_t** c, uint64_t ptr);
-void emitr2r(uint8_t** c, opcode op, uint8_t dstreg, uint8_t srcreg);
-void emitr2m(uint8_t** c, opcode op, uint32_t dstmem, uint8_t srcreg);
-void emitm2r(uint8_t** c, opcode op, uint32_t srcmem, uint8_t dstreg);
-void emitv2r(uint8_t** c, opcode op, uint64_t srcval, uint8_t dstreg);
-
-int interpret(uint64_t* reg, uint8_t* mem);
+void* bytecode_compile(Context& ctx, u32 mem_size, u32 code_start, u32 data_start, u32 stack_start);
+int interpret(uint64_t* reg);
 
 #endif // guard

@@ -1,36 +1,16 @@
 #include "sourcefile.h"
 #include "parser.h"
 #include "typer.h"
-
-void cool() {
-	/*
-    int* five_val = (int*)malloc(sizeof(int));
-    *five_val = 5;
-    value FIVE = { NT_VALUE, VAL_INTEGER, five_val };
-
-
-    uint64_t reg[NREG] = { 0 };
-    uint8_t mem[1024] = { 0 };
-
-    reg[SP] = 800;
-
-    uint8_t *p = mem;
-    emitv2r(&p, OP_MOV, 4, 0);
-    emitr2r(&p, OP_MOV, 1, 0);
-    emitv2r(&p, OP_MULS, 2, 0);
-    emitr2r(&p, OP_SUB, 0, 1);
-
-    interpret(reg, mem);
-
-    printreg(reg);
-	*/
-}
-
-void die() {
-	exit(1);
-}
+#include "backends/bytecode/bytecode.h"
 
 Context global { .global = &global };
+
+void exit_with_error() {
+	for (auto& err : global.errors) {
+		err.print();
+	}
+    exit(1);
+}
 
 int main(int argc, const char** argv) {
 	bool dd = false;
@@ -46,36 +26,26 @@ int main(int argc, const char** argv) {
 		else {
 			if (add_source(a) < 0) {
 				printf("failed to read source '%s'\n", a);
-				die();
+                exit(1);
 			}
 		}
 	}
 	if (sources.size() == 0) {
 		printf("no input files\n");
-		die();
+        exit(1);
 	}
 
 	if (!parse_all_files(global)) {
         printf("parser failed\n");
-        goto PrintErr;
+        exit_with_error();
     }
 
     if (!typecheck_all(global)) {
         printf("type checker failed\n");
-        goto PrintErr;
+        exit_with_error();
     }
 
-    for (const auto& x : global.defines) {
-        print(std::cout, x.second, true);
-        std::cout << "\n";
-    }
-
-
-PrintErr:
-	for (auto& err : global.errors) {
-		err.print();
-	    return 1;
-	}
+    void* compiled = bytecode_compile(global, 10 * 1024 * 1024, 0, 4096, 9 * 1024 * 1024);
 
     return 0;
 }

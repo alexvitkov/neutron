@@ -60,6 +60,7 @@ struct ASTVar : ASTNode {
     const char* name;
     ASTType* type;
     ASTNode* value;
+    void* location;
 
     inline ASTVar(const char* name, ASTType* type, ASTNode* initial_value)
         : ASTNode(AST_VAR), name(name), type(type), value(initial_value) {};
