@@ -345,7 +345,10 @@ bool skim(Context& ctx, TokenReader& r) {
                 if (!openBracket.type)
                     return false;
                 r.pos = openBracket.match + 1;
-                Token openCurly = r.expect(TOK('{'));
+
+        
+
+                Token openCurly = r.pop_until(TOK('{'));
                 if (!openCurly.type)
                     return false;
                 r.pos = openCurly.match + 1;
@@ -529,6 +532,13 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 
     if (!parse_type_list(ctx, r, TOK(')'), &fn->args))
         return nullptr;
+
+    if (r.peek().type == TOK(':')) {
+        r.pop();
+        fn->rettype = parse_type(ctx, r);
+        if (!fn->rettype)
+            return nullptr;
+    }
 
     Context* fn_ctx = new Context();
     fn_ctx->parent = &ctx;

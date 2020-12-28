@@ -1,4 +1,4 @@
 
-fn add(x: u64, y: u64) {
-    return x + y * x;
+fn add(x: u64, y: u64): u32  {
+    return x + y;
 }

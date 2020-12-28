@@ -54,7 +54,13 @@ void print(std::ostream& o, ASTFn* node, bool decl) {
             o << fn->name;
         o << '(';
         print(o, fn->args);
-        o << ") ";
+        o << ")";
+
+        if (node->rettype) {
+            o << ": ";
+            print(o, node->rettype, false);
+        }
+        o << ' ';
         print(o, *node->block);
     }
     else {

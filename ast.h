@@ -79,7 +79,7 @@ struct ASTFn : ASTNode {
     const char* name;
     TypeList args;
     Block* block;
-
+    ASTType* rettype;
     inline ASTFn(const char* name) : ASTNode(AST_FN), name(name) {}
 };
 
