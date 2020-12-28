@@ -1,6 +1,5 @@
 
 fn add(x: u64, y: u32): u64 {
     let z: bool;
-    z = x + y;
-    return z * x + y;
+    x = z + x;
 }

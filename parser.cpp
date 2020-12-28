@@ -95,12 +95,6 @@ CharTraits ctt[128] {
 /* 127 -     */ CT_ERROR,
 };
 
-enum : u8 {
-    PREFIX    = 0x10,
-    POSTFIX   = 0x20,
-    PREC_MASK = 0x0F,
-};
-
 #define PREC(tt) (prec[tt] & PREC_MASK)
 #define IS_RIGHT_ASSOC(tt) (PREC(tt) == 1)
 
@@ -113,7 +107,7 @@ inline bool is_operator(TokenType tt) {
 // prec[OP_SHIFTLEFT] & PREC_MASK is the precedence of the << operator
 // if the PREFIX or POSTFIX bit is set, the operator can also be postfix/prefix
 // if PREC = 1, then it's right associative
-u8 prec[] = {
+u8 prec[148] = {
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 /* ! */        PREFIX, 
 0, 0, 0,
@@ -128,7 +122,7 @@ u8 prec[] = {
 /* / */  11,
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 /* < */  5,
-/* = */  1,
+/* = */  1   | ASSIGNMENT,
 /* > */  5,
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 /* [ */        POSTFIX,
@@ -148,16 +142,16 @@ u8 prec[] = {
 /* && */  3,
 /* || */  2,
 /* != */  4,
-/* += */  1,
-/* -= */  1,
-/* *= */  1,
-1, // /=
-/* \%= */ 1,
-/* <<= */ 1,
-/* >>= */ 1,
-/* &= */  1,
-/* ^= */  1,
-/* |= */  1,
+/* += */  1 | ASSIGNMENT,
+/* -= */  1 | ASSIGNMENT,
+/* *= */  1 | ASSIGNMENT,
+/* /=  */ 1 | ASSIGNMENT,
+/* \%= */ 1 | ASSIGNMENT,
+/* <<= */ 1 | ASSIGNMENT,
+/* >>= */ 1 | ASSIGNMENT,
+/* &= */  1 | ASSIGNMENT,
+/* ^= */  1 | ASSIGNMENT,
+/* |= */  1 | ASSIGNMENT,
 };
 
 

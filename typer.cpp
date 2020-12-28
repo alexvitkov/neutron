@@ -78,14 +78,15 @@ ASTType* typecheck(Context& ctx, ASTNode* node) {
                 ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
                 return nullptr;
             }
-    
             
-            // TODO this isn't alwys accurate, for assignment
-            // we can only cast rhs to lhs
-            if (implicit_cast(ctx, &bin->lhs, rhst))
-                return rhst;
             if (implicit_cast(ctx, &bin->rhs, lhst))
                 return lhst;
+
+            if (!(prec[bin->op] & ASSIGNMENT) && implicit_cast(ctx, &bin->lhs, rhst))
+                return rhst;
+
+            ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
+            return nullptr;
         }
         default: {
                 ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "unsupported node type"});

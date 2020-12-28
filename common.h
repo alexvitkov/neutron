@@ -104,4 +104,14 @@ struct Context {
     }
 };
 
+enum OpTraits : u8 {
+    PREFIX     = 0x10,
+    POSTFIX    = 0x20,
+    ASSIGNMENT = 0x40,
+    PREC_MASK  = 0x0F,
+};
+
+extern u8 prec[148];
+
+
 #endif // guard
