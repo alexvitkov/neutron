@@ -94,6 +94,13 @@ struct Context {
     ASTNode* resolve(const char* name);
     ASTNode* resolve(char* name, int length);
     bool define(const char* name, ASTNode* value);
+
+    template <typename T, typename ... Ts>
+    T* alloc(Ts ...args) {
+        T* buf = (T*)malloc(sizeof(T));
+        new (buf) T (args...);
+        return buf;
+    }
 };
 
 #endif // guard

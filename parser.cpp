@@ -350,9 +350,7 @@ bool skim(Context& ctx, TokenReader& r) {
                     return false;
                 r.pos = openCurly.match + 1;
 
-                ASTFn* decl = (ASTFn*)malloc(sizeof(ASTFn));
-                decl->nodetype = AST_FN;
-                decl->name = malloc_token_name(r, name);
+                ASTFn* decl = ctx.alloc<ASTFn>(malloc_token_name(r, name));
 
                 if (!ctx.define(decl->name, (ASTNode*)decl))
                     return false;
@@ -367,11 +365,7 @@ bool skim(Context& ctx, TokenReader& r) {
                 if (!semicolon.type)
                     return false;
 
-                ASTVar* decl = (ASTVar*)malloc(sizeof(ASTVar));
-                decl->nodetype = AST_VAR;
-                decl->type = nullptr;
-                decl->value = nullptr;
-                decl->name = malloc_token_name(r, name);
+                ASTVar* decl = ctx.alloc<ASTVar>(malloc_token_name(r, name), nullptr, nullptr);
                 if (!ctx.define(decl->name, (ASTNode*)decl))
                     return false;
 
@@ -414,20 +408,20 @@ bool skim(Context& ctx, TokenReader& r) {
     }
 }
 
-ASTNode* parse_type(Context& ctx, TokenReader& r) {
+ASTType* parse_type(Context& ctx, TokenReader& r) {
     Token t = r.pop();
 
     switch (t.type) {
-        case KW_U8:  return (ASTNode*)&t_u8;
-        case KW_U16: return (ASTNode*)&t_u16;
-        case KW_U32: return (ASTNode*)&t_u32;
-        case KW_U64: return (ASTNode*)&t_u64;
-        case KW_I8:  return (ASTNode*)&t_i8;
-        case KW_I16: return (ASTNode*)&t_i16;
-        case KW_I32: return (ASTNode*)&t_i32;
-        case KW_I64: return (ASTNode*)&t_i64;
-        case KW_F32: return (ASTNode*)&t_f32;
-        case KW_F64: return (ASTNode*)&t_f64;
+        case KW_U8:  return &t_u8;
+        case KW_U16: return &t_u16;
+        case KW_U32: return &t_u32;
+        case KW_U64: return &t_u64;
+        case KW_I8:  return &t_i8;
+        case KW_I16: return &t_i16;
+        case KW_I32: return &t_i32;
+        case KW_I64: return &t_i64;
+        case KW_F32: return &t_f32;
+        case KW_F64: return &t_f64;
         default:
             unexpected_token(r, t, TOK_NONE);
             return nullptr;
@@ -450,7 +444,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
         if (!r.expect(TOK(':')).type)
             return false;
 
-        ASTNode* type = parse_type(ctx, r);
+        ASTType* type = parse_type(ctx, r);
         if (!type)
             return false;
 
@@ -494,9 +488,8 @@ Block* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
 
         if (r.peek().type == KW_RETURN) {
             r.pop();
-            ASTReturn* ret = (ASTReturn*)malloc(sizeof(ASTReturn));
-            ret->nodetype = AST_RETURN;
-            ret->value = parse_expr(*ctx, r, TOK(';'));
+            
+            ASTReturn* ret = ctx->alloc<ASTReturn>(parse_expr(*ctx, r, TOK(';')));
             if (!ret->value)
                 return nullptr;
             block->statements.push_back((ASTNode*)ret);
@@ -528,9 +521,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         free(name_);
     }
     else {
-        ASTFn* decl = (ASTFn*)malloc(sizeof(ASTFn));
-        decl->nodetype = AST_FN;
-        decl->name = nullptr;
+        ASTFn* decl = ctx.alloc<ASTFn>(nullptr);
     }
 
     if (!r.expect(TOK('(')).type)
@@ -544,11 +535,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     fn_ctx->global = ctx.global;
 
     for (const auto& entry : fn->args.entries) {
-        ASTVar* decl = (ASTVar*)malloc(sizeof(ASTVar));
-        decl->nodetype = AST_VAR;
-        decl->type = entry.type;
-        decl->value = nullptr;
-        decl->name = entry.name;
+        ASTVar* decl = ctx.alloc<ASTVar>(entry.name, entry.type, nullptr);
         fn_ctx->define(entry.name, (ASTNode*)decl);
     }
 
@@ -570,11 +557,10 @@ bool pop(SYState& s) {
         s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression"});
         return false;
     }
-    ASTBinaryOp* bin = (ASTBinaryOp*)malloc(sizeof(ASTBinaryOp));
-    bin->nodetype = AST_BINARY_OP;
-    bin->lhs = s.output[s.output.size() - 2];
-    bin->rhs = s.output[s.output.size() - 1];
-    bin->op = s.stack.back();
+    ASTBinaryOp* bin = s.ctx.alloc<ASTBinaryOp>(
+            s.stack.back(), 
+            s.output[s.output.size() - 2], 
+            s.output[s.output.size() - 1]);
     s.stack.pop_back();
     s.output.pop_back();
     s.output[s.output.size() - 1] = (ASTNode*)bin;

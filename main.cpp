@@ -1,7 +1,6 @@
 #include "sourcefile.h"
 #include "parser.h"
 #include "typer.h"
-#include "context.h"
 
 void cool() {
 	/*

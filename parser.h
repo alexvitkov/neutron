@@ -3,7 +3,6 @@
 
 #include "common.h"
 #include "typer.h"
-#include "context.h"
 
 struct Token {
 	TokenType type;

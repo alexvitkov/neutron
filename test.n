@@ -1,4 +1,4 @@
 
 fn add(x: u64, y: u64) {
-    return x + y;
+    return x + y * x;
 }
