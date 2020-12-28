@@ -20,6 +20,7 @@ f64,    KW_F64
 fn,     KW_FN
 struct, KW_STRUCT
 let,    KW_LET
+return, KW_RETURN
 true,   KW_TRUE
 false,  KW_FALSE
 ++,     OP_PLUSPLUS

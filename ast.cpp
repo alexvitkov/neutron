@@ -5,7 +5,7 @@ int indent = 0;
 void print(std::ostream& o, TypeList& tl) {
     for (const auto& entry : tl.entries) {
         o << entry.name << ": ";
-        print(o, entry.value, false);
+        print(o, entry.type, false);
         o << ", ";
     }
     if (!tl.entries.empty())
@@ -24,6 +24,12 @@ void print(std::ostream& o, Block& bl) {
         indent_line(o);
         print(o, x.second, true);
     }
+
+    for (const auto& d : bl.statements) {
+        indent_line(o);
+        print(o, d, false);
+    }
+
     indent--;
     indent_line(o);
     o << "}\n";
@@ -35,6 +41,7 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
         case AST_TYPE:      print(o, (ASTType*)node, false); break;
         case AST_BINARY_OP: print(o, (ASTBinaryOp*)node); break;
         case AST_VAR:       print(o, (ASTVar*)node, decl); break;
+        case AST_RETURN:    print(o, (ASTReturn*)node); break;
         default:            o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
@@ -107,10 +114,15 @@ void print(std::ostream& o, ASTVar* node, bool decl) {
             print(o, node->value, false);
         }
 
-
         o << ";\n";
     }
     else {
-        o << node->nodetype;
+        o << node->name;
     }
+}
+
+void print(std::ostream& o, ASTReturn* node) {
+    o << "return ";
+    print(o, node->value, false);
+    o << ";\n";
 }

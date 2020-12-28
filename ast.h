@@ -11,6 +11,7 @@ enum ASTNodeType {
     AST_VAR,
     AST_BLOCK,
     AST_BINARY_OP,
+    AST_RETURN,
 };
 
 struct ASTNode {
@@ -35,6 +36,11 @@ struct ASTBinaryOp {
     ASTNode *lhs, *rhs;
 };
 
+struct ASTReturn {
+	ASTNodeType nodetype;
+    ASTNode *value;
+};
+
 struct Block {
     Context* ctx;
     std::vector<ASTNode*> statements;
@@ -43,7 +49,7 @@ struct Block {
 struct TypeList {
     struct Entry {
         const char* name;
-        ASTType* value;
+        ASTType* type;
     };
     std::vector<Entry> entries;
 };
@@ -62,5 +68,6 @@ void print(std::ostream& o, ASTType* node, bool decl);
 void print(std::ostream& o, ASTFn* node, bool decl);
 void print(std::ostream& o, ASTBinaryOp* node);
 void print(std::ostream& o, ASTVar* node, bool decl);
+void print(std::ostream& o, ASTReturn* node);
 
 #endif // guard

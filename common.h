@@ -56,6 +56,7 @@ enum TokenType : u8 {
 	KW_FN,
 	KW_LET,
 	KW_STRUCT,
+    KW_RETURN,
 	KW_TRUE,
 	KW_FALSE,
 

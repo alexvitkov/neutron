@@ -1,9 +1,4 @@
 
-fn foo(x: i32, y: i32) {
+fn add(x: u64, y: u64) {
+    return x + y;
 }
-
-fn bar(x: u64, y: u64) {
-    let x: u32 = foo == bar * x;
-}
-
-let x: u32 = foo;

@@ -454,7 +454,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
         if (!type)
             return false;
 
-        tl->entries.push_back(TypeList::Entry { .name = malloc_token_name(r, name), .value = type });
+        tl->entries.push_back(TypeList::Entry { .name = malloc_token_name(r, name), .type = type });
 
         t = r.peek();
         if (t.type == delim) {
@@ -469,6 +469,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
 }
 
 bool parse_decl_statement(Context& ctx, TokenReader& r);
+ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim);
 
 Block* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
 
@@ -490,6 +491,16 @@ Block* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
     while (true) {
         if (parse_decl_statement(*ctx, r))
             continue;
+
+        if (r.peek().type == KW_RETURN) {
+            r.pop();
+            ASTReturn* ret = (ASTReturn*)malloc(sizeof(ASTReturn));
+            ret->nodetype = AST_RETURN;
+            ret->value = parse_expr(*ctx, r, TOK(';'));
+            if (!ret->value)
+                return nullptr;
+            block->statements.push_back((ASTNode*)ret);
+        }
 
         if (r.peek().type == TOK('}')) {
             r.pop();
@@ -525,13 +536,21 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     if (!r.expect(TOK('(')).type)
         return nullptr;
 
-    if (!parse_type_list(ctx, r, TOK(')'), &fn->args)) {
+    if (!parse_type_list(ctx, r, TOK(')'), &fn->args))
         return nullptr;
-    }
 
     Context* fn_ctx = new Context();
     fn_ctx->parent = &ctx;
     fn_ctx->global = ctx.global;
+
+    for (const auto& entry : fn->args.entries) {
+        ASTVar* decl = (ASTVar*)malloc(sizeof(ASTVar));
+        decl->nodetype = AST_VAR;
+        decl->type = entry.type;
+        decl->value = nullptr;
+        decl->name = entry.name;
+        fn_ctx->define(entry.name, (ASTNode*)decl);
+    }
 
     fn->block = parse_block(ctx, r, fn_ctx);
     if (!fn->block)
