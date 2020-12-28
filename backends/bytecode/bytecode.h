@@ -70,4 +70,22 @@ enum AddrMode : uint8_t {
 void* bytecode_compile(Context& ctx, u32 mem_size, u32 code_start, u32 data_start, u32 stack_start);
 int interpret(uint64_t* reg);
 
+struct Emitter {
+    std::unordered_map<ASTNode*, std::vector<u32*>> waiting;
+    std::unordered_map<ASTNode*, u32> addresses;
+
+    void emitexit(u8 code);
+    void emitcall(u64 ptr);
+    void emitret(u64 ptr);
+    void emitr2r(OpCode op, u8 dstreg, u8 srcreg);
+    void emitr2m(OpCode op, u32 dstmem, u8 srcreg);
+    void emitm2r(OpCode op, u32 srcmem, u8 dstreg);
+    void emitv2r(OpCode op, u64 srcval, u8 dstreg);
+
+    Context& global;
+    u8 *mem, *s;
+
+    Emitter(Context& global, u32 mem_size, u32 code_start, u32 data_start, u32 stack_start);
+};
+
 #endif // guard

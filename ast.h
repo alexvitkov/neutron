@@ -56,14 +56,26 @@ struct ASTPrimitiveType : ASTType {
         : ASTType(AST_PRIMITIVE_TYPE), kind(kind), size(size), name(name) {}
 };
 
+enum VarLocationType : u8 {
+    VL_UNDEFINED = 0,
+    VL_REGISTER,
+    VL_STACK
+};
+
+struct VarLocation {
+    VarLocationType type;
+    u16 offset;
+};
+
 struct ASTVar : ASTNode {
     const char* name;
     ASTType* type;
     ASTNode* value;
-    void* location;
+    VarLocation location;
+    i32 argindex;
 
-    inline ASTVar(const char* name, ASTType* type, ASTNode* initial_value)
-        : ASTNode(AST_VAR), name(name), type(type), value(initial_value) {};
+    inline ASTVar(const char* name, ASTType* type, ASTNode* initial_value, int argindex)
+        : ASTNode(AST_VAR), name(name), type(type), value(initial_value), argindex(argindex) {};
 };
 
 struct ASTNumber : ASTNode {
@@ -94,6 +106,7 @@ struct ASTReturn : ASTNode {
     inline ASTReturn(ASTNode* value) : ASTNode(AST_RETURN), value(value) {};
 };
 
+// TODO too much indireciton here
 struct ASTFn : ASTNode {
     const char* name;
     TypeList args;

@@ -362,7 +362,7 @@ bool skim(Context& ctx, TokenReader& r) {
                 if (!semicolon.type)
                     return false;
 
-                ASTVar* decl = ctx.alloc<ASTVar>(malloc_token_name(r, name), nullptr, nullptr);
+                ASTVar* decl = ctx.alloc<ASTVar>(malloc_token_name(r, name), nullptr, nullptr, -1);
                 if (!ctx.declare(decl->name, (ASTNode*)decl))
                     return false;
 
@@ -544,8 +544,9 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     fn_ctx->global = ctx.global;
     fn_ctx->declare("returntype", rettype);
 
+    int argid = 0;
     for (const auto& entry : fn->args.entries) {
-        ASTVar* decl = ctx.alloc<ASTVar>(entry.name, entry.type, nullptr);
+        ASTVar* decl = ctx.alloc<ASTVar>(entry.name, entry.type, nullptr, argid++);
         fn_ctx->declare(entry.name, (ASTNode*)decl);
     }
 
