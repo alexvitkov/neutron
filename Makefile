@@ -1,6 +1,6 @@
 
 ntr: *.cpp *.h keywords.gperf.gen.h 
-	g++ -g *.cpp -o ntr
+	g++ -g all.cpp -o ntr
 
 keywords.gperf.gen.h: keywords.gperf common.h
 	gperf $< --output-file=$@
