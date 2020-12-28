@@ -35,7 +35,12 @@ bool implicit_cast(Context& ctx, ASTNode** dst, ASTType* type) {
             || (l->kind == r->kind && l->size < r->size)
             || (l->kind == PRIMITIVE_UNSIGNED && r->kind == PRIMITIVE_SIGNED && l->size < r->size))
     {
-        *dst = ctx.alloc<ASTCast>(r, *dst);
+        if ((*dst)->nodetype == AST_NUMBER) {
+            ((ASTNumber*)(*dst))->type = type;
+        }
+        else {
+            *dst = ctx.alloc<ASTCast>(r, *dst);
+        }
         return true;
     }
     return false;

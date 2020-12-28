@@ -1,4 +1,4 @@
 
-fn add(x: u8, y: u32): u64 {
+fn add(x: u32, y: u32): u64 {
     x = 244;
 }
