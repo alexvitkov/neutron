@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <string>
 #include <vector>
 #include <unordered_map>
 
@@ -18,6 +19,8 @@
 enum TokenType : u8 {
 	TOK_NONE = 0,
 
+    // VOLATILE - if you reorder the operators, you have to change 
+    // the precedence table in parser.cpp
     OP_PLUSPLUS = 128,
     OP_MINUSMINUS,
     OP_SHIFTLEFT,
@@ -58,8 +61,38 @@ enum TokenType : u8 {
 
 	TOK_ID  = 128,
 	TOK_NUM,
+};
 
-    // VOLATILE, if you reorder these you have to change the 'prec' table in parser.cpp
+struct Error {
+	enum {
+		TOKENIZER,
+		PARSER,
+	} kind;
+
+	enum {
+		WARNING,
+		ERROR,
+	} severity;
+
+	const char* message;
+
+	void print();
+};
+
+struct ASTNode;
+
+struct Context {
+	std::unordered_map<std::string, ASTNode*> defines;
+	std::vector<Error> errors;
+    Context* global;
+    Context* parent;
+
+	bool ok();
+    bool is_global();
+
+    ASTNode* resolve(const char* name);
+    ASTNode* resolve(char* name, int length);
+    bool define(const char* name, ASTNode* value);
 };
 
 #endif // guard

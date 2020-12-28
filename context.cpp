@@ -1,4 +1,4 @@
-#include "context.h"
+#include "common.h"
 
 bool Context::ok() {
 	for (const auto& err : errors) {
@@ -44,4 +44,12 @@ ASTNode* Context::resolve(const char* name) {
 
     }
     return it->second;
+}
+
+ASTNode* Context::resolve(char* name, int length) {
+    char old = name[length];
+    name[length] = 0;
+    ASTNode* result = resolve(name);
+    name[length] = old; 
+    return result;
 }

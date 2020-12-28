@@ -95,12 +95,18 @@ CharTraits ctt[128] {
 /* 127 -     */ CT_ERROR,
 };
 
-
 enum : u8 {
     PREFIX    = 0x10,
     POSTFIX   = 0x20,
     PREC_MASK = 0x0F,
 };
+
+#define PREC(tt) ((tt) & PREC_MASK)
+
+inline bool is_operator(TokenType tt) {
+    // TODO this is not great
+    return (tt < 128 && (ctt[tt] & CT_OPERATOR)) || (tt >= 128 && tt < 148);
+}
 
 // PRECEDENCE TABLE
 // prec[OP_SHIFTLEFT] & PREC_MASK is the precedence of the << operator
@@ -152,7 +158,6 @@ u8 prec[] = {
 /* ^= */  1,
 /* |= */  1,
 };
-
 
 
 bool tokenize(Context& global, SourceFile &s) {
@@ -376,9 +381,10 @@ bool skim(Context& ctx, TokenReader& r) {
                 if (ctx.is_global()) {
                     unexpected_token(r, next, TOK_NONE);
                     return false;
-                } else
+                } else {
                     r.pos = start_pos;
                     return true;
+                }
             }
 
             case TOK_NONE: {
@@ -463,7 +469,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
 
 bool parse_decl_statement(Context& ctx, TokenReader& r);
 
-ASTBlock* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
+Block* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
 
     if (!r.expect(TOK('{')).type)
         return nullptr;
@@ -477,8 +483,7 @@ ASTBlock* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
     if (!skim(*ctx, r))
         return nullptr;
 
-    ASTBlock* block = new ASTBlock();
-    block->nodetype = AST_BLOCK;
+    Block* block = new Block();
     block->ctx = ctx;
 
     while (true) {
@@ -534,9 +539,71 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     return fn;
 }
 
+struct SYState {
+    Context& ctx;
+    std::vector<ASTNode*> output;
+    std::vector<TokenType> stack;
+};
+
+bool pop(SYState& s) {
+    if (s.output.size() < 2) {
+        s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression"});
+        return false;
+    }
+    ASTBinaryOp* bin = (ASTBinaryOp*)malloc(sizeof(ASTBinaryOp));
+    bin->nodetype = AST_BINARY_OP;
+    bin->lhs = s.output[s.output.size() - 2];
+    bin->rhs = s.output[s.output.size() - 1];
+    s.output.pop_back();
+    s.output[s.output.size() - 1] = (ASTNode*)bin;
+    return true;
+}
+
 ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
-    r.pop_until(delim);
-    return (ASTNode*)&t_u32;
+    SYState s { .ctx = ctx };
+    bool prev_was_value = true;
+
+    for (Token t = r.pop(); t.type != delim; t = r.pop()) {
+        if (t.type == TOK_ID) {
+            ASTNode* resolved = ctx.resolve(r.sf.buffer + t.start, t.length);
+            if (!resolved)
+                return nullptr;
+            s.output.push_back(resolved);
+            prev_was_value = true;
+        }
+        else if (t.type == TOK('(')) {
+            if (prev_was_value) {
+                // TODO Function call
+            } else {
+                s.stack.push_back(t.type);
+                prev_was_value = false;
+            }
+        }
+        else if (t.type == TOK(')')) {
+            while (s.stack.back() != TOK('('))
+                if (!pop(s))
+                    return nullptr;
+            s.output.pop_back(); // disacrd the (
+        }
+        else if (is_operator(t.type)) {
+            // TODO right assoc
+            while (!s.stack.empty() && s.stack.back() != TOK('(') && PREC(s.stack.back()) > PREC(t.type)) 
+                if (!pop(s))
+                    return nullptr;
+            s.stack.push_back(t.type);
+            prev_was_value = false;
+        }
+    }
+
+    while (!s.stack.empty()) 
+        if (!pop(s))
+            return nullptr;
+
+    if (s.output.size() != 1) {
+        s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression"});
+        return nullptr;
+    }
+    return s.output[0];
 }
 
 bool parse_let(Context& ctx, TokenReader& r) {
@@ -554,9 +621,10 @@ bool parse_let(Context& ctx, TokenReader& r) {
     if (!var->type)
         return false;
 
-    if (r.peek().type == TOK('='))
+    if (r.peek().type == TOK('=')) {
+        r.pop();
         return (var->value = parse_expr(ctx, r, TOK(';')));
-    else 
+    } else 
         return r.expect(TOK(';')).type;
 }
 
@@ -566,7 +634,6 @@ bool parse_decl_statement(Context& ctx, TokenReader& r) {
             ASTFn* fn = parse_fn(ctx, r, true);
             if (!fn)
                 return false;
-            std::cout << fn << "\n";
             break;
         }
         case KW_LET: {
@@ -598,5 +665,11 @@ bool parse_all_files(Context& global) {
         if (!parse_top_level(global, r))
             return false;
     }
+
+    for (const auto& x : global.defines) {
+        print(std::cout, x.second, true);
+        std::cout << "\n";
+    }
+
     return true;
 }

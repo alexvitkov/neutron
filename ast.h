@@ -10,6 +10,7 @@ enum ASTNodeType {
     AST_FN,
     AST_VAR,
     AST_BLOCK,
+    AST_BINARY_OP,
 };
 
 struct ASTNode {
@@ -28,10 +29,13 @@ struct ASTVar {
     ASTNode* value;
 };
 
-struct Context;
-
-struct ASTBlock {
+struct ASTBinaryOp {
 	ASTNodeType nodetype;
+    TokenType op;
+    ASTNode *lhs, *rhs;
+};
+
+struct Block {
     Context* ctx;
     std::vector<ASTNode*> statements;
 };
@@ -50,11 +54,13 @@ struct ASTFn {
 	ASTNodeType nodetype;
     char* name;
     TypeList args;
-    ASTBlock* block;
+    Block* block;
 };
 
-std::ostream& operator<<(std::ostream& o, ASTNode* node);
-std::ostream& operator<<(std::ostream& o, ASTType* node);
-std::ostream& operator<<(std::ostream& o, ASTFn* node);
+void print(std::ostream& o, ASTNode* node, bool decl);
+void print(std::ostream& o, ASTType* node, bool decl);
+void print(std::ostream& o, ASTFn* node, bool decl);
+void print(std::ostream& o, ASTBinaryOp* node);
+void print(std::ostream& o, ASTVar* node, bool decl);
 
 #endif // guard

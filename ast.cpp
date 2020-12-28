@@ -1,35 +1,84 @@
 #include "ast.h"
 
+int indent = 0;
+
 void print(std::ostream& o, TypeList& tl) {
     for (const auto& entry : tl.entries) {
-        o << entry.name << ": " << entry.value << ", ";
+        o << entry.name << ": ";
+        print(o, entry.value, false);
+        o << ", ";
     }
-    o << "\b\b \b"; // clear the last comma
+    if (!tl.entries.empty())
+        o << "\b\b \b"; // clear the last comma
 }
 
-std::ostream& operator<<(std::ostream& o, ASTNode* node) {
+void indent_line(std::ostream& o) {
+    for (int i = 0; i < indent; i++)
+        o << "    ";
+}
+
+void print(std::ostream& o, Block& bl) {
+    indent ++;
+    o << "{ \n";
+    for (const auto& x : bl.ctx->defines) {
+        indent_line(o);
+        print(o, x.second, true);
+    }
+    indent--;
+    indent_line(o);
+    o << "}\n";
+}
+
+void print(std::ostream& o, ASTNode* node, bool decl) {
     switch (node->nodetype) {
-        case AST_TYPE: return o << (ASTFn*)node;
-        case AST_FN:   return o << (ASTType*)node;
-        default:       return o << '[' << node->nodetype << ']';
+        case AST_FN:        print(o, (ASTFn*)node, decl); break;
+        case AST_TYPE:      print(o, (ASTType*)node, false); break;
+        case AST_BINARY_OP: print(o, (ASTBinaryOp*)node); break;
+        case AST_VAR:       print(o, (ASTVar*)node, decl); break;
+        default:            o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
 
-std::ostream& operator<<(std::ostream& o, ASTFn* node) {
-    ASTFn* fn = (ASTFn*)node;
-    o << "fn ";
-    if (fn->name)
-        o << fn->name;
-    o << '(';
-    print(o, fn->args);
-    o << ") { }";
-    return o;
+void print(std::ostream& o, ASTFn* node, bool decl) {
+    if (decl) {
+        ASTFn* fn = (ASTFn*)node;
+        o << "fn ";
+        if (fn->name)
+            o << fn->name;
+        o << '(';
+        print(o, fn->args);
+        o << ") ";
+        print(o, *node->block);
+    }
+    else {
+        o << node->name;
+    }
 }
 
-std::ostream& operator<<(std::ostream& o, ASTType* node) {
+void print(std::ostream& o, ASTType* node, bool decl) {
     if (node->name)
         o << node->name;
     else
         o << "[TYPE]";
-    return o;
+}
+
+void print(std::ostream& o, ASTBinaryOp* node) {
+    o << '(' << node->lhs << " # " << node->rhs << ')';
+}
+
+void print(std::ostream& o, ASTVar* node, bool decl) {
+    if (decl) {
+        o << "let " << node->name << ": ";
+        print(o, node->type, false);
+        if (node->value) {
+            o << " = " ;
+            print(o, node->value, false);
+        }
+
+
+        o << ";\n";
+    }
+    else {
+        o << node->nodetype;
+    }
 }
