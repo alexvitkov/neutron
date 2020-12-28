@@ -13,7 +13,7 @@ enum CharTraits : u8 {
 	CT_LETTER              = 0x01,
 	CT_DIGIT               = 0x02,
 	CT_WHITESPACE          = 0x04,
-	CT_SINGLECHAR_OP       = 0x08,
+	CT_OPERATOR       = 0x08,
 	CT_MULTICHAR_OP_START  = 0x10,
 };
 
@@ -51,20 +51,20 @@ CharTraits ctt[128] {
 /* 30  - RS  */ CT_ERROR,
 /* 31  - US  */ CT_ERROR,
 /* 32  - SPC */ CT_WHITESPACE,
-/* 33  - !   */ CT_ERROR,
+/* 33  - !   */ CT_OPERATOR,
 /* 34  - "   */ CT_ERROR,
 /* 35  - #   */ CT_ERROR,
 /* 36  - $   */ CT_ERROR,
-/* 37  - %   */ CT_ERROR,
-/* 38  - &   */ CT_ERROR,
+/* 37  - %   */ CT_OPERATOR,
+/* 38  - &   */ CT_OPERATOR,
 /* 39  - '   */ CT_ERROR,
-/* 40  - (   */ CT_SINGLECHAR_OP,
-/* 41  - )   */ CT_SINGLECHAR_OP,
-/* 42  - *   */ CT_SINGLECHAR_OP,
-/* 43  - +   */ CT_SINGLECHAR_OP,
-/* 44  - ,   */ CT_SINGLECHAR_OP,
-/* 45  - -   */ CT_SINGLECHAR_OP,
-/* 46  - .   */ CT_SINGLECHAR_OP,
+/* 40  - (   */ CT_OPERATOR,
+/* 41  - )   */ CT_OPERATOR,
+/* 42  - *   */ CT_OPERATOR,
+/* 43  - +   */ CT_OPERATOR,
+/* 44  - ,   */ CT_OPERATOR,
+/* 45  - -   */ CT_OPERATOR,
+/* 46  - .   */ CT_OPERATOR,
 /* 47  - /   */ CT_ERROR,
 /* 48  - 0   */ CT_DIGIT,
 /* 49  - 1   */ CT_DIGIT,
@@ -76,43 +76,43 @@ CharTraits ctt[128] {
 /* 55  - 7   */ CT_DIGIT,
 /* 56  - 8   */ CT_DIGIT,
 /* 57  - 9   */ CT_DIGIT,
-/* 58  - :   */ CT_SINGLECHAR_OP,
-/* 59  - ;   */ CT_SINGLECHAR_OP,
-/* 60  - <   */ CT_ERROR,
-/* 61  - =   */ CT_SINGLECHAR_OP,
-/* 62  - >   */ CT_ERROR,
+/* 58  - :   */ CT_OPERATOR,
+/* 59  - ;   */ CT_OPERATOR,
+/* 60  - <   */ CT_OPERATOR,
+/* 61  - =   */ CT_OPERATOR,
+/* 62  - >   */ CT_OPERATOR,
 /* 63  - ?   */ CT_ERROR,
 /* 64  - @   */ CT_ERROR,
-/* 65  - A   */ CT_WHITESPACE,
-/* 66  - B   */ CT_WHITESPACE,
-/* 67  - C   */ CT_WHITESPACE,
-/* 68  - D   */ CT_WHITESPACE,
-/* 69  - E   */ CT_WHITESPACE,
-/* 70  - F   */ CT_WHITESPACE,
-/* 71  - G   */ CT_WHITESPACE,
-/* 72  - H   */ CT_WHITESPACE,
-/* 73  - I   */ CT_WHITESPACE,
-/* 74  - J   */ CT_WHITESPACE,
-/* 75  - K   */ CT_WHITESPACE,
-/* 76  - L   */ CT_WHITESPACE,
-/* 77  - M   */ CT_WHITESPACE,
-/* 78  - N   */ CT_WHITESPACE,
-/* 79  - O   */ CT_WHITESPACE,
-/* 80  - P   */ CT_WHITESPACE,
-/* 81  - Q   */ CT_WHITESPACE,
-/* 82  - R   */ CT_WHITESPACE,
-/* 83  - S   */ CT_WHITESPACE,
-/* 84  - T   */ CT_WHITESPACE,
-/* 85  - U   */ CT_WHITESPACE,
-/* 86  - V   */ CT_WHITESPACE,
-/* 87  - W   */ CT_WHITESPACE,
-/* 88  - X   */ CT_WHITESPACE,
-/* 89  - Y   */ CT_WHITESPACE,
-/* 90  - Z   */ CT_WHITESPACE,
-/* 91  - [   */ CT_ERROR,
+/* 65  - A   */ CT_LETTER,
+/* 66  - B   */ CT_LETTER,
+/* 67  - C   */ CT_LETTER,
+/* 68  - D   */ CT_LETTER,
+/* 69  - E   */ CT_LETTER,
+/* 70  - F   */ CT_LETTER,
+/* 71  - G   */ CT_LETTER,
+/* 72  - H   */ CT_LETTER,
+/* 73  - I   */ CT_LETTER,
+/* 74  - J   */ CT_LETTER,
+/* 75  - K   */ CT_LETTER,
+/* 76  - L   */ CT_LETTER,
+/* 77  - M   */ CT_LETTER,
+/* 78  - N   */ CT_LETTER,
+/* 79  - O   */ CT_LETTER,
+/* 80  - P   */ CT_LETTER,
+/* 81  - Q   */ CT_LETTER,
+/* 82  - R   */ CT_LETTER,
+/* 83  - S   */ CT_LETTER,
+/* 84  - T   */ CT_LETTER,
+/* 85  - U   */ CT_LETTER,
+/* 86  - V   */ CT_LETTER,
+/* 87  - W   */ CT_LETTER,
+/* 88  - X   */ CT_LETTER,
+/* 89  - Y   */ CT_LETTER,
+/* 90  - Z   */ CT_LETTER,
+/* 91  - [   */ CT_OPERATOR,
 /* 92  - \   */ CT_ERROR,
-/* 93  - ]   */ CT_ERROR,
-/* 94  - ^   */ CT_ERROR,
+/* 93  - ]   */ CT_OPERATOR,
+/* 94  - ^   */ CT_OPERATOR,
 /* 95  - _   */ CT_LETTER, // yes, _ is a letter
 /* 96  - `   */ CT_ERROR,
 /* 97  - a   */ CT_LETTER,
@@ -141,10 +141,10 @@ CharTraits ctt[128] {
 /* 120 - x   */ CT_LETTER,
 /* 121 - y   */ CT_LETTER,
 /* 122 - z   */ CT_LETTER,
-/* 123 - {   */ CT_SINGLECHAR_OP,
-/* 124 - |   */ CT_ERROR,
-/* 125 - }   */ CT_SINGLECHAR_OP,
-/* 126 - ~   */ CT_ERROR,
+/* 123 - {   */ CT_OPERATOR,
+/* 124 - |   */ CT_OPERATOR,
+/* 125 - }   */ CT_OPERATOR,
+/* 126 - ~   */ CT_OPERATOR,
 /* 127 -     */ CT_ERROR,
 };
 
@@ -170,7 +170,7 @@ bool tokenize(Context& global, SourceFile &s) {
 		}
 
 		if (state) {
-			if ((ct & (CT_LETTER | CT_DIGIT)) == 0 && state) {
+			if (!(ct & (CT_LETTER | CT_DIGIT))) {
 				tok* kw = Perfect_Hash::in_word_set(s.buffer + word_start, i - word_start);
 
 				s.tokens.push_back({
@@ -188,7 +188,7 @@ bool tokenize(Context& global, SourceFile &s) {
 			}
 		}
 
-		if (ct & CT_SINGLECHAR_OP) {
+		if (ct & CT_OPERATOR) {
 			u64 match = 0;
 			switch (c) {
 				case '(':
@@ -215,12 +215,22 @@ bool tokenize(Context& global, SourceFile &s) {
 				}
 			}
 
+            u32 length = 1;
+
+            tok* t;
+            if (i + 2 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 3)))
+                length = 3;
+            else if (i + 1 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 2)))
+                length = 2;
+
 			s.tokens.push_back({
-				.type = TOK(c),
+				.type = t ? t->type : TOK(c),
 				.match = (u32)match,
-				.length = 1,
+				.length = length,
 				.start = i
 			});
+
+            i += length - 1;
 		}
 	}
 
@@ -531,12 +541,11 @@ bool parse_let(Context& ctx, TokenReader& r) {
     ASTVar* var = (ASTVar*)ctx.resolve(name_);
     free(name_);
 
-    if (r.peek().type == TOK(':')) {
-        r.pop();
-        var->type = parse_type(ctx, r);
-        if (!var->type)
-            return false;
-    }
+    if (!r.expect(TOK(':')).type)
+        return false;
+    var->type = parse_type(ctx, r);
+    if (!var->type)
+        return false;
 
     if (r.peek().type == TOK('='))
         return (var->value = parse_expr(ctx, r, TOK(';')));
