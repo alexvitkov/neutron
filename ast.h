@@ -6,7 +6,7 @@
 
 enum ASTNodeType {
 	AST_NONE = 0,
-	AST_TYPE,
+	AST_PRIMITIVE_TYPE,
     AST_FN,
     AST_VAR,
     AST_BLOCK,
@@ -18,26 +18,34 @@ struct ASTNode {
 	ASTNodeType nodetype;
 };
 
-struct ASTType {
+enum PrimitiveTypeKind : u8 {
+    PRIMITIVE_SIGNED,
+    PRIMITIVE_UNSIGNED,
+    PRIMITIVE_FLOAT
+};
+
+struct ASTPrimitiveType {
 	ASTNodeType nodetype;
+    PrimitiveTypeKind kind;
+    u8 size;
     const char* name;
 };
 
 struct ASTVar {
-	ASTNodeType nodetype;
+    ASTNodeType nodetype;
     const char* name;
-    ASTType* type;
+    ASTNode* type;
     ASTNode* value;
 };
 
 struct ASTBinaryOp {
-	ASTNodeType nodetype;
+    ASTNodeType nodetype;
     TokenType op;
     ASTNode *lhs, *rhs;
 };
 
 struct ASTReturn {
-	ASTNodeType nodetype;
+    ASTNodeType nodetype;
     ASTNode *value;
 };
 
@@ -49,7 +57,7 @@ struct Block {
 struct TypeList {
     struct Entry {
         const char* name;
-        ASTType* type;
+        ASTNode* type;
     };
     std::vector<Entry> entries;
 };
@@ -57,14 +65,14 @@ struct TypeList {
 struct Context;
 
 struct ASTFn {
-	ASTNodeType nodetype;
+    ASTNodeType nodetype;
     char* name;
     TypeList args;
     Block* block;
 };
 
 void print(std::ostream& o, ASTNode* node, bool decl);
-void print(std::ostream& o, ASTType* node, bool decl);
+void print(std::ostream& o, ASTPrimitiveType* node);
 void print(std::ostream& o, ASTFn* node, bool decl);
 void print(std::ostream& o, ASTBinaryOp* node);
 void print(std::ostream& o, ASTVar* node, bool decl);

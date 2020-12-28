@@ -37,12 +37,12 @@ void print(std::ostream& o, Block& bl) {
 
 void print(std::ostream& o, ASTNode* node, bool decl) {
     switch (node->nodetype) {
-        case AST_FN:        print(o, (ASTFn*)node, decl); break;
-        case AST_TYPE:      print(o, (ASTType*)node, false); break;
-        case AST_BINARY_OP: print(o, (ASTBinaryOp*)node); break;
-        case AST_VAR:       print(o, (ASTVar*)node, decl); break;
-        case AST_RETURN:    print(o, (ASTReturn*)node); break;
-        default:            o << "NOPRINT[" << node->nodetype << ']'; break;
+        case AST_FN:             print(o, (ASTFn*)node, decl); break;
+        case AST_PRIMITIVE_TYPE: print(o, (ASTPrimitiveType*)node); break;
+        case AST_BINARY_OP:      print(o, (ASTBinaryOp*)node); break;
+        case AST_VAR:            print(o, (ASTVar*)node, decl); break;
+        case AST_RETURN:         print(o, (ASTReturn*)node); break;
+        default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
 
@@ -62,11 +62,8 @@ void print(std::ostream& o, ASTFn* node, bool decl) {
     }
 }
 
-void print(std::ostream& o, ASTType* node, bool decl) {
-    if (node->name)
-        o << node->name;
-    else
-        o << "[TYPE]";
+void print(std::ostream& o, ASTPrimitiveType* node) {
+    o << node->name;
 }
 
 void print(std::ostream& o, ASTBinaryOp* node) {

@@ -414,20 +414,20 @@ bool skim(Context& ctx, TokenReader& r) {
     }
 }
 
-ASTType* parse_type(Context& ctx, TokenReader& r) {
+ASTNode* parse_type(Context& ctx, TokenReader& r) {
     Token t = r.pop();
 
     switch (t.type) {
-        case KW_U8:  return &t_u8;
-        case KW_U16: return &t_u16;
-        case KW_U32: return &t_u32;
-        case KW_U64: return &t_u64;
-        case KW_I8:  return &t_i8;
-        case KW_I16: return &t_i16;
-        case KW_I32: return &t_i32;
-        case KW_I64: return &t_i64;
-        case KW_F32: return &t_f32;
-        case KW_F64: return &t_f64;
+        case KW_U8:  return (ASTNode*)&t_u8;
+        case KW_U16: return (ASTNode*)&t_u16;
+        case KW_U32: return (ASTNode*)&t_u32;
+        case KW_U64: return (ASTNode*)&t_u64;
+        case KW_I8:  return (ASTNode*)&t_i8;
+        case KW_I16: return (ASTNode*)&t_i16;
+        case KW_I32: return (ASTNode*)&t_i32;
+        case KW_I64: return (ASTNode*)&t_i64;
+        case KW_F32: return (ASTNode*)&t_f32;
+        case KW_F64: return (ASTNode*)&t_f64;
         default:
             unexpected_token(r, t, TOK_NONE);
             return nullptr;
@@ -450,7 +450,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
         if (!r.expect(TOK(':')).type)
             return false;
 
-        ASTType* type = parse_type(ctx, r);
+        ASTNode* type = parse_type(ctx, r);
         if (!type)
             return false;
 

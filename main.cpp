@@ -1,4 +1,3 @@
-#include "bytecode.h"
 #include "sourcefile.h"
 #include "parser.h"
 #include "typer.h"
@@ -35,8 +34,6 @@ void die() {
 Context global { .global = &global };
 
 int main(int argc, const char** argv) {
-	init_typer();
-
 	bool dd = false;
 	for (int i = 1; i < argc; i++) {
 		const char* a = argv[i];

@@ -1,5 +1,4 @@
 #include "ast.cpp"
-#include "bytecode.cpp"
 #include "context.cpp"
 #include "main.cpp"
 #include "parser.cpp"

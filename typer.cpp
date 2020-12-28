@@ -1,24 +1,12 @@
 #include "typer.h"
 
-std::vector<Type> defined_types;
-
-ASTType t_u8  { .nodetype = AST_TYPE, .name = "u8"  };
-ASTType t_u16 { .nodetype = AST_TYPE, .name = "u16" };
-ASTType t_u32 { .nodetype = AST_TYPE, .name = "u32" };
-ASTType t_u64 { .nodetype = AST_TYPE, .name = "u64" };
-ASTType t_i8  { .nodetype = AST_TYPE, .name = "i8"  };
-ASTType t_i16 { .nodetype = AST_TYPE, .name = "i16" };
-ASTType t_i32 { .nodetype = AST_TYPE, .name = "i32" };
-ASTType t_i64 { .nodetype = AST_TYPE, .name = "i64" };
-ASTType t_f32 { .nodetype = AST_TYPE, .name = "f32" };
-ASTType t_f64 { .nodetype = AST_TYPE, .name = "f64" };
-
-// TODO pointers to Type should be permanent
-// vector is a really bad fit for this
-void init_typer() {
-	defined_types.reserve(10000);
-	defined_types.push_back({ .kind = PRIMITIVE_UNSIGNED, .size = 1 }); // u8
-	defined_types.push_back({ .kind = PRIMITIVE_UNSIGNED, .size = 8 }); // u64
-	defined_types.push_back({ .kind = PRIMITIVE_FLOAT, .size = 8 });    // f64
-}
-
+ASTPrimitiveType t_u8  { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_UNSIGNED, .size = 1, .name = "u8"  };
+ASTPrimitiveType t_u16 { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_UNSIGNED, .size = 2, .name = "u16" };
+ASTPrimitiveType t_u32 { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_UNSIGNED, .size = 4, .name = "u32" };
+ASTPrimitiveType t_u64 { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_UNSIGNED, .size = 8, .name = "u64" };
+ASTPrimitiveType t_i8  { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_SIGNED,   .size = 1, .name = "i8"  };
+ASTPrimitiveType t_i16 { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_SIGNED,   .size = 2, .name = "i16" };
+ASTPrimitiveType t_i32 { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_SIGNED,   .size = 4, .name = "i32" };
+ASTPrimitiveType t_i64 { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_SIGNED,   .size = 8, .name = "i64" };
+ASTPrimitiveType t_f32 { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_FLOAT,    .size = 4, .name = "f32" };
+ASTPrimitiveType t_f64 { .nodetype = AST_PRIMITIVE_TYPE, .kind = PRIMITIVE_FLOAT,    .size = 8, .name = "f64" };
