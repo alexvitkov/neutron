@@ -11,15 +11,17 @@ enum ASTNodeType : u8 {
 	AST_PRIMITIVE_TYPE,
     AST_FN,
     AST_VAR,
-    AST_BLOCK,
     AST_BINARY_OP,
     AST_RETURN,
+    AST_CAST,
 };
 
 enum PrimitiveTypeKind : u8 {
     PRIMITIVE_SIGNED,
     PRIMITIVE_UNSIGNED,
-    PRIMITIVE_FLOAT
+    PRIMITIVE_BOOL,
+    PRIMITIVE_FLOAT,
+    PRIMITIVE_TYPE
 };
 
 struct Block {
@@ -62,6 +64,14 @@ struct ASTVar : ASTNode {
         : ASTNode(AST_VAR), name(name), type(type), value(initial_value) {};
 };
 
+struct ASTCast : ASTNode {
+    ASTType* newtype;
+    ASTNode* inner;
+
+    inline ASTCast(ASTType* newtype, ASTNode* inner)
+        : ASTNode(AST_CAST), newtype(newtype), inner(inner) {};
+};
+
 struct ASTBinaryOp : ASTNode {
     TokenType op;
     ASTNode *lhs, *rhs;
@@ -79,7 +89,6 @@ struct ASTFn : ASTNode {
     const char* name;
     TypeList args;
     Block* block;
-    ASTType* rettype;
     inline ASTFn(const char* name) : ASTNode(AST_FN), name(name) {}
 };
 
@@ -89,5 +98,6 @@ void print(std::ostream& o, ASTFn* node, bool decl);
 void print(std::ostream& o, ASTBinaryOp* node);
 void print(std::ostream& o, ASTVar* node, bool decl);
 void print(std::ostream& o, ASTReturn* node);
+void print(std::ostream& o, ASTCast* node);
 
 #endif // guard

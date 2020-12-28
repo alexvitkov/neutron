@@ -17,7 +17,7 @@ void Error::print() {
 
 }
 
-bool Context::define(const char* name, ASTNode* value) {
+bool Context::declare(const char* name, ASTNode* value) {
     std::string str(name);
 
     auto it = defines.find(str);

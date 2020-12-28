@@ -42,6 +42,7 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
         case AST_BINARY_OP:      print(o, (ASTBinaryOp*)node); break;
         case AST_VAR:            print(o, (ASTVar*)node, decl); break;
         case AST_RETURN:         print(o, (ASTReturn*)node); break;
+        case AST_CAST:           print(o, (ASTCast*)node); break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
@@ -56,9 +57,10 @@ void print(std::ostream& o, ASTFn* node, bool decl) {
         print(o, fn->args);
         o << ")";
 
-        if (node->rettype) {
+        ASTType* rettype = (ASTType*)node->block->ctx->resolve("returntype");
+        if (rettype) {
             o << ": ";
-            print(o, node->rettype, false);
+            print(o, rettype, false);
         }
         o << ' ';
         print(o, *node->block);
@@ -128,4 +130,11 @@ void print(std::ostream& o, ASTReturn* node) {
     o << "return ";
     print(o, node->value, false);
     o << ";\n";
+}
+
+void print(std::ostream& o, ASTCast* node) {
+    o << '(';
+    print(o, node->newtype, false);
+    o << ')';
+    print(o, node->inner, false);
 }

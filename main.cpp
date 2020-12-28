@@ -55,12 +55,27 @@ int main(int argc, const char** argv) {
 		die();
 	}
 
-	if (!parse_all_files(global))
+	if (!parse_all_files(global)) {
         printf("parser failed\n");
+        goto PrintErr;
+    }
 
+    if (!typecheck_all(global)) {
+        printf("type checker failed\n");
+        goto PrintErr;
+    }
+
+    for (const auto& x : global.defines) {
+        print(std::cout, x.second, true);
+        std::cout << "\n";
+    }
+
+
+PrintErr:
 	for (auto& err : global.errors) {
 		err.print();
+	    return 1;
 	}
 
-	return 0;
+    return 0;
 }

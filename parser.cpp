@@ -355,7 +355,7 @@ bool skim(Context& ctx, TokenReader& r) {
 
                 ASTFn* decl = ctx.alloc<ASTFn>(malloc_token_name(r, name));
 
-                if (!ctx.define(decl->name, (ASTNode*)decl))
+                if (!ctx.declare(decl->name, (ASTNode*)decl))
                     return false;
                 break;
             }
@@ -369,7 +369,7 @@ bool skim(Context& ctx, TokenReader& r) {
                     return false;
 
                 ASTVar* decl = ctx.alloc<ASTVar>(malloc_token_name(r, name), nullptr, nullptr);
-                if (!ctx.define(decl->name, (ASTNode*)decl))
+                if (!ctx.declare(decl->name, (ASTNode*)decl))
                     return false;
 
                 break;
@@ -425,6 +425,7 @@ ASTType* parse_type(Context& ctx, TokenReader& r) {
         case KW_I64: return &t_i64;
         case KW_F32: return &t_f32;
         case KW_F64: return &t_f64;
+        case KW_BOOL: return &t_bool;
         default:
             unexpected_token(r, t, TOK_NONE);
             return nullptr;
@@ -533,20 +534,23 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     if (!parse_type_list(ctx, r, TOK(')'), &fn->args))
         return nullptr;
 
+    ASTType* rettype = nullptr;
+
     if (r.peek().type == TOK(':')) {
         r.pop();
-        fn->rettype = parse_type(ctx, r);
-        if (!fn->rettype)
+        rettype = parse_type(ctx, r);
+        if (!rettype)
             return nullptr;
     }
 
     Context* fn_ctx = new Context();
     fn_ctx->parent = &ctx;
     fn_ctx->global = ctx.global;
+    fn_ctx->declare("returntype", rettype);
 
     for (const auto& entry : fn->args.entries) {
         ASTVar* decl = ctx.alloc<ASTVar>(entry.name, entry.type, nullptr);
-        fn_ctx->define(entry.name, (ASTNode*)decl);
+        fn_ctx->declare(entry.name, (ASTNode*)decl);
     }
 
     fn->block = parse_block(ctx, r, fn_ctx);
@@ -681,11 +685,6 @@ bool parse_all_files(Context& global) {
         TokenReader r { .sf = sources[i], .ctx = global };
         if (!parse_top_level(global, r))
             return false;
-    }
-
-    for (const auto& x : global.defines) {
-        print(std::cout, x.second, true);
-        std::cout << "\n";
     }
 
     return true;

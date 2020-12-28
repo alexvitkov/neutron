@@ -68,6 +68,7 @@ struct Error {
 	enum {
 		TOKENIZER,
 		PARSER,
+		TYPER,
 	} kind;
 
 	enum {
@@ -93,7 +94,7 @@ struct Context {
 
     ASTNode* resolve(const char* name);
     ASTNode* resolve(char* name, int length);
-    bool define(const char* name, ASTNode* value);
+    bool declare(const char* name, ASTNode* value);
 
     template <typename T, typename ... Ts>
     T* alloc(Ts ...args) {
