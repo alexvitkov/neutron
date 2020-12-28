@@ -63,7 +63,39 @@ void print(std::ostream& o, ASTType* node, bool decl) {
 }
 
 void print(std::ostream& o, ASTBinaryOp* node) {
-    o << '(' << node->lhs << " # " << node->rhs << ')';
+    o << '(';
+    print(o, node->lhs, false);
+    o << ' ';
+
+    switch (node->op) {
+        case OP_PLUSPLUS: o << "++"; break;
+        case OP_MINUSMINUS: o << "--"; break;
+        case OP_SHIFTLEFT: o << "<<"; break;
+        case OP_SHIFTRIGHT: o << ">>"; break;
+        case OP_LESSEREQUALS: o << "<="; break;
+        case OP_GREATEREQUALS: o << ">="; break;
+        case OP_DOUBLEEQUALS: o << "=="; break;
+        case OP_AND: o << "&&"; break;
+        case OP_OR: o << "||"; break;
+        case OP_NOTEQUALS: o << "!="; break;
+        case OP_ADDASSIGN: o << "+="; break;
+        case OP_SUBASSIGN: o << "-="; break;
+        case OP_MULASSIGN: o << "*="; break;
+        case OP_DIVASSIGN: o << "/="; break;
+        case OP_MODASSIGN: o << "\%="; break;
+        case OP_SHIFTLEFTASSIGN: o << "<<="; break;
+        case OP_SHIFTRIGHTASSIGN: o << ">>="; break;
+        case OP_BITANDASSIGN: o << "&="; break;
+        case OP_BITXORASSIGN: o << "^="; break;
+        case OP_BITORASSIGN: o << "|="; break;
+        default:
+            o << (char)node->op;
+    }
+
+    o << ' ';
+    print(o, node->rhs, false);
+    o << ')';
+    // << node->lhs << " # " << node->rhs << ')';
 }
 
 void print(std::ostream& o, ASTVar* node, bool decl) {

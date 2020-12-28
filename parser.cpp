@@ -101,7 +101,8 @@ enum : u8 {
     PREC_MASK = 0x0F,
 };
 
-#define PREC(tt) ((tt) & PREC_MASK)
+#define PREC(tt) (prec[tt] & PREC_MASK)
+#define IS_RIGHT_ASSOC(tt) (PREC(tt) == 1)
 
 inline bool is_operator(TokenType tt) {
     // TODO this is not great
@@ -554,6 +555,8 @@ bool pop(SYState& s) {
     bin->nodetype = AST_BINARY_OP;
     bin->lhs = s.output[s.output.size() - 2];
     bin->rhs = s.output[s.output.size() - 1];
+    bin->op = s.stack.back();
+    s.stack.pop_back();
     s.output.pop_back();
     s.output[s.output.size() - 1] = (ASTNode*)bin;
     return true;
@@ -586,8 +589,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
             s.output.pop_back(); // disacrd the (
         }
         else if (is_operator(t.type)) {
-            // TODO right assoc
-            while (!s.stack.empty() && s.stack.back() != TOK('(') && PREC(s.stack.back()) > PREC(t.type)) 
+            while (!s.stack.empty() && s.stack.back() != TOK('(') && PREC(s.stack.back()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
                 if (!pop(s))
                     return nullptr;
             s.stack.push_back(t.type);

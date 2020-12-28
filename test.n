@@ -3,10 +3,7 @@ fn foo(x: i32, y: i32) {
 }
 
 fn bar(x: u64, y: u64) {
-    let x: u32 = foo;
-    let y: u32 = bar;
-
-    fn baz() {
-    }
+    let x: u32 = foo == bar * x;
 }
 
+let x: u32 = foo;
