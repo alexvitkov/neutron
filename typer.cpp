@@ -88,6 +88,10 @@ ASTType* typecheck(Context& ctx, ASTNode* node) {
             ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
             return nullptr;
         }
+        case AST_NUMBER: {
+            ASTNumber* num = (ASTNumber*)node;
+            return num->type;
+        }
         default: {
                 ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "unsupported node type"});
                 return nullptr;

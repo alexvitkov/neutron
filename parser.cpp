@@ -181,7 +181,7 @@ bool tokenize(Context& global, SourceFile &s) {
 				tok* kw = Perfect_Hash::in_word_set(s.buffer + word_start, i - word_start);
 
 				s.tokens.push_back({
-					.type = kw ? kw->type : (state == WORD ? TOK_ID : TOK_NUM),
+					.type = kw ? kw->type : (state == WORD ? TOK_ID : TOK_NUMBER),
 					.length = (u32)(i - word_start),
 					.start = word_start
 				});
@@ -588,6 +588,18 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                 return nullptr;
             s.output.push_back(resolved);
             prev_was_value = true;
+        }
+        else if (t.type == TOK_NUMBER) {
+            u64 acc = 0;
+            for (int i = 0; i < t.length; i++) {
+                char c = r.sf.buffer[t.start + i];
+                if (c >= '0' && c <= '9') {
+                    acc += c - '0';
+                    acc *= 10;
+                }
+            }
+            acc /= 10;
+            s.output.push_back(ctx.alloc<ASTNumber>(acc));
         }
         else if (t.type == TOK('(')) {
             if (prev_was_value) {

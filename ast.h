@@ -14,6 +14,7 @@ enum ASTNodeType : u8 {
     AST_BINARY_OP,
     AST_RETURN,
     AST_CAST,
+    AST_NUMBER,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -64,6 +65,13 @@ struct ASTVar : ASTNode {
         : ASTNode(AST_VAR), name(name), type(type), value(initial_value) {};
 };
 
+struct ASTNumber : ASTNode {
+    u64 floorabs;
+    ASTType* type;
+
+    ASTNumber(u64 floorabs);
+};
+
 struct ASTCast : ASTNode {
     ASTType* newtype;
     ASTNode* inner;
@@ -99,5 +107,6 @@ void print(std::ostream& o, ASTBinaryOp* node);
 void print(std::ostream& o, ASTVar* node, bool decl);
 void print(std::ostream& o, ASTReturn* node);
 void print(std::ostream& o, ASTCast* node);
+void print(std::ostream& o, ASTNumber* node);
 
 #endif // guard

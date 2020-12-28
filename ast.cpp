@@ -1,6 +1,18 @@
 #include "ast.h"
+#include "typer.h"
 
 int indent = 0;
+
+ASTNumber::ASTNumber(u64 floorabs) : ASTNode(AST_NUMBER), floorabs(floorabs) {
+    if (floorabs < 0xFF)
+        type = &t_u8;
+    else if (floorabs < 0xFFFF)
+        type = &t_u16;
+    else if (floorabs < 0xFFFFFFFF)
+        type = &t_u32;
+    else
+        type = &t_u64;
+}
 
 void print(std::ostream& o, TypeList& tl) {
     for (const auto& entry : tl.entries) {
@@ -43,6 +55,7 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
         case AST_VAR:            print(o, (ASTVar*)node, decl); break;
         case AST_RETURN:         print(o, (ASTReturn*)node); break;
         case AST_CAST:           print(o, (ASTCast*)node); break;
+        case AST_NUMBER:         print(o, (ASTNumber*)node); break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
@@ -137,4 +150,8 @@ void print(std::ostream& o, ASTCast* node) {
     print(o, node->newtype, false);
     o << ')';
     print(o, node->inner, false);
+}
+
+void print(std::ostream& o, ASTNumber* node) {
+    o << node->floorabs;
 }

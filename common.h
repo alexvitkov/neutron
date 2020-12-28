@@ -61,7 +61,7 @@ enum TokenType : u8 {
 	KW_FALSE,
 
 	TOK_ID  = 128,
-	TOK_NUM,
+	TOK_NUMBER,
 };
 
 struct Error {

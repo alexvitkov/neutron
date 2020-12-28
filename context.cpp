@@ -14,7 +14,6 @@ bool Context::is_global() {
 
 void Error::print() {
 	printf("error: %s\n", this->message);
-
 }
 
 bool Context::declare(const char* name, ASTNode* value) {

@@ -1,5 +1,4 @@
 
-fn add(x: u64, y: u32): u64 {
-    let z: bool;
-    x = z + x;
+fn add(x: u8, y: u32): u64 {
+    x = 244;
 }
