@@ -45,7 +45,12 @@ int main(int argc, const char** argv) {
         exit_with_error();
     }
 
-    void* compiled = bytecode_compile(global, 10 * 1024 * 1024, 0, 4096, 9 * 1024 * 1024);
+    void* code = malloc(10 * 1024 * 1024);
+    void* stac = malloc(10 * 1024);
+
+    void* end = bytecode_compile(global, code, stac);
+
+    bytecode_disassemble((u8*)code, (u8*)end);
 
     return 0;
 }

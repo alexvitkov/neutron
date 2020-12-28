@@ -11,6 +11,9 @@
 #define RES   (NREG - 2)
 #define IP    (NREG - 3)
 
+#define RETREG (NREG - 4)
+#define TMPREG (NREG - 5)
+
 enum OpCode : u8 {
     // 0x00 EXITCODE(u1)
     OP_EXIT  = 0x00,
@@ -48,44 +51,90 @@ enum OpCode : u8 {
     OP_LTEF,
 };
 
-enum AddrMode : uint8_t {
+enum AddrMode : u8 {
     // ADDR is 4 bytes, REG is 1 byte, VAL is 8 bytes
 
     // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 0x00 0x00 |
     AM_REG2REG = 0x01,
 
-    // | OPCODE 0x02 0x00 SRCREG | DSTADDR |
+    // | OPCODE 0x02 0x00 SRCREG | 0x00 0x00 0x00 0x00 | DSTADDR |
     AM_REG2MEM = 0x02,
 
-    // | OPCODE 0x03 0x00 DSTREG | SRCADDR |
+    // | OPCODE 0x03 DSTREG 0x00 | 0x00 0x00 0x00 0x00 | SRCADDR |
     AM_MEM2REG = 0x03,
 
-    // | OPCODE 0x04 0x00 DSTREG | 0x00 0x00 0x00 0x00 | VAL (8 bytes) |
+    // | OPCODE 0x04 DSTREG 0x00 | 0x00 0x00 0x00 0x00 | VAL (8 bytes) |
     AM_VAL2REG = 0x04,
 
-    // | OPCODE 0x04 0x00 0x00 | DSTREG (4 bytes) | VAL (8 bytes) |
+    // | OPCODE 0x05 0x00 0x00 | 0x00 0x00 0x00 0x00 | ADDR ( 8 bytes) | VAL (8 bytes) |
     AM_VAL2MEM = 0x05,
 };
 
-void* bytecode_compile(Context& ctx, u32 mem_size, u32 code_start, u32 data_start, u32 stack_start);
+struct Instr {
+    OpCode op;
+    AddrMode addrmode;
+    u8 dstreg;
+    u8 srcreg;
+    u32 zero;
+};
+
+struct Reg2MemInstr : public Instr {
+    void* dstaddr;
+};
+
+struct Mem2RegInstr : public Instr {
+    void* srcaddr;
+};
+
+struct Val2RegInstr : public Instr {
+    u64 val;
+};
+
+struct Val2MemInstr : public Instr {
+    void* dstaddr;
+    u64 val;
+};
+
+struct Loc {
+    enum {
+        REGISTER,
+        MEMORY,
+        NODE,
+        STACK,
+        VALUE,
+    } type;
+    union {
+        u8 reg;
+        void* addr;
+        ASTNode* node;
+        u32 offset;
+        u64 value;
+    };
+};
+
+void* bytecode_compile(Context& ctx, void* code_start, void* stack_start);
+void bytecode_disassemble(u8* start, u8* end);
 int interpret(uint64_t* reg);
 
+Loc lreg(u8 regid);
+Loc lnode(ASTNode* node);
+Loc lval(u64 num);
+
 struct Emitter {
-    std::unordered_map<ASTNode*, std::vector<u32*>> waiting;
-    std::unordered_map<ASTNode*, u32> addresses;
+    std::unordered_map<ASTNode*, std::vector<void**>> waiting;
+    std::unordered_map<ASTNode*, void*> addresses;
 
     void emitexit(u8 code);
     void emitcall(u64 ptr);
-    void emitret(u64 ptr);
-    void emitr2r(OpCode op, u8 dstreg, u8 srcreg);
-    void emitr2m(OpCode op, u32 dstmem, u8 srcreg);
-    void emitm2r(OpCode op, u32 srcmem, u8 dstreg);
-    void emitv2r(OpCode op, u64 srcval, u8 dstreg);
+    void emit(OpCode op, Loc dst, Loc src);
 
     Context& global;
-    u8 *mem, *s;
+    u8 *s;
+    u64* stack;
 
-    Emitter(Context& global, u32 mem_size, u32 code_start, u32 data_start, u32 stack_start);
+    void nodeaddr(ASTNode* node, void** addr);
+
+    Emitter(Context& global, void* code_start, void* stack_start);
 };
 
 #endif // guard

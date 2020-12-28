@@ -1,5 +1,5 @@
 
-fn add(x: u32, y: u32): u16 {
-    let a: u32 = 100;
+fn add(x: u8, y: u8): u8 {
+    return 1 + 1;
 }
 
