@@ -504,8 +504,10 @@ Block* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
             break;
         }
         else {
-            r.expect(TOK('}'));
-            return nullptr;
+            ASTNode* expr = parse_expr(*ctx, r, TOK(';'));
+            if (!expr)
+                return nullptr;
+            block->statements.push_back(expr);
         }
     }
     return block;
