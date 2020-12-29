@@ -99,7 +99,7 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
                 case Loc::STACK: {
                     Instr* i = (Instr*)s;
                     i->op = op;
-                    i->addrmode = AM_REG2REGDEREF;
+                    i->addrmode = AM_REG2REGDEREFDST;
                     i->srcreg = src.reg;
                     i->dstreg = SP;
                     i->mem_offset = dst.offset;
@@ -134,6 +134,23 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
                 }
                 default:
                     assert(!"addrmode not impl 2");
+            }
+            break;
+        }
+        case Loc::STACK: {
+            switch (dst.type) {
+                case Loc::REGISTER: {
+                    Instr* i = (Instr*)s;
+                    i->op = op,
+                    i->addrmode = AM_REG2REGDEREFSRC,
+                    i->srcreg = SP,
+                    i->dstreg = dst.reg,
+                    i->mem_offset = src.offset,
+                    s += sizeof(*i);
+                    break;
+                }
+                default:
+                    assert(!"addrmode not impl 7");
             }
             break;
         }
@@ -319,7 +336,7 @@ Next:
                     start += sizeof(*i);
                     break;
                 }
-                case AM_REG2REGDEREF: {
+                case AM_REG2REGDEREFDST: {
                     Instr* i = (Instr*)start;
                     printf("[");
                     printregname(i->dstreg);
@@ -327,6 +344,17 @@ Next:
                         printf(" + %x", i->mem_offset);
                     printf("], ");
                     printregname(i->srcreg);
+                    start += sizeof(*i);
+                    break;
+                }
+                case AM_REG2REGDEREFSRC: {
+                    Instr* i = (Instr*)start;
+                    printregname(i->dstreg);
+                    printf(", [");
+                    printregname(i->srcreg);
+                    if (i->mem_offset)
+                        printf(" + %x", i->mem_offset);
+                    printf("]");
                     start += sizeof(*i);
                     break;
                 }
