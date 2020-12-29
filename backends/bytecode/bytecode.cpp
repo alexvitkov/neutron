@@ -6,34 +6,36 @@
 #include <algorithm>
 #include <assert.h>
 
-void compile_expr(Emitter& em, Loc dst, ASTNode *expr) {
+void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
     switch (expr->nodetype) {
         case AST_NUMBER: {
             ASTNumber* num = (ASTNumber*)expr;
-            em.emit(OP_MOV, dst, lval(num->floorabs));
+            em.emit(op, dst, lval(num->floorabs));
             break;
         }
 
         case AST_BINARY_OP: {
             ASTBinaryOp* bin = (ASTBinaryOp*)expr;
-            compile_expr(em, dst, bin->lhs);
-            compile_expr(em, lreg(TMPREG), bin->rhs);
+            compile_expr(em, OP_MOV, lreg(RTMP), bin->lhs);
 
             switch (bin->op) {
                 case '+':
-                    em.emit(OP_ADD, dst, lreg(TMPREG));
+                    compile_expr(em, OP_ADD, lreg(RTMP), bin->rhs);
                     break;
                 default:
                     assert(!"not impl 5");
                     break;
             }
+
+            if (!(op == OP_MOV && dst.reg == RTMP && dst.type == Loc::REGISTER))
+                em.emit(op, dst, lreg(RTMP));
             break;
         }
 
         case AST_CAST: {
             ASTCast* cast = (ASTCast*)expr;
             ASTType* oldType = typecheck(em.global, cast->inner);
-            compile_expr(em, dst, cast->inner);
+            compile_expr(em, op, dst, cast->inner);
 
             // TODO cast is ignored
             break;
@@ -41,8 +43,8 @@ void compile_expr(Emitter& em, Loc dst, ASTNode *expr) {
 
         case AST_VAR: {
             ASTVar* var = (ASTVar*)expr;
-            //var.location
-
+            em.emit(op, dst, var->location);
+            break;
         }
 
         default:
@@ -131,7 +133,7 @@ void compile_fn(Emitter& em, ASTFn* fn) {
                 var->location = lstack(frame_size);
                 frame_size += 8;
             }
-            printf("%s at %d:%d\n", var->name, var->location.type, var->location.offset);
+            // printf("%s at %d:%d\n", var->name, var->location.type, var->location.offset);
         }
         else if (decl.second->nodetype == AST_FN) {
             compile_fn(em, (ASTFn*)decl.second);
@@ -141,7 +143,7 @@ void compile_fn(Emitter& em, ASTFn* fn) {
     for (ASTNode* stmt : fn->block->statements) {
         if (stmt->nodetype == AST_RETURN) {
             ASTReturn* ret = (ASTReturn*)stmt;
-            compile_expr(em, lreg(RETREG), ret->value);
+            compile_expr(em, OP_MOV, lreg(RRET), ret->value);
             *em.s = OP_RET;
             em.s += 8;
         }
@@ -194,39 +196,47 @@ void Emitter::emitcall(u64 ptr) {
     s += 16;
 }
 
+void printregname(u8 reg) {
+    if (reg == RTMP)
+        printf("RTMP");
+    else if (reg == RRET)
+        printf("RRET");
+    else printf("R%d", reg);
+}
+
 void bytecode_disassemble(u8* start, u8* end) {
 Next:
     while (start < end) {
 
         switch (start[0]) {
             case OP_RET:   
-                printf("RET\n");   
+                printf("RET");   
                 start += 8;
                 goto Next;
             case OP_EXIT:  
                 printf("EXIT 0x%x", start[1]);  
                 goto Next;
-            case OP_JMP:   printf("JMP");   break;
-            case OP_JMPIF: printf("JMPIF"); break;
-            case OP_CALL:  printf("CALL");  break;
-            case OP_ADD:   printf("ADD");   break;
-            case OP_SUB:   printf("SUB");   break;
-            case OP_MOV:   printf("MOV");   break;
-            case OP_MULS:  printf("MULS");  break;
-            case OP_MULU:  printf("MULU");  break;
-            case OP_EQ:    printf("EQ");    break;
-            case OP_GTS:   printf("GTS");   break;
-            case OP_LTS:   printf("LTS");   break;
-            case OP_GTU:   printf("GTU");   break;
-            case OP_LTU:   printf("LTU");   break;
-            case OP_GTF:   printf("GTF");   break;
-            case OP_LTF:   printf("LTF");   break;
-            case OP_GTES:  printf("GTES");  break;
-            case OP_LTES:  printf("LTES");  break;
-            case OP_GTEU:  printf("GTEU");  break;
-            case OP_LTEU:  printf("LTEU");  break;
-            case OP_GTEF:  printf("GTEF");  break;
-            case OP_LTEF:  printf("LTEF");  break;
+            case OP_JMP:   printf("JMP   ");  break;
+            case OP_JMPIF: printf("JMPIF ");  break;
+            case OP_CALL:  printf("CALL  ");  break;
+            case OP_ADD:   printf("ADD   ");  break;
+            case OP_SUB:   printf("SUB   ");  break;
+            case OP_MOV:   printf("MOV   ");  break;
+            case OP_MULS:  printf("MULS  ");  break;
+            case OP_MULU:  printf("MULU  ");  break;
+            case OP_EQ:    printf("EQ    ");  break;
+            case OP_GTS:   printf("GTS   ");  break;
+            case OP_LTS:   printf("LTS   ");  break;
+            case OP_GTU:   printf("GTU   ");  break;
+            case OP_LTU:   printf("LTU   ");  break;
+            case OP_GTF:   printf("GTF   ");  break;
+            case OP_LTF:   printf("LTF   ");  break;
+            case OP_GTES:  printf("GTES  ");  break;
+            case OP_LTES:  printf("LTES  ");  break;
+            case OP_GTEU:  printf("GTEU  ");  break;
+            case OP_LTEU:  printf("LTEU  ");  break;
+            case OP_GTEF:  printf("GTEF  ");  break;
+            case OP_LTEF:  printf("LTEF  ");  break;
             default:
                 assert(!"???");
                 return;
@@ -237,31 +247,35 @@ Next:
             switch (addrmode) {
                 case AM_REG2REG: {
                     Instr* i = (Instr*)start;
-                    printf(" R%d, R%d\n", i->dstreg, i->srcreg);
+                    printregname(i->dstreg);
+                    printf(", ");
+                    printregname(i->srcreg);
                     start += sizeof(*i);
                     break;
                 }
                 case AM_REG2MEM: {
                     Reg2MemInstr* i = (Reg2MemInstr*)start;
-                    printf(" [%p], R%d\n", i->dstaddr, i->srcreg);
+                    printf("[%p], ", i->dstaddr);
                     start += sizeof(*i);
                     break;
                 }
                 case AM_MEM2REG: {
                     Mem2RegInstr* i = (Mem2RegInstr*)start;
-                    printf(" R%d, [%p]\n", i->dstreg, i->srcaddr);
+                    printregname(i->dstreg);
+                    printf(", [%p]", i->srcaddr);
                     start += sizeof(*i);
                     break;
                 }
                 case AM_VAL2REG: {
                     Val2RegInstr* i = (Val2RegInstr*)start;
-                    printf(" R%d, %lu\n", i->dstreg, i->val);
+                    printregname(i->dstreg);
+                    printf(", %lu", i->val);
                     start += sizeof(*i);
                     break;
                 }
                 case AM_VAL2MEM: {
                     Val2MemInstr* i = (Val2MemInstr*)start;
-                    printf(" [%p], %lu\n", i->dstaddr, i->val);
+                    printf(" [%p], %lu", i->dstaddr, i->val);
                     start += sizeof(*i);
                     break;
                 }
@@ -269,6 +283,7 @@ Next:
                     assert(!"???");
                 }
             }
+            printf("\n");
         }
     }
 }

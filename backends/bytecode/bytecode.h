@@ -12,8 +12,8 @@
 #define RES   (NREG - 2)
 #define IP    (NREG - 3)
 
-#define RETREG (NREG - 4)
-#define TMPREG (NREG - 5)
+#define RRET (NREG - 4)
+#define RTMP (NREG - 5)
 
 enum OpCode : u8 {
     // 0x00 EXITCODE(u1)

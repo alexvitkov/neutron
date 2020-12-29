@@ -580,7 +580,7 @@ bool pop(SYState& s) {
 
 ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
     SYState s { .ctx = ctx };
-    bool prev_was_value = true;
+    bool prev_was_value = false;
 
     for (Token t = r.pop(); t.type != delim; t = r.pop()) {
         if (t.type == TOK_ID) {
@@ -614,7 +614,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
             while (s.stack.back() != TOK('('))
                 if (!pop(s))
                     return nullptr;
-            s.output.pop_back(); // disacrd the (
+            s.stack.pop_back(); // disacrd the (
         }
         else if (is_operator(t.type)) {
             while (!s.stack.empty() && s.stack.back() != TOK('(') && PREC(s.stack.back()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
