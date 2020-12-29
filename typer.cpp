@@ -97,6 +97,15 @@ ASTType* typecheck(Context& ctx, ASTNode* node) {
             ASTNumber* num = (ASTNumber*)node;
             return num->type;
         }
+        case AST_IF: {
+            ASTIf* ifs = (ASTIf*)node;
+            typecheck(ctx, ifs->condition);
+            for (const auto& stmt : ifs->block.statements) {
+                if (!typecheck(ifs->block.ctx, stmt))
+                    return nullptr;
+            }
+            return (ASTType*)1; // TODO TODO TODO TODO TODO
+        }
         default: {
                 ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "unsupported node type"});
                 return nullptr;

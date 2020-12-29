@@ -97,7 +97,7 @@ struct ASTIf : ASTNode {
     ASTNode* condition;
     Block block;
 
-    inline ASTIf(Context& parent_ctx) : block(parent_ctx), ASTNode(AST_IF) {}
+    inline ASTIf(Context& parent_ctx) : ASTNode(AST_IF), block(parent_ctx) {}
 };
 
 struct ASTCast : ASTNode {

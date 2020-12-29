@@ -342,21 +342,25 @@ bool skim(Context& ctx, TokenReader& r) {
                 }
                 break;
             case KW_FN: {
-                // TODO we're leaking
-                Token namet = r.peek();
-                if (namet.type == TOK_ID) {
-                    char* name = malloc_token_name(r, namet);
-                    if (!ctx.declare(name, ctx.alloc<ASTFn>(ctx, name)))
-                        return false;
+                if (depth == 0) {
+                    // TODO we're leaking
+                    Token namet = r.peek();
+                    if (namet.type == TOK_ID) {
+                        char* name = malloc_token_name(r, namet);
+                        if (!ctx.declare(name, ctx.alloc<ASTFn>(ctx, name)))
+                            return false;
+                    }
+                    break;
                 }
-                break;
             }
             case KW_LET: {
-                Token namet = r.peek();
-                if (namet.type == TOK_ID) {
-                    char* name = malloc_token_name(r, namet);
-                    if (!ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, 0)))
-                        return false;
+                if (depth == 0) {
+                    Token namet = r.peek();
+                    if (namet.type == TOK_ID) {
+                        char* name = malloc_token_name(r, namet);
+                        if (!ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, 0)))
+                            return false;
+                    }
                 }
                 break;
             }
