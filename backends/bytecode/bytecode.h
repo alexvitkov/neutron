@@ -21,11 +21,11 @@ enum OpCode : u8 {
     // 0x00 EXITCODE(u1)
     OP_EXIT  = 0x01,
 
-    // | OPCODE 0x00 0x00 0x00 | OFFSET (u32) |
+    // | OPCODE 0x00 0x00 0x00 | 0x00 0x00 0x00 0x00 |
     // will always jump to addr
     OP_JMP,
 
-    // | OPCODE 0x00 0x00 TESTREG | OFFSET(u32) |
+    // | OPCODE 0x00 0x00 TESTREG | 0x00 0x00 0x00 0x00 |
     // Will only jump if value of TESTREG != 0
     OP_JMPIF,
 
@@ -55,22 +55,28 @@ enum OpCode : u8 {
 };
 
 enum AddrMode : u8 {
-    // ADDR is 4 bytes, REG is 1 byte, VAL is 8 bytes
 
     // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 0x00 0x00 |
     AM_REG2REG = 0x01,
 
-    // | OPCODE 0x02 0x00 SRCREG | 0x00 0x00 0x00 0x00 | DSTADDR |
+    // | OPCODE 0x02 0x00 SRCREG | 0x00 0x00 MEM_OFFSET(2B) | DSTADDR |
     AM_REG2MEM = 0x02,
 
-    // | OPCODE 0x03 DSTREG 0x00 | 0x00 0x00 0x00 0x00 | SRCADDR |
+    // | OPCODE 0x03 DSTREG 0x00 | 0x00 0x00 MEM_OFFSET(2B) | SRCADDR |
     AM_MEM2REG = 0x03,
 
-    // | OPCODE 0x04 DSTREG 0x00 | 0x00 0x00 0x00 0x00 | VAL (8 bytes) |
+    // | OPCODE 0x04 DSTREG 0x00 | 0x00 0x00 0x00 0x00 | VAL (8B) |
     AM_VAL2REG = 0x04,
 
-    // | OPCODE 0x05 0x00 0x00 | 0x00 0x00 0x00 0x00 | ADDR ( 8 bytes) | VAL (8 bytes) |
+    // | OPCODE 0x05 0x00 0x00 | 0x00 0x00 MEM_OFFSET(2B) | ADDR (8B) | VAL (8B) |
     AM_VAL2MEM = 0x05,
+
+    // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 MEM_OFFSET(2B) |
+    AM_REG2REGDEREF = 0x06,
+    
+    // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 MEM_OFFSET(2B) | VAL (8B) |
+    AM_VAL2REGDEREF = 0x07,
+
 };
 
 struct Instr {
@@ -78,18 +84,15 @@ struct Instr {
     AddrMode addrmode;
     u8 dstreg;
     u8 srcreg;
-    u32 zero;
+    u16 _zero;
+    u32 mem_offset;
 };
 
-struct Reg2MemInstr : public Instr {
-    void* dstaddr;
+struct MemInstr : public Instr {
+    void* addr;
 };
 
-struct Mem2RegInstr : public Instr {
-    void* srcaddr;
-};
-
-struct Val2RegInstr : public Instr {
+struct ValInstr : public Instr {
     u64 val;
 };
 

@@ -88,11 +88,21 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
                     break;
                 }
                 case Loc::NODE: {
-                    Reg2MemInstr* i = (Reg2MemInstr*)s;
+                    MemInstr* i = (MemInstr*)s;
                     i->op = op;
                     i->addrmode = AM_REG2MEM;
                     i->srcreg = src.reg;
-                    nodeaddr(dst.node, &i->dstaddr);
+                    nodeaddr(dst.node, &i->addr);
+                    s += sizeof(*i);
+                    break;
+                }
+                case Loc::STACK: {
+                    Instr* i = (Instr*)s;
+                    i->op = op;
+                    i->addrmode = AM_REG2REGDEREF;
+                    i->srcreg = src.reg;
+                    i->dstreg = SP;
+                    i->mem_offset = dst.offset;
                     s += sizeof(*i);
                     break;
                 }
@@ -104,10 +114,20 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
         case Loc::VALUE: {
             switch (dst.type) {
                 case Loc::REGISTER: {
-                    Val2RegInstr* i = (Val2RegInstr*)s;
+                    ValInstr* i = (ValInstr*)s;
                     i->op = op;
                     i->addrmode = AM_VAL2REG;
                     i->dstreg = dst.reg;
+                    i->val = src.value;
+                    s += sizeof(*i);
+                    break;
+                }
+                case Loc::STACK: {
+                    ValInstr* i = (ValInstr*)s;
+                    i->op = op,
+                    i->addrmode = AM_VAL2REGDEREF,
+                    i->dstreg = SP,
+                    i->mem_offset = dst.offset,
                     i->val = src.value;
                     s += sizeof(*i);
                     break;
@@ -220,6 +240,8 @@ void printregname(u8 reg) {
         printf("RTMP");
     else if (reg == RRET)
         printf("RRET");
+    else if (reg == SP)
+        printf("SP");
     else printf("R%d", reg);
 }
 
@@ -272,20 +294,20 @@ Next:
                     break;
                 }
                 case AM_REG2MEM: {
-                    Reg2MemInstr* i = (Reg2MemInstr*)start;
-                    printf("[%p], ", i->dstaddr);
+                    MemInstr* i = (MemInstr*)start;
+                    printf("[%p], ", i->addr);
                     start += sizeof(*i);
                     break;
                 }
                 case AM_MEM2REG: {
-                    Mem2RegInstr* i = (Mem2RegInstr*)start;
+                    MemInstr* i = (MemInstr*)start;
                     printregname(i->dstreg);
-                    printf(", [%p]", i->srcaddr);
+                    printf(", [%p]", i->addr);
                     start += sizeof(*i);
                     break;
                 }
                 case AM_VAL2REG: {
-                    Val2RegInstr* i = (Val2RegInstr*)start;
+                    ValInstr* i = (ValInstr*)start;
                     printregname(i->dstreg);
                     printf(", %lu", i->val);
                     start += sizeof(*i);
@@ -297,8 +319,29 @@ Next:
                     start += sizeof(*i);
                     break;
                 }
+                case AM_REG2REGDEREF: {
+                    Instr* i = (Instr*)start;
+                    printf("[");
+                    printregname(i->dstreg);
+                    if (i->mem_offset)
+                        printf(" + %x", i->mem_offset);
+                    printf("], ");
+                    printregname(i->srcreg);
+                    start += sizeof(*i);
+                    break;
+                }
+                case AM_VAL2REGDEREF: {
+                    ValInstr* i = (ValInstr*)start;
+                    printf("[");
+                    printregname(i->dstreg);
+                    if (i->mem_offset)
+                        printf(" + %x", i->mem_offset);
+                    printf("], %lu", i->val);
+                    start += sizeof(*i);
+                    break;
+                }
                 default: {
-                    assert(!"???");
+                    assert(!"invalid addressing mode");
                 }
             }
             printf("\n");
