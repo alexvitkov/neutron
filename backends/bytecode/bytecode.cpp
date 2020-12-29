@@ -45,9 +45,45 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
                     compile_expr(em, OP_MOV, loc, bin->rhs);
                     break;
                 }
+                case OP_DOUBLEEQUALS: {
+                    compile_expr(em, OP_MOV, lreg(RTMP), bin->lhs);
+                    compile_expr(em, OP_MOV, lreg(RTMP - 1), bin->rhs);
+                    em.emit(OP_EQ, lreg(RTMP), lreg(RTMP - 1));
+                    break;
+                }
                 default:
                     assert(!"binary operator not implemented");
             }
+            break;
+        }
+
+        case AST_IF: {
+            ASTIf* ifs = (ASTIf*)expr;
+
+            compile_expr(em, OP_MOV, lreg(RTMP), ifs->condition);
+
+            // Jump will be taken if the expression is false
+            // we don't know the address we'll jump to yet, we'll fill it in when we're with the bloc
+            MemInstr* jmp = (MemInstr*)em.s;
+            jmp->srcreg = RRES;
+            jmp->op = OP_JZ;
+
+            em.s += sizeof(*jmp);
+
+            for (ASTNode* node : ifs->block.statements)
+                compile_expr(em, OP_DISCARD, lreg(0), node);
+
+            // We're now right after the if's block, fill in the address
+            jmp->addr = em.s;
+            break;
+        }
+
+        case AST_RETURN: {
+            ASTReturn* ret = (ASTReturn*)expr;
+            if (ret->value)
+                compile_expr(em, OP_MOV, lreg(RRET), ret->value);
+            *em.s = OP_RET;
+            em.s += 8;
             break;
         }
 
@@ -196,18 +232,8 @@ void compile_fn(Emitter& em, ASTFn* fn) {
         }
     }
 
-    for (ASTNode* node : fn->block.statements) {
-        if (node->nodetype == AST_RETURN) {
-            ASTReturn* ret = (ASTReturn*)node;
-            if (ret->value)
-                compile_expr(em, OP_MOV, lreg(RRET), ret->value);
-            *em.s = OP_RET;
-            em.s += 8;
-        }
-        else {
-            compile_expr(em, OP_DISCARD, lreg(0), node);
-        }
-    }
+    for (ASTNode* node : fn->block.statements)
+        compile_expr(em, OP_DISCARD, lreg(0), node);
 
 }
 
@@ -275,26 +301,33 @@ Next:
                 printf("EXIT 0x%x\n", start[1]);  
                 goto Next;
             case OP_JMP:   printf("JMP   ");  break;
-            case OP_JMPIF: printf("JMPIF ");  break;
-            case OP_CALL:  printf("CALL  ");  break;
-            case OP_ADD:   printf("ADD   ");  break;
-            case OP_SUB:   printf("SUB   ");  break;
-            case OP_MOV:   printf("MOV   ");  break;
-            case OP_MULS:  printf("MULS  ");  break;
-            case OP_MULU:  printf("MULU  ");  break;
-            case OP_EQ:    printf("EQ    ");  break;
-            case OP_GTS:   printf("GTS   ");  break;
-            case OP_LTS:   printf("LTS   ");  break;
-            case OP_GTU:   printf("GTU   ");  break;
-            case OP_LTU:   printf("LTU   ");  break;
-            case OP_GTF:   printf("GTF   ");  break;
-            case OP_LTF:   printf("LTF   ");  break;
-            case OP_GTES:  printf("GTES  ");  break;
-            case OP_LTES:  printf("LTES  ");  break;
-            case OP_GTEU:  printf("GTEU  ");  break;
-            case OP_LTEU:  printf("LTEU  ");  break;
-            case OP_GTEF:  printf("GTEF  ");  break;
-            case OP_LTEF:  printf("LTEF  ");  break;
+            case OP_JNZ: 
+                printf("JNZ  %p\n", ((MemInstr*)start)->addr);
+                start += sizeof(MemInstr);
+                goto Next;
+            case OP_JZ: 
+                printf("JZ   %p\n", ((MemInstr*)start)->addr);
+                start += sizeof(MemInstr);
+                goto Next;
+            case OP_CALL:  printf("CALL ");  break;
+            case OP_ADD:   printf("ADD  ");  break;
+            case OP_SUB:   printf("SUB  ");  break;
+            case OP_MOV:   printf("MOV  ");  break;
+            case OP_MULS:  printf("MULS ");  break;
+            case OP_MULU:  printf("MULU ");  break;
+            case OP_EQ:    printf("EQ   ");  break;
+            case OP_GTS:   printf("GTS  ");  break;
+            case OP_LTS:   printf("LTS  ");  break;
+            case OP_GTU:   printf("GTU  ");  break;
+            case OP_LTU:   printf("LTU  ");  break;
+            case OP_GTF:   printf("GTF  ");  break;
+            case OP_LTF:   printf("LTF  ");  break;
+            case OP_GTES:  printf("GTES ");  break;
+            case OP_LTES:  printf("LTES ");  break;
+            case OP_GTEU:  printf("GTEU ");  break;
+            case OP_LTEU:  printf("LTEU ");  break;
+            case OP_GTEF:  printf("GTEF ");  break;
+            case OP_LTEF:  printf("LTEF ");  break;
             default:
                 assert(!"???");
                 return;

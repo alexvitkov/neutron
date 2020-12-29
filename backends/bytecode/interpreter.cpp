@@ -12,7 +12,7 @@ NEXT:
                     printf("Bytecode exited with code %x\n", b[1]);
                 return 1;
             }
-            case OP_JMPIF: {
+            case OP_JNZ: {
                 if (!reg[b[3]]) {
                     reg[IP] += 8;
                     goto NEXT;
@@ -20,7 +20,7 @@ NEXT:
                 // FALLTHROUGH
             }
             case OP_JMP: {
-                reg[IP] += ((int32_t*)b)[1];
+                reg[IP] += ((u64*)b)[1];
                 goto NEXT;
             }
             case OP_CALL: {
@@ -83,19 +83,19 @@ NEXT:
                 case OP_MOV: *dstp  = src; goto NEXT; 
                 case OP_MULS: *dstp  *= src; goto NEXT; 
                 case OP_MULU: *(int64_t*)dstp  *= *(int64_t*)&src; goto NEXT; 
-                case OP_EQ:   reg[RES] =           *dstp ==             src; goto NEXT;
-                case OP_GTU:  reg[RES] =           *dstp >              src; goto NEXT;
-                case OP_LTU:  reg[RES] =           *dstp <              src; goto NEXT;
-                case OP_GTS:  reg[RES] = *(int64_t*)dstp >  *(int64_t*)&src; goto NEXT;
-                case OP_LTS:  reg[RES] = *(int64_t*)dstp <  *(int64_t*)&src; goto NEXT;
-                case OP_GTF:  reg[RES] =  *(double*)dstp >   *(double*)&src; goto NEXT;
-                case OP_LTF:  reg[RES] =  *(double*)dstp <   *(double*)&src; goto NEXT;
-                case OP_GTEU: reg[RES] =           *dstp >=             src; goto NEXT;
-                case OP_LTEU: reg[RES] =           *dstp <=             src; goto NEXT;
-                case OP_GTES: reg[RES] = *(int64_t*)dstp >= *(int64_t*)&src; goto NEXT;
-                case OP_LTES: reg[RES] = *(int64_t*)dstp <= *(int64_t*)&src; goto NEXT;
-                case OP_GTEF: reg[RES] =  *(double*)dstp >=  *(double*)&src; goto NEXT;
-                case OP_LTEF: reg[RES] =  *(double*)dstp <=  *(double*)&src; goto NEXT;
+                case OP_EQ:   reg[RRES] =           *dstp ==             src; goto NEXT;
+                case OP_GTU:  reg[RRES] =           *dstp >              src; goto NEXT;
+                case OP_LTU:  reg[RRES] =           *dstp <              src; goto NEXT;
+                case OP_GTS:  reg[RRES] = *(int64_t*)dstp >  *(int64_t*)&src; goto NEXT;
+                case OP_LTS:  reg[RRES] = *(int64_t*)dstp <  *(int64_t*)&src; goto NEXT;
+                case OP_GTF:  reg[RRES] =  *(double*)dstp >   *(double*)&src; goto NEXT;
+                case OP_LTF:  reg[RRES] =  *(double*)dstp <   *(double*)&src; goto NEXT;
+                case OP_GTEU: reg[RRES] =           *dstp >=             src; goto NEXT;
+                case OP_LTEU: reg[RRES] =           *dstp <=             src; goto NEXT;
+                case OP_GTES: reg[RRES] = *(int64_t*)dstp >= *(int64_t*)&src; goto NEXT;
+                case OP_LTES: reg[RRES] = *(int64_t*)dstp <= *(int64_t*)&src; goto NEXT;
+                case OP_GTEF: reg[RRES] =  *(double*)dstp >=  *(double*)&src; goto NEXT;
+                case OP_LTEF: reg[RRES] =  *(double*)dstp <=  *(double*)&src; goto NEXT;
 
                 default: {
                     printf("Invalid instruction %x\n", op);

@@ -9,7 +9,7 @@
 
 #define NREG 16
 #define SP    (NREG - 1)
-#define RES   (NREG - 2)
+#define RRES  (NREG - 2)
 #define IP    (NREG - 3)
 
 #define RRET (NREG - 4)
@@ -21,13 +21,15 @@ enum OpCode : u8 {
     // 0x00 EXITCODE(u1)
     OP_EXIT  = 0x01,
 
-    // | OPCODE 0x00 0x00 0x00 | 0x00 0x00 0x00 0x00 |
+    // | OPCODE 0x00 0x00 0x00 | 0x00 0x00 0x00 0x00 | ADDR |
     // will always jump to addr
     OP_JMP,
 
-    // | OPCODE 0x00 0x00 TESTREG | 0x00 0x00 0x00 0x00 |
-    // Will only jump if value of TESTREG != 0
-    OP_JMPIF,
+    // | OPCODE 0x00 0x00 TESTREG | 0x00 0x00 0x00 0x00 | ADDR |
+    // Will only jump if value of TESTREG is not zero
+    OP_JNZ,
+    // Will only jump if value of TESTREG is zero
+    OP_JZ,
 
     OP_CALL,
     OP_RET,
