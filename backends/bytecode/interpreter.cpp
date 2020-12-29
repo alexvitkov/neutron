@@ -43,45 +43,30 @@ NEXT:
         if (i->op & OP_ADDRESSABLE) {
             u64 src, *dstp;
 
-            switch (i->addrmode) {
-                case AM_REG2REG: {
-                    dstp = &reg[i->dstreg];
-                    src  =  reg[i->srcreg];
-                    reg[IP] += sizeof(Instr);
-                    break;
-                }
-                case AM_REG2MEM: {
-                    MemInstr* ii = (MemInstr*)i;
-                    dstp = (u64*)((u8*)ii->addr + ii->mem_offset);
+            switch (i->addrmode & AM_SRC_BITS) {
+                case AM_SRCREG:
                     src = reg[i->srcreg];
-                    reg[IP] += sizeof(MemInstr);
                     break;
-                }
-                case AM_MEM2REG: {
-                    MemInstr* ii = (MemInstr*)i;
+                case AM_SRCMEM:
+                    src = *(u64*)((MemInstr*)i)->addr;
+                    break;
+                case AM_SRCDEREF:
+                    src = *(u64*)(reg[i->srcreg]);
+                    break;
+                case AM_SRCVAL:
+                    src = ((ValInstr*)i)->val;
+                    break;
+            }
+            switch (i->addrmode & AM_DST_BITS) {
+                case AM_DSTREG:
                     dstp = &reg[i->dstreg];
-                    src = *(u64*)((u8*)ii->addr + ii->mem_offset);
-                    reg[IP] += sizeof(MemInstr);
                     break;
-                }
-                case AM_VAL2REG: {
-                    ValInstr* ii = (ValInstr*)i;
-                    dstp = reg + i->dstreg;
-                    src = ii->val;
-                    reg[IP] += sizeof(ValInstr);
+                case AM_DSTMEM:
+                    dstp = (u64*)((MemInstr*)i)->addr;
                     break;
-                }
-                case AM_VAL2MEM: {
-                    Val2MemInstr* ii = (Val2MemInstr*)i;
-                    dstp = (u64*)ii->addr;
-                    src = ii->val;
-                    reg[IP] += sizeof(Val2MemInstr);
+                case AM_DSTDEREF:
+                    dstp = (u64*)(reg[i->dstreg]);
                     break;
-                }
-                default: {
-                    assert(!"invalid addr mode");
-                    return 1;
-                }
             }
 
             switch (i->op) {
@@ -104,10 +89,8 @@ NEXT:
                 case OP_GTEF: reg[RRES] =  *(double*)dstp >=  *(double*)&src; goto NEXT;
                 case OP_LTEF: reg[RRES] =  *(double*)dstp <=  *(double*)&src; goto NEXT;
 
-                default: {
-                    printf("Invalid instruction %x\n", i->op);
-                    return 1;
-                }
+                default:
+                    assert(!"invalid instr");
             }
         }
     }

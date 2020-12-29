@@ -56,37 +56,24 @@ enum OpCode : u8 {
     OP_LTEF,
 };
 
-enum AddrMode : u8 {
+enum AddrModeBits : u8 {
+    // lower 4 bits describe the source
+    AM_SRC_BITS = 0x0F,
+    AM_SRCREG   = 0x01,
+    AM_SRCDEREF = 0x01 | 0x02,
+    AM_SRCMEM   = 0x04,
+    AM_SRCVAL   = 0x08,
 
-    // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 0x00 0x00 |
-    AM_REG2REG = 0x01,
-
-    // | OPCODE 0x02 0x00 SRCREG | 0x00 0x00 MEM_OFFSET(2B) | DSTADDR |
-    AM_REG2MEM = 0x02,
-
-    // | OPCODE 0x03 DSTREG 0x00 | 0x00 0x00 MEM_OFFSET(2B) | SRCADDR |
-    AM_MEM2REG = 0x03,
-
-    // | OPCODE 0x04 DSTREG 0x00 | 0x00 0x00 0x00 0x00 | VAL (8B) |
-    AM_VAL2REG = 0x04,
-
-    // | OPCODE 0x05 0x00 0x00 | 0x00 0x00 MEM_OFFSET(2B) | ADDR (8B) | VAL (8B) |
-    AM_VAL2MEM = 0x05,
-
-    // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 MEM_OFFSET(2B) |
-    AM_REG2REGDEREFSRC = 0x06,
-
-    // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 MEM_OFFSET(2B) | VAL (8B) |
-    AM_VAL2REGDEREF= 0x07,
-
-    // | OPCODE 0x01 DSTREG SRCREG | 0x00 0x00 MEM_OFFSET(2B) |
-    AM_REG2REGDEREFDST = 0x08,
-
+    // upper 4 bits describe the destination
+    AM_DST_BITS = 0xF0,
+    AM_DSTREG   = 0x10,
+    AM_DSTDEREF = 0x10 | 0x20,
+    AM_DSTMEM   = 0x40,
 };
 
 struct Instr {
     OpCode op;
-    AddrMode addrmode;
+    u8 addrmode;
     u8 dstreg;
     u8 srcreg;
     u16 _zero;

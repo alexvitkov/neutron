@@ -108,38 +108,43 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
     }
 }
 
+// The size of the instruciton can be inferred from the addressing mode
+u8 instr_size(u8 addrmode) {
+    if (addrmode == (AM_SRCVAL | AM_DSTMEM))
+        return sizeof(Val2MemInstr);
+    else if (addrmode & AM_SRCVAL)
+        return sizeof(ValInstr);
+    else if (addrmode & (AM_SRCMEM | AM_DSTMEM))
+        return sizeof(MemInstr);
+    else
+        return sizeof(Instr);
+}
+
 void Emitter::emit(OpCode op, Loc dst, Loc src) {
+    Instr* i = (Instr*)s;
+    i->op = op;
+
     switch (src.type) {
         case Loc::REGISTER: {
+            i->addrmode = AM_SRCREG;
+            i->srcreg = src.reg;
+
             switch (dst.type) {
                 case Loc::REGISTER: {
-                    Instr* i = (Instr*)s;
-                    *i = {
-                        .op = op,
-                        .addrmode = AM_REG2REG,
-                        .dstreg = dst.reg,
-                        .srcreg = src.reg,
-                    };
-                    s += sizeof(*i);
+                    i->dstreg = dst.reg;
+                    i->addrmode |= AM_DSTREG;
                     break;
                 }
                 case Loc::NODE: {
                     MemInstr* i = (MemInstr*)s;
-                    i->op = op;
-                    i->addrmode = AM_REG2MEM;
-                    i->srcreg = src.reg;
+                    i->addrmode |= AM_DSTMEM;
                     nodeaddr(dst.node, &i->addr);
-                    s += sizeof(*i);
                     break;
                 }
                 case Loc::STACK: {
-                    Instr* i = (Instr*)s;
-                    i->op = op;
-                    i->addrmode = AM_REG2REGDEREFDST;
-                    i->srcreg = src.reg;
+                    i->addrmode |= AM_DSTDEREF;
                     i->dstreg = SP;
                     i->mem_offset = dst.offset;
-                    s += sizeof(*i);
                     break;
                 }
                 default:
@@ -148,24 +153,20 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
             break;
         }
         case Loc::VALUE: {
+            ValInstr* i = (ValInstr*)s;
+            i->addrmode = AM_SRCVAL;
+            i->val = src.value;
+
             switch (dst.type) {
                 case Loc::REGISTER: {
-                    ValInstr* i = (ValInstr*)s;
-                    i->op = op;
-                    i->addrmode = AM_VAL2REG;
+                    i->addrmode |= AM_DSTREG;
                     i->dstreg = dst.reg;
-                    i->val = src.value;
-                    s += sizeof(*i);
                     break;
                 }
                 case Loc::STACK: {
-                    ValInstr* i = (ValInstr*)s;
-                    i->op = op,
-                    i->addrmode = AM_VAL2REGDEREF,
-                    i->dstreg = SP,
-                    i->mem_offset = dst.offset,
-                    i->val = src.value;
-                    s += sizeof(*i);
+                    i->addrmode |= AM_DSTDEREF;
+                    i->dstreg = SP;
+                    i->mem_offset = dst.offset;
                     break;
                 }
                 default:
@@ -174,15 +175,13 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
             break;
         }
         case Loc::STACK: {
+            i->addrmode = AM_SRCDEREF;
             switch (dst.type) {
                 case Loc::REGISTER: {
-                    Instr* i = (Instr*)s;
-                    i->op = op,
-                    i->addrmode = AM_REG2REGDEREFSRC,
-                    i->srcreg = SP,
-                    i->dstreg = dst.reg,
-                    i->mem_offset = src.offset,
-                    s += sizeof(*i);
+                    i->addrmode |= AM_DSTREG;
+                    i->srcreg = SP;
+                    i->dstreg = dst.reg;
+                    i->mem_offset = src.offset;
                     break;
                 }
                 default:
@@ -193,10 +192,13 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
         default:
             assert(!"addrmode not impl 3");
     }
+
+    // Increment the instruction write pointer so we're ready for writing the next instruction
+    s += instr_size(i->addrmode);
 }
 
 void compile_fn(Emitter& em, ASTFn* fn) {
-    // TODO check if already compilerd
+    // TODO check if the function is already compiled
     
     void* addr = em.s;
     em.addresses.insert(std::make_pair<>((ASTNode*)fn, addr));
@@ -212,7 +214,7 @@ void compile_fn(Emitter& em, ASTFn* fn) {
 
     u32 frame_size = 0;
 
-    // init the stack frame
+    // Initialize the stack frame
     for (const auto& decl : fn->block.ctx.defines) {
         if (decl.second->nodetype == AST_VAR) {
             ASTVar* var = (ASTVar*)decl.second;
@@ -329,84 +331,48 @@ Next:
             case OP_GTEF:  printf("GTEF ");  break;
             case OP_LTEF:  printf("LTEF ");  break;
             default:
-                assert(!"???");
+                printf("Invalid instruction %x\n", start[0]);
+                assert(0);
                 return;
         }
 
         if (start[0] >= OP_ADDRESSABLE) {
-            AddrMode addrmode = (AddrMode)start[1];
-            switch (addrmode) {
-                case AM_REG2REG: {
-                    Instr* i = (Instr*)start;
+            Instr* i = (Instr*)start;
+
+            switch (i->addrmode & AM_DST_BITS) {
+                case AM_DSTREG:
                     printregname(i->dstreg);
                     printf(", ");
-                    printregname(i->srcreg);
-                    start += sizeof(*i);
                     break;
-                }
-                case AM_REG2MEM: {
-                    MemInstr* i = (MemInstr*)start;
-                    printf("[%p], ", i->addr);
-                    start += sizeof(*i);
+                case AM_DSTMEM:
+                    printf("%p, ", (u64*)((MemInstr*)i)->addr);
                     break;
-                }
-                case AM_MEM2REG: {
-                    MemInstr* i = (MemInstr*)start;
-                    printregname(i->dstreg);
-                    printf(", [%p]", i->addr);
-                    start += sizeof(*i);
-                    break;
-                }
-                case AM_VAL2REG: {
-                    ValInstr* i = (ValInstr*)start;
-                    printregname(i->dstreg);
-                    printf(", %lu", i->val);
-                    start += sizeof(*i);
-                    break;
-                }
-                case AM_VAL2MEM: {
-                    Val2MemInstr* i = (Val2MemInstr*)start;
-                    printf(" [%p], %lu", i->dstaddr, i->val);
-                    start += sizeof(*i);
-                    break;
-                }
-                case AM_REG2REGDEREFDST: {
-                    Instr* i = (Instr*)start;
+                case AM_DSTDEREF:
                     printf("[");
                     printregname(i->dstreg);
-                    if (i->mem_offset)
-                        printf(" + %x", i->mem_offset);
                     printf("], ");
-                    printregname(i->srcreg);
-                    start += sizeof(*i);
                     break;
-                }
-                case AM_REG2REGDEREFSRC: {
-                    Instr* i = (Instr*)start;
-                    printregname(i->dstreg);
-                    printf(", [");
-                    printregname(i->srcreg);
-                    if (i->mem_offset)
-                        printf(" + %x", i->mem_offset);
-                    printf("]");
-                    start += sizeof(*i);
-                    break;
-                }
-                case AM_VAL2REGDEREF: {
-                    ValInstr* i = (ValInstr*)start;
-                    printf("[");
-                    printregname(i->dstreg);
-                    if (i->mem_offset)
-                        printf(" + %x", i->mem_offset);
-                    printf("], %lu", i->val);
-                    start += sizeof(*i);
-                    break;
-                }
-                default: {
-                    assert(!"invalid addressing mode");
-                }
             }
+
+            switch (i->addrmode & AM_SRC_BITS) {
+                case AM_SRCREG:
+                    printregname(i->srcreg);
+                    break;
+                case AM_SRCMEM:
+                    printf("%p", (u64*)((MemInstr*)i)->addr);
+                    break;
+                case AM_SRCDEREF:
+                    printf("[");
+                    printregname(i->srcreg);
+                    printf("]");
+                    break;
+                case AM_SRCVAL:
+                    printf("%lu", ((ValInstr*)i)->val);
+                    break;
+            }
+
             printf("\n");
+            start += instr_size(i->addrmode);
         }
     }
 }
