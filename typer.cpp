@@ -68,10 +68,20 @@ ASTType* typecheck(Context& ctx, ASTNode* node) {
         case AST_RETURN: {
             ASTReturn* ret = (ASTReturn*)node;
             ASTType* rettype = (ASTType*)ctx.resolve("returntype");
-            if (!implicit_cast(ctx, &ret->value, rettype)) {
-                return nullptr;
+
+            if (rettype) {
+                if (!implicit_cast(ctx, &ret->value, rettype)) {
+                    return nullptr;
+                }
             }
-            return rettype;
+            else {
+                if (ret->value) {
+                    ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
+                    return nullptr;
+                }
+            }
+
+            return (ASTType*)1;
         }
         case AST_BINARY_OP: {
             ASTBinaryOp* bin = (ASTBinaryOp*)node;
