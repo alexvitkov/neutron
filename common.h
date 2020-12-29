@@ -101,7 +101,7 @@ struct Context {
     bool declare(const char* name, ASTNode* value);
 
     inline Context(Context* parent)
-        : parent(parent), global(parent ? parent : this) { }
+        : parent(parent), global(parent ? parent->global : this) { }
 
     Context(Context&) = delete;
     Context(Context&&) = delete;
