@@ -177,3 +177,10 @@ void print(std::ostream& o, ASTCast* node) {
 void print(std::ostream& o, ASTNumber* node) {
     o << node->floorabs;
 }
+
+void print(std::ostream& o, ASTIf* node) {
+    o << "if ";
+    print(o, node->condition, false);
+    o << " ";
+    print(o, node->block);
+}

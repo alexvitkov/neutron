@@ -64,7 +64,7 @@ enum TokenType : u8 {
 	KW_FALSE,
     KW_IF,
 
-	TOK_ID  = 128,
+	TOK_ID,
 	TOK_NUMBER,
 };
 

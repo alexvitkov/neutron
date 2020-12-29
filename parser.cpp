@@ -459,8 +459,9 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
     return true;
 }
 
-bool parse_decl_statement(Context& ctx, TokenReader& r);
-ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim);
+enum trool { MORE, DONE, FAIL };
+trool parse_decl_statement(Context& ctx, TokenReader& r);
+ASTNode* parse_expr(Context& ctx, TokenReader& r);
 
 bool parse_block(Block& block, TokenReader& r) {
     if (!r.expect(TOK('{')).type)
@@ -470,31 +471,49 @@ bool parse_block(Block& block, TokenReader& r) {
         return false;
 
     while (true) {
-        if (parse_decl_statement(block.ctx, r))
-            continue;
+X:
+        switch (parse_decl_statement(block.ctx, r)) {
+            case FAIL:
+                return false;
+            case DONE:
+                break;
+            case MORE:
+                goto X;
+        }
         
         switch(r.peek().type) {
             case KW_RETURN: {
                 r.pop();
-                ASTReturn* ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r, TOK(';')));
+                ASTReturn* ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r));
                 if (!ret->value)
                     return false;
                 block.statements.push_back((ASTNode*)ret);
+                if (!r.expect(TOK(';')).type)
+                    return false;
                 break;
             }
             case KW_IF: {
-                assert(!"not impol");
-                r.pop();
+                ASTIf* ifs = block.ctx.alloc<ASTIf>(block.ctx);
+                ifs->condition = parse_expr(block.ctx, r);
+                if (!ifs->condition)
+                    return false;
+                if (!parse_block(ifs->block, r))
+                    return false;
+                block.statements.push_back(ifs);
+                break;
             }
             case TOK('}'): {
                 r.pop();
                 return true;
             }
             default: {
-                ASTNode* expr = parse_expr(block.ctx, r, TOK(';'));
+                ASTNode* expr = parse_expr(block.ctx, r);
                 if (!expr)
                     return false;
+                if (!r.expect(TOK(';')).type)
+                    return false;
                 block.statements.push_back(expr);
+                break;
             }
         }
     }
@@ -541,7 +560,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         fn->block.ctx.declare(entry.name, (ASTNode*)decl);
     }
 
-    if (parse_block(fn->block, r))
+    if (!parse_block(fn->block, r))
         return nullptr;
 
     return fn;
@@ -568,59 +587,97 @@ bool pop(SYState& s) {
     return true;
 }
 
-ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
+ASTNode* parse_expr(Context& ctx, TokenReader& r) {
     SYState s { .ctx = ctx };
     bool prev_was_value = false;
 
-    for (Token t = r.pop(); t.type != delim; t = r.pop()) {
-        if (t.type == TOK_ID) {
-            ASTNode* resolved = ctx.resolve(r.sf.buffer + t.start, t.length);
-            if (!resolved)
-                return nullptr;
-            s.output.push_back(resolved);
-            prev_was_value = true;
-        }
-        else if (t.type == TOK_NUMBER) {
-            u64 acc = 0;
-            for (int i = 0; i < t.length; i++) {
-                char c = r.sf.buffer[t.start + i];
-                if (c >= '0' && c <= '9') {
-                    acc += c - '0';
-                    acc *= 10;
+    Token t;
+    while (true) {
+        t = r.pop();
+
+        switch (t.type) {
+
+            case TOK_ID: {
+                if (prev_was_value) {
+                    unexpected_token(r, t, TOK_NONE);
+                    return nullptr;
+                }
+
+                ASTNode* resolved = ctx.resolve(r.sf.buffer + t.start, t.length);
+                if (!resolved) {
+                    s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "failed to resolve"});
+                    return nullptr;
+                }
+                s.output.push_back(resolved);
+                prev_was_value = true;
+                break;
+            }
+
+            case TOK_NUMBER: {
+                if (prev_was_value) {
+                    unexpected_token(r, t, TOK_NONE);
+                    return nullptr;
+                }
+
+                u64 acc = 0;
+                for (int i = 0; i < t.length; i++) {
+                    char c = r.sf.buffer[t.start + i];
+                    if (c >= '0' && c <= '9') {
+                        acc += c - '0';
+                        acc *= 10;
+                    }
+                }
+                acc /= 10;
+                s.output.push_back(ctx.alloc<ASTNumber>(acc));
+                break;
+            }
+            case TOK('('): {
+                if (prev_was_value) {
+                    // TODO Function call
+                    assert(!"not impl");
+                } else {
+                    s.stack.push_back(t.type);
+                    prev_was_value = false;
+                }
+                break;
+            }
+            case TOK(')'): {
+                while (s.stack.back() != TOK('('))
+                    if (!pop(s))
+                        return nullptr;
+                s.stack.pop_back(); // disacrd the (
+                prev_was_value = true;
+                break;
+            }
+            // TODO this is not a sane exit condition
+            case TOK(';'):
+            case TOK('{'):
+            case TOK(','): {
+                // s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression 1"});
+                r.pos--;
+                goto Done;
+            }
+
+            default: {
+                prev_was_value = false;
+                if (is_operator(t.type)) {
+                    while (!s.stack.empty() && s.stack.back() != TOK('(') && PREC(s.stack.back()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
+                        if (!pop(s))
+                            return nullptr;
+                    s.stack.push_back(t.type);
+                    prev_was_value = false;
                 }
             }
-            acc /= 10;
-            s.output.push_back(ctx.alloc<ASTNumber>(acc));
-        }
-        else if (t.type == TOK('(')) {
-            if (prev_was_value) {
-                // TODO Function call
-            } else {
-                s.stack.push_back(t.type);
-                prev_was_value = false;
-            }
-        }
-        else if (t.type == TOK(')')) {
-            while (s.stack.back() != TOK('('))
-                if (!pop(s))
-                    return nullptr;
-            s.stack.pop_back(); // disacrd the (
-        }
-        else if (is_operator(t.type)) {
-            while (!s.stack.empty() && s.stack.back() != TOK('(') && PREC(s.stack.back()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
-                if (!pop(s))
-                    return nullptr;
-            s.stack.push_back(t.type);
-            prev_was_value = false;
         }
     }
 
+Done:
     while (!s.stack.empty()) 
         if (!pop(s))
             return nullptr;
 
     if (s.output.size() != 1) {
-        s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression"});
+        s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression 2"});
         return nullptr;
     }
     return s.output[0];
@@ -643,33 +700,36 @@ bool parse_let(Context& ctx, TokenReader& r) {
 
     if (r.peek().type == TOK('=')) {
         r.pop();
-        return (var->value = parse_expr(ctx, r, TOK(';')));
-    } else 
-        return r.expect(TOK(';')).type;
+        return (var->value = parse_expr(ctx, r));
+    };
+    return r.expect(TOK(';')).type;
 }
 
-bool parse_decl_statement(Context& ctx, TokenReader& r) {
+
+trool parse_decl_statement(Context& ctx, TokenReader& r) {
     switch (r.peek().type) {
         case KW_FN: {
             ASTFn* fn = parse_fn(ctx, r, true);
             if (!fn)
-                return false;
+                return FAIL;
             break;
         }
         case KW_LET: {
             if (!parse_let(ctx, r))
-                return false;
+                return FAIL;
             break;
         }
         default:
-            return false;
+            return DONE;
     }
-    return true;
+    return MORE;
 }
 
 bool parse_top_level(Context& ctx, TokenReader r) {
-    while (parse_decl_statement(ctx, r));
-    return r.peek().type == TOK_NONE;
+    trool res = MORE;
+    while (res == MORE)
+        res = parse_decl_statement(ctx, r);
+    return res == DONE;
 }
 
 bool parse_all_files(Context& global) {

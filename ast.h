@@ -137,5 +137,6 @@ void print(std::ostream& o, ASTVar* node, bool decl);
 void print(std::ostream& o, ASTReturn* node);
 void print(std::ostream& o, ASTCast* node);
 void print(std::ostream& o, ASTNumber* node);
+void print(std::ostream& o, ASTIf* node);
 
 #endif // guard
