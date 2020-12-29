@@ -1,28 +1,30 @@
 #include "bytecode.h"
 
-int interpret(u64* reg, u8* mem) {
+int interpret(u64* reg, void* main, void* code_end) {
     while (true) {
 NEXT:
-        u8* b = mem + reg[IP];
-        const u8 op = b[0];
+        Instr* i = (Instr*)main;
 
-        switch (op) {
+        switch (i->op) {
             case OP_EXIT: { 
-                if (b[1])
-                    printf("Bytecode exited with code %x\n", b[1]);
+                if (((u8*)i)[1])
+                    printf("Bytecode exited with code %x\n", ((u8*)i)[1]);
                 return 1;
             }
+            case OP_JZ:
             case OP_JNZ: {
-                if (!reg[b[3]]) {
-                    reg[IP] += 8;
+                if (!reg[i->srcreg] != (i-> op == OP_JNZ)) {
+                    reg[IP] = (u64)((MemInstr*)i)->addr;
                     goto NEXT;
                 }
-                // FALLTHROUGH
-            }
-            case OP_JMP: {
-                reg[IP] += ((u64*)b)[1];
+                reg[IP] += sizeof(MemInstr);
                 goto NEXT;
             }
+            case OP_JMP: {
+                reg[IP] = (u64)((MemInstr*)i)->addr;
+                goto NEXT;
+            }
+            /*
             case OP_CALL: {
                 *(u64*)(mem + reg[SP]) = reg[IP] + 16;
                 // todo native functions
@@ -35,49 +37,54 @@ NEXT:
                 reg[IP] = *(u64*)(mem + reg[SP]);
                 goto NEXT;
             }
+            */
         }
 
-        if (op & OP_ADDRESSABLE) {
+        if (i->op & OP_ADDRESSABLE) {
             u64 src, *dstp;
 
-            switch (b[1]) {
+            switch (i->addrmode) {
                 case AM_REG2REG: {
-                    dstp = reg + b[2];
-                    src = reg[b[3]];
-                    reg[IP] += 8;
+                    dstp = &reg[i->dstreg];
+                    src  =  reg[i->srcreg];
+                    reg[IP] += sizeof(Instr);
                     break;
                 }
                 case AM_REG2MEM: {
-                    dstp = (u64*)(mem + ((u32*)b)[1]);
-                    src = reg[b[3]];
-                    reg[IP] += 8;
+                    MemInstr* ii = (MemInstr*)i;
+                    dstp = (u64*)((u8*)ii->addr + ii->mem_offset);
+                    src = reg[i->srcreg];
+                    reg[IP] += sizeof(MemInstr);
                     break;
                 }
                 case AM_MEM2REG: {
-                    dstp = reg + b[3];
-                    src = ((u64*)(mem + ((u32*)b)[1]))[0];
-                    reg[IP] += 8;
+                    MemInstr* ii = (MemInstr*)i;
+                    dstp = &reg[i->dstreg];
+                    src = *(u64*)((u8*)ii->addr + ii->mem_offset);
+                    reg[IP] += sizeof(MemInstr);
                     break;
                 }
                 case AM_VAL2REG: {
-                    dstp = reg + b[3];
-                    src = ((u64*)b)[1];
-                    reg[IP] += 16;
+                    ValInstr* ii = (ValInstr*)i;
+                    dstp = reg + i->dstreg;
+                    src = ii->val;
+                    reg[IP] += sizeof(ValInstr);
                     break;
                 }
                 case AM_VAL2MEM: {
-                    dstp = (u64*)(mem + ((u32*)b)[1]);
-                    src = ((u64*)b)[1];
-                    reg[IP] += 16;
+                    Val2MemInstr* ii = (Val2MemInstr*)i;
+                    dstp = (u64*)ii->addr;
+                    src = ii->val;
+                    reg[IP] += sizeof(Val2MemInstr);
                     break;
                 }
                 default: {
-                    printf("Invalid addressing mode %x\n", b[1]);
+                    assert(!"invalid addr mode");
                     return 1;
                 }
             }
 
-            switch (op) {
+            switch (i->op) {
                 case OP_ADD: *dstp += src; goto NEXT; 
                 case OP_SUB: *dstp -= src; goto NEXT; 
                 case OP_MOV: *dstp  = src; goto NEXT; 
@@ -98,7 +105,7 @@ NEXT:
                 case OP_LTEF: reg[RRES] =  *(double*)dstp <=  *(double*)&src; goto NEXT;
 
                 default: {
-                    printf("Invalid instruction %x\n", op);
+                    printf("Invalid instruction %x\n", i->op);
                     return 1;
                 }
             }
@@ -112,29 +119,4 @@ void printreg(u64* reg) {
         if (i % 4 == 3)
             printf("\n");
     }
-}
-
-
-void cool() {
-	/*
-    int* five_val = (int*)malloc(sizeof(int));
-    *five_val = 5;
-    value FIVE = { NT_VALUE, VAL_INTEGER, five_val };
-
-
-    uint64_t reg[NREG] = { 0 };
-    uint8_t mem[1024] = { 0 };
-
-    reg[SP] = 800;
-
-    uint8_t *p = mem;
-    emitv2r(&p, OP_MOV, 4, 0);
-    emitr2r(&p, OP_MOV, 1, 0);
-    emitv2r(&p, OP_MULS, 2, 0);
-    emitr2r(&p, OP_SUB, 0, 1);
-
-    interpret(reg, mem);
-
-    printreg(reg);
-	*/
 }

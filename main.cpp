@@ -40,8 +40,9 @@ int main(int argc, const char** argv) {
         printf("parser failed\n");
         exit_with_error();
     }
-
+    
     printf("----------\n\n");
+
     for (const auto& decl : global.defines) {
         print(std::cout, decl.second, true);
         std::cout << '\n';
@@ -60,6 +61,11 @@ int main(int argc, const char** argv) {
     void* end = bytecode_compile(global, code, stac);
 
     bytecode_disassemble((u8*)code, (u8*)end);
+
+    ASTNode* main_fn = global.resolve("main");
+    if (main_fn) {
+        printf("\n----------\n\n");
+    }
 
     return 0;
 }

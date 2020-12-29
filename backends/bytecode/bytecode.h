@@ -102,7 +102,7 @@ struct ValInstr : public Instr {
 };
 
 struct Val2MemInstr : public Instr {
-    void* dstaddr;
+    void* addr;
     u64 val;
 };
 
