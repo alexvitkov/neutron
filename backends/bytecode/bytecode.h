@@ -16,8 +16,10 @@
 #define RTMP (NREG - 5)
 
 enum OpCode : u8 {
+    OP_DISCARD = 0x00,
+
     // 0x00 EXITCODE(u1)
-    OP_EXIT  = 0x00,
+    OP_EXIT  = 0x01,
 
     // | OPCODE 0x00 0x00 0x00 | OFFSET (u32) |
     // will always jump to addr

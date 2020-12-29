@@ -6,6 +6,20 @@
 #include <algorithm>
 #include <assert.h>
 
+
+
+Loc lvalue(Emitter& em, ASTNode* expr) {
+    switch (expr->nodetype) {
+        case AST_VAR: {
+            ASTVar* var = (ASTVar*)expr;
+            return var->location;
+        }
+        default:
+            assert(!"invalid lvalue");
+    }
+}
+
+
 void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
     switch (expr->nodetype) {
         case AST_NUMBER: {
@@ -16,19 +30,24 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
 
         case AST_BINARY_OP: {
             ASTBinaryOp* bin = (ASTBinaryOp*)expr;
-            compile_expr(em, OP_MOV, lreg(RTMP), bin->lhs);
 
             switch (bin->op) {
-                case '+':
+                case '+': {
+                    compile_expr(em, OP_MOV, lreg(RTMP), bin->lhs);
                     compile_expr(em, OP_ADD, lreg(RTMP), bin->rhs);
+                    if (op && !(op == OP_MOV && dst.reg == RTMP && dst.type == Loc::REGISTER))
+                        em.emit(op, dst, lreg(RTMP));
                     break;
+                }
+                case '=': {
+                    // TODO typer should make sure its a valid lvalue
+                    Loc loc = lvalue(em, bin->lhs);
+                    compile_expr(em, OP_MOV, loc, bin->rhs);
+                    break;
+                }
                 default:
-                    assert(!"not impl 5");
-                    break;
+                    assert(!"binary operator not implemented");
             }
-
-            if (!(op == OP_MOV && dst.reg == RTMP && dst.type == Loc::REGISTER))
-                em.emit(op, dst, lreg(RTMP));
             break;
         }
 
@@ -78,7 +97,7 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
                     break;
                 }
                 default:
-                    assert(!"not impl 1");
+                    assert(!"addrmode not impl 1");
             }
             break;
         }
@@ -94,12 +113,12 @@ void Emitter::emit(OpCode op, Loc dst, Loc src) {
                     break;
                 }
                 default:
-                    assert(!"not impl 2");
+                    assert(!"addrmode not impl 2");
             }
             break;
         }
         default:
-            assert(!"not impl 3");
+            assert(!"addrmode not impl 3");
     }
 }
 
@@ -140,15 +159,15 @@ void compile_fn(Emitter& em, ASTFn* fn) {
         }
     }
 
-    for (ASTNode* stmt : fn->block->statements) {
-        if (stmt->nodetype == AST_RETURN) {
-            ASTReturn* ret = (ASTReturn*)stmt;
+    for (ASTNode* node : fn->block->statements) {
+        if (node->nodetype == AST_RETURN) {
+            ASTReturn* ret = (ASTReturn*)node;
             compile_expr(em, OP_MOV, lreg(RRET), ret->value);
             *em.s = OP_RET;
             em.s += 8;
         }
         else {
-            assert(!"not impl 4");
+            compile_expr(em, OP_DISCARD, lreg(0), node);
         }
     }
 
@@ -207,14 +226,13 @@ void printregname(u8 reg) {
 void bytecode_disassemble(u8* start, u8* end) {
 Next:
     while (start < end) {
-
         switch (start[0]) {
             case OP_RET:   
-                printf("RET");   
+                printf("RET\n");   
                 start += 8;
                 goto Next;
             case OP_EXIT:  
-                printf("EXIT 0x%x", start[1]);  
+                printf("EXIT 0x%x\n", start[1]);  
                 goto Next;
             case OP_JMP:   printf("JMP   ");  break;
             case OP_JMPIF: printf("JMPIF ");  break;
