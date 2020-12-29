@@ -70,13 +70,17 @@ ASTType* typecheck(Context& ctx, ASTNode* node) {
             ASTType* rettype = (ASTType*)ctx.resolve("returntype");
 
             if (rettype) {
+                if (!ret->value) {
+                    ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "invalid return 1"});
+                    return nullptr;
+                }
                 if (!implicit_cast(ctx, &ret->value, rettype)) {
                     return nullptr;
                 }
             }
             else {
                 if (ret->value) {
-                    ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
+                    ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "invalid return 2"});
                     return nullptr;
                 }
             }

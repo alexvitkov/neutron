@@ -456,9 +456,15 @@ X:
         switch(r.peek().type) {
             case KW_RETURN: {
                 r.pop();
-                ASTReturn* ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r));
-                if (!ret->value)
-                    return false;
+                ASTReturn *ret;
+                if (r.peek().type == TOK(';')) {
+                    ret = block.ctx.alloc<ASTReturn>(nullptr);
+                }
+                else {
+                    ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r));
+                    if (!ret->value)
+                        return false;
+                }
                 block.statements.push_back((ASTNode*)ret);
                 if (!r.expect(TOK(';')).type)
                     return false;

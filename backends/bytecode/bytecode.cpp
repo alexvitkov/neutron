@@ -199,7 +199,8 @@ void compile_fn(Emitter& em, ASTFn* fn) {
     for (ASTNode* node : fn->block.statements) {
         if (node->nodetype == AST_RETURN) {
             ASTReturn* ret = (ASTReturn*)node;
-            compile_expr(em, OP_MOV, lreg(RRET), ret->value);
+            if (ret->value)
+                compile_expr(em, OP_MOV, lreg(RRET), ret->value);
             *em.s = OP_RET;
             em.s += 8;
         }

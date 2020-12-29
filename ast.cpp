@@ -166,8 +166,13 @@ void print(std::ostream& o, ASTVar* node, bool decl) {
 }
 
 void print(std::ostream& o, ASTReturn* node) {
-    o << "return ";
-    print(o, node->value, false);
+    if (node->value) {
+        o << "return ";
+        print(o, node->value, false);
+    }
+    else {
+        o << "return";
+    }
 }
 
 void print(std::ostream& o, ASTCast* node) {
