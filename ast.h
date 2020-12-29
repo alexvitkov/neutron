@@ -29,7 +29,7 @@ enum PrimitiveTypeKind : u8 {
 struct Block {
     Context ctx;
     std::vector<ASTNode*> statements;
-    inline Block(Context& parent) : ctx(parent) {}
+    inline Block(Context& parent) : ctx(&parent) {}
 };
 
 struct ASTNode {

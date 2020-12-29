@@ -15,6 +15,7 @@ enum CharTraits : u8 {
 	CT_WHITESPACE          = 0x04,
 	CT_OPERATOR            = 0x08,
 	CT_MULTICHAR_OP_START  = 0x10,
+    CT_HELPERTOKEN         = 0x20,
 };
 
 CharTraits ctt[128] {
@@ -58,17 +59,17 @@ CharTraits ctt[128] {
 /* 37  - %   */ CT_OPERATOR,
 /* 38  - &   */ CT_OPERATOR,
 /* 39  - '   */ CT_ERROR,
-/* 40  - (   */ CT_OPERATOR,
-/* 41  - )   */ CT_OPERATOR,
+/* 40  - (   */ CT_HELPERTOKEN,
+/* 41  - )   */ CT_HELPERTOKEN,
 /* 42  - *   */ CT_OPERATOR,
 /* 43  - +   */ CT_OPERATOR,
-/* 44  - ,   */ CT_OPERATOR,
+/* 44  - ,   */ CT_HELPERTOKEN,
 /* 45  - -   */ CT_OPERATOR,
-/* 46  - .   */ CT_OPERATOR,
+/* 46  - .   */ CT_HELPERTOKEN,
 /* 47  - /   */ CT_ERROR,
 /* 48  - 0   */ CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT,
-/* 58  - :   */ CT_OPERATOR,
-/* 59  - ;   */ CT_OPERATOR,
+/* 58  - :   */ CT_HELPERTOKEN,
+/* 59  - ;   */ CT_HELPERTOKEN,
 /* 60  - <   */ CT_OPERATOR,
 /* 61  - =   */ CT_OPERATOR,
 /* 62  - >   */ CT_OPERATOR,
@@ -78,9 +79,9 @@ CharTraits ctt[128] {
                 CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER,
                 CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER,
                 CT_LETTER, CT_LETTER,
-/* 91  - [   */ CT_OPERATOR,
+/* 91  - [   */ CT_HELPERTOKEN,
 /* 92  - \   */ CT_ERROR,
-/* 93  - ]   */ CT_OPERATOR,
+/* 93  - ]   */ CT_HELPERTOKEN,
 /* 94  - ^   */ CT_OPERATOR,
 /* 95  - _   */ CT_LETTER, // yes, _ is a letter
 /* 96  - `   */ CT_ERROR,
@@ -88,9 +89,9 @@ CharTraits ctt[128] {
                 CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER,
                 CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER, CT_LETTER,
                 CT_LETTER, CT_LETTER,
-/* 123 - {   */ CT_OPERATOR,
+/* 123 - {   */ CT_HELPERTOKEN,
 /* 124 - |   */ CT_OPERATOR,
-/* 125 - }   */ CT_OPERATOR,
+/* 125 - }   */ CT_HELPERTOKEN,
 /* 126 - ~   */ CT_OPERATOR,
 /* 127 -     */ CT_ERROR,
 };
@@ -194,7 +195,7 @@ bool tokenize(Context& global, SourceFile &s) {
 			}
 		}
 
-		if (ct & CT_OPERATOR) {
+		if (ct & (CT_OPERATOR | CT_HELPERTOKEN)) {
 			u64 match = 0;
 			switch (c) {
 				case '(':
@@ -324,84 +325,51 @@ char* malloc_token_name(TokenReader& r, Token tok) {
 }
 
 bool skim(Context& ctx, TokenReader& r) {
+    // TODO a solution to the start_pos meme may be to pass TokenReader by value
 	int start_pos = r.pos;
+    int depth = 0;
 
     while (true) {
-        Token next = r.pop();
-        switch (next.type) {
-
+        Token t = r.pop();
+        switch (t.type) {
+            case TOK('{'):
+                depth++;
+                break;
+            case TOK('}'):
+                if (depth-- == 0) {
+                    r.pos = start_pos;
+                    return true;
+                }
+                break;
             case KW_FN: {
-                Token name = r.expect(TOK_ID);
-                if (!name.type)
-                    return false;
-                Token openBracket = r.expect(TOK('('));
-                if (!openBracket.type)
-                    return false;
-                r.pos = openBracket.match + 1;
-
-        
-
-                Token openCurly = r.pop_until(TOK('{'));
-                if (!openCurly.type)
-                    return false;
-                r.pos = openCurly.match + 1;
-
-                ASTFn* decl = ctx.alloc<ASTFn>(ctx, malloc_token_name(r, name));
-
-                if (!ctx.declare(decl->name, (ASTNode*)decl))
-                    return false;
-                break;
-            }
-
-            case KW_LET: {
-                Token name = r.expect(TOK_ID);
-                if (!name.type)
-                    return false;
-                Token semicolon = r.pop_until(TOK(';'));
-                if (!semicolon.type)
-                    return false;
-
-                ASTVar* decl = ctx.alloc<ASTVar>(malloc_token_name(r, name), nullptr, nullptr, -1);
-                if (!ctx.declare(decl->name, (ASTNode*)decl))
-                    return false;
-
-                break;
-            }
-
-            case TOK('}'): {
-                if (ctx.is_global()) {
-                    unexpected_token(r, next, TOK_NONE);
-                    return false;
-                } else {
-                    r.pos = start_pos;
-                    return true;
-                }
-            }
-
-            case TOK_NONE: {
-                if (ctx.is_global()) {
-                    r.pos = start_pos;
-                    return true;
-                } else {
-                    unexpected_token(r, next, TOK('}'));
-                    return false;
-                }
-            }
-
-            default: {
-                if (ctx.is_global()) {
-                    unexpected_token(r, next, TOK_NONE);
-                    return false;
-                }
-                else {
-                    Token semicolon = r.pop_until(TOK(';'));
-                    if (!semicolon.type)
+                // TODO we're leaking
+                Token namet = r.peek();
+                if (namet.type == TOK_ID) {
+                    char* name = malloc_token_name(r, namet);
+                    if (!ctx.declare(name, ctx.alloc<ASTFn>(ctx, name)))
                         return false;
                 }
+                break;
             }
-
+            case KW_LET: {
+                Token namet = r.peek();
+                if (namet.type == TOK_ID) {
+                    char* name = malloc_token_name(r, namet);
+                    if (!ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, 0)))
+                        return false;
+                }
+                break;
+            }
+            case TOK_NONE: {
+                r.pos = start_pos;
+                return true;
+            }
+            default:
+                continue;
         }
+
     }
+    return true;
 }
 
 ASTType* parse_type(Context& ctx, TokenReader& r) {

@@ -130,7 +130,7 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
       {"<<=",    OP_SHIFTLEFTASSIGN},
       {""}, {""}, {""},
 #line 26 "keywords.gperf"
-      {"if",     KW_FALSE},
+      {"if",     KW_IF},
 #line 15 "keywords.gperf"
       {"i32",    KW_I32 },
       {""}, {""}, {""},

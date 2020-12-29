@@ -52,7 +52,9 @@ void print(std::ostream& o, Block& bl) {
     for (const auto& d : bl.statements) {
         indent_line(o);
         print(o, d, false);
-        o << ";\n";
+
+        if (d->nodetype != AST_IF)
+            o << ";\n";
     }
 
     indent--;
@@ -69,6 +71,7 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
         case AST_RETURN:         print(o, (ASTReturn*)node); break;
         case AST_CAST:           print(o, (ASTCast*)node); break;
         case AST_NUMBER:         print(o, (ASTNumber*)node); break;
+        case AST_IF:             print(o, (ASTIf*)node); break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }

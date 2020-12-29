@@ -103,8 +103,11 @@ struct Context {
     inline Context(Context* parent)
         : parent(parent), global(parent ? parent : this) { }
 
+    Context(Context&) = delete;
+    Context(Context&&) = delete;
+
     template <typename T, typename ... Ts>
-    T* alloc(Ts ...args) {
+    T* alloc(Ts &&...args) {
         T* buf = (T*)malloc(sizeof(T));
         new (buf) T (args...);
         return buf;
