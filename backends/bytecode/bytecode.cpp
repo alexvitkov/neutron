@@ -16,7 +16,6 @@ void compile_expr(Emitter& em, Loc dst, ASTNode *expr) {
 
         case AST_BINARY_OP: {
             ASTBinaryOp* bin = (ASTBinaryOp*)expr;
-
             compile_expr(em, dst, bin->lhs);
             compile_expr(em, lreg(TMPREG), bin->rhs);
 
@@ -24,7 +23,6 @@ void compile_expr(Emitter& em, Loc dst, ASTNode *expr) {
                 case '+':
                     em.emit(OP_ADD, dst, lreg(TMPREG));
                     break;
-
                 default:
                     assert(!"not impl 5");
                     break;
@@ -39,6 +37,12 @@ void compile_expr(Emitter& em, Loc dst, ASTNode *expr) {
 
             // TODO cast is ignored
             break;
+        }
+
+        case AST_VAR: {
+            ASTVar* var = (ASTVar*)expr;
+            //var.location
+
         }
 
         default:
@@ -121,10 +125,10 @@ void compile_fn(Emitter& em, ASTFn* fn) {
 
             // TODO not all arguments can fit in registers
             if (var->argindex >= 0) {
-                var->location = { VL_REGISTER, (u16)var->argindex };
+                var->location = lreg(var->argindex); 
             }
             else {
-                var->location = { VL_STACK, (u16)frame_size };
+                var->location = lstack(frame_size);
                 frame_size += 8;
             }
             printf("%s at %d:%d\n", var->name, var->location.type, var->location.offset);
@@ -270,5 +274,6 @@ Next:
 }
 
 Loc lreg(u8 reg)         { return { .type = Loc::REGISTER, .reg   = reg  }; }
+Loc lstack(u64 offset)   { return { .type = Loc::STACK,    .offset = offset }; }
 Loc lnode(ASTNode* node) { return { .type = Loc::NODE,     .node  = node }; }
 Loc lval(u64 num)        { return { .type = Loc::VALUE,    .value = num  }; }

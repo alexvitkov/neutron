@@ -56,22 +56,28 @@ struct ASTPrimitiveType : ASTType {
         : ASTType(AST_PRIMITIVE_TYPE), kind(kind), size(size), name(name) {}
 };
 
-enum VarLocationType : u8 {
-    VL_UNDEFINED = 0,
-    VL_REGISTER,
-    VL_STACK
-};
-
-struct VarLocation {
-    VarLocationType type;
-    u16 offset;
+struct Loc {
+    enum {
+        REGISTER,
+        MEMORY,
+        NODE,
+        STACK,
+        VALUE,
+    } type;
+    union {
+        u8 reg;
+        void* addr;
+        ASTNode* node;
+        u64 offset;
+        u64 value;
+    };
 };
 
 struct ASTVar : ASTNode {
     const char* name;
     ASTType* type;
     ASTNode* value;
-    VarLocation location;
+    Loc location;
     i32 argindex;
 
     inline ASTVar(const char* name, ASTType* type, ASTNode* initial_value, int argindex)

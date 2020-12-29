@@ -2,6 +2,7 @@
 #define BYTECODE_H
 
 #include "../../common.h"
+#include "../../ast.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,27 +96,12 @@ struct Val2MemInstr : public Instr {
     u64 val;
 };
 
-struct Loc {
-    enum {
-        REGISTER,
-        MEMORY,
-        NODE,
-        STACK,
-        VALUE,
-    } type;
-    union {
-        u8 reg;
-        void* addr;
-        ASTNode* node;
-        u32 offset;
-        u64 value;
-    };
-};
 
 void* bytecode_compile(Context& ctx, void* code_start, void* stack_start);
 void bytecode_disassemble(u8* start, u8* end);
 int interpret(uint64_t* reg);
 
+Loc lstack(u64 offset);
 Loc lreg(u8 regid);
 Loc lnode(ASTNode* node);
 Loc lval(u64 num);
