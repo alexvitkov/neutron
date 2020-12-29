@@ -1,6 +1,8 @@
 #include "ast.h"
 #include "typer.h"
 
+#define ALWAYS_BRACKETS 0
+
 int indent = 0;
 
 ASTNumber::ASTNumber(u64 floorabs) : ASTNode(AST_NUMBER), floorabs(floorabs) {
@@ -34,12 +36,23 @@ void print(std::ostream& o, Block& bl) {
     o << "{ \n";
     for (const auto& x : bl.ctx->defines) {
         indent_line(o);
-        print(o, x.second, true);
+
+        switch (x.second->nodetype) {
+        case AST_FN:
+        case AST_VAR:
+            print(o, x.second, true);
+            break;
+        default:
+            o << "const " << x.first << " = ";
+            print(o, x.second, true);
+            o << ";\n";
+        }
     }
 
     for (const auto& d : bl.statements) {
         indent_line(o);
         print(o, d, false);
+        o << ";\n";
     }
 
     indent--;
@@ -51,7 +64,7 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
     switch (node->nodetype) {
         case AST_FN:             print(o, (ASTFn*)node, decl); break;
         case AST_PRIMITIVE_TYPE: print(o, (ASTPrimitiveType*)node); break;
-        case AST_BINARY_OP:      print(o, (ASTBinaryOp*)node); break;
+        case AST_BINARY_OP:      print(o, (ASTBinaryOp*)node, false); break;
         case AST_VAR:            print(o, (ASTVar*)node, decl); break;
         case AST_RETURN:         print(o, (ASTReturn*)node); break;
         case AST_CAST:           print(o, (ASTCast*)node); break;
@@ -87,9 +100,15 @@ void print(std::ostream& o, ASTPrimitiveType* node) {
     o << node->name;
 }
 
-void print(std::ostream& o, ASTBinaryOp* node) {
-    o << '(';
-    print(o, node->lhs, false);
+
+void print(std::ostream& o, ASTBinaryOp* node, bool brackets = false) {
+    if (ALWAYS_BRACKETS || brackets)
+        o << '(';
+
+    if (node->lhs->nodetype == AST_BINARY_OP)
+        print(o, (ASTBinaryOp*)node->lhs, PREC(((ASTBinaryOp*)(node->lhs))->op) <= PREC(node->op));
+    else
+        print(o, node->lhs, false);
     o << ' ';
 
     switch (node->op) {
@@ -118,8 +137,12 @@ void print(std::ostream& o, ASTBinaryOp* node) {
     }
 
     o << ' ';
-    print(o, node->rhs, false);
-    o << ')';
+    if (node->rhs->nodetype == AST_BINARY_OP)
+        print(o, (ASTBinaryOp*)node->rhs, PREC(((ASTBinaryOp*)(node->rhs))->op) <= PREC(node->op));
+    else
+        print(o, node->rhs, false);
+    if (ALWAYS_BRACKETS || brackets)
+        o << ')';
     // << node->lhs << " # " << node->rhs << ')';
 }
 
@@ -142,14 +165,13 @@ void print(std::ostream& o, ASTVar* node, bool decl) {
 void print(std::ostream& o, ASTReturn* node) {
     o << "return ";
     print(o, node->value, false);
-    o << ";\n";
 }
 
 void print(std::ostream& o, ASTCast* node) {
-    o << '(';
     print(o, node->newtype, false);
-    o << ')';
+    o << '(';
     print(o, node->inner, false);
+    o << ')';
 }
 
 void print(std::ostream& o, ASTNumber* node) {

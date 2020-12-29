@@ -123,7 +123,7 @@ struct ASTFn : ASTNode {
 void print(std::ostream& o, ASTNode* node, bool decl);
 void print(std::ostream& o, ASTPrimitiveType* node);
 void print(std::ostream& o, ASTFn* node, bool decl);
-void print(std::ostream& o, ASTBinaryOp* node);
+void print(std::ostream& o, ASTBinaryOp* node, bool brackets);
 void print(std::ostream& o, ASTVar* node, bool decl);
 void print(std::ostream& o, ASTReturn* node);
 void print(std::ostream& o, ASTCast* node);

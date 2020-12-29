@@ -16,6 +16,8 @@
 #define i32 int32_t
 #define i64 int64_t
 
+#define PREC(tt) (prec[tt] & PREC_MASK)
+
 enum TokenType : u8 {
 	TOK_NONE = 0,
 
