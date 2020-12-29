@@ -1,14 +1,13 @@
 #include "../../common.h"
 #include "../../ast.h"
+#include "../../typer.h"
 #include "bytecode.h"
 
 #include <algorithm>
 #include <assert.h>
 
 void compile_expr(Emitter& em, Loc dst, ASTNode *expr) {
-
     switch (expr->nodetype) {
-
         case AST_NUMBER: {
             ASTNumber* num = (ASTNumber*)expr;
             em.emit(OP_MOV, dst, lval(num->floorabs));
@@ -33,11 +32,19 @@ void compile_expr(Emitter& em, Loc dst, ASTNode *expr) {
             break;
         }
 
+        case AST_CAST: {
+            ASTCast* cast = (ASTCast*)expr;
+            ASTType* oldType = typecheck(em.global, cast->inner);
+            compile_expr(em, dst, cast->inner);
+
+            // TODO cast is ignored
+            break;
+        }
+
         default:
-            assert(!"not impl 6");
+            assert(!"compile_expr not impl for this ASTNode typek");
             break;
     }
-
 }
 
 void Emitter::emit(OpCode op, Loc dst, Loc src) {
@@ -191,10 +198,10 @@ Next:
             case OP_RET:   
                 printf("RET\n");   
                 start += 8;
-                break;
+                goto Next;
             case OP_EXIT:  
                 printf("EXIT 0x%x", start[1]);  
-                break;
+                goto Next;
             case OP_JMP:   printf("JMP");   break;
             case OP_JMPIF: printf("JMPIF"); break;
             case OP_CALL:  printf("CALL");  break;
@@ -259,7 +266,6 @@ Next:
                 }
             }
         }
-
     }
 }
 

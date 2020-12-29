@@ -1,6 +1,7 @@
 #include "sourcefile.h"
 #include "parser.h"
 #include "typer.h"
+#include "ast.h"
 #include "backends/bytecode/bytecode.h"
 
 Context global { .global = &global };
@@ -47,6 +48,11 @@ int main(int argc, const char** argv) {
 
     void* code = malloc(10 * 1024 * 1024);
     void* stac = malloc(10 * 1024);
+
+    for (const auto& decl : global.defines) {
+        print(std::cout, decl.second, true);
+        std::cout << '\n';
+    }
 
     void* end = bytecode_compile(global, code, stac);
 
