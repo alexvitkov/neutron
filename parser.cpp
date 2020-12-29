@@ -532,7 +532,8 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
             return nullptr;
     }
 
-    fn->block.ctx.declare("returntype", rettype);
+    if (rettype)
+        fn->block.ctx.declare("returntype", rettype);
 
     int argid = 0;
     for (const auto& entry : fn->args.entries) {
