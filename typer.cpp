@@ -53,8 +53,8 @@ ASTType* typecheck(Context& ctx, ASTNode* node) {
             return &t_type;
         case AST_FN: {
             ASTFn* fn = (ASTFn*)node;
-            for (const auto& stmt : fn->block->statements) {
-                if (!typecheck(*fn->block->ctx, stmt))
+            for (const auto& stmt : fn->block.statements) {
+                if (!typecheck(fn->block.ctx, stmt))
                     return nullptr;
             }
             return &t_fn;

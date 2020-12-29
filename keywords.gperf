@@ -23,6 +23,7 @@ let,    KW_LET
 return, KW_RETURN
 true,   KW_TRUE
 false,  KW_FALSE
+if,     KW_FALSE
 ++,     OP_PLUSPLUS
 --,     OP_MINUSMINUS
 <<,     OP_SHIFTLEFT

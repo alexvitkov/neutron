@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -61,6 +62,7 @@ enum TokenType : u8 {
     KW_RETURN,
 	KW_TRUE,
 	KW_FALSE,
+    KW_IF,
 
 	TOK_ID  = 128,
 	TOK_NUMBER,
@@ -97,6 +99,9 @@ struct Context {
     ASTNode* resolve(const char* name);
     ASTNode* resolve(char* name, int length);
     bool declare(const char* name, ASTNode* value);
+
+    inline Context(Context* parent)
+        : parent(parent), global(parent ? parent : this) { }
 
     template <typename T, typename ... Ts>
     T* alloc(Ts ...args) {

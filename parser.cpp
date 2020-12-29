@@ -95,7 +95,6 @@ CharTraits ctt[128] {
 /* 127 -     */ CT_ERROR,
 };
 
-#define PREC(tt) (prec[tt] & PREC_MASK)
 #define IS_RIGHT_ASSOC(tt) (PREC(tt) == 1)
 
 inline bool is_operator(TokenType tt) {
@@ -347,7 +346,7 @@ bool skim(Context& ctx, TokenReader& r) {
                     return false;
                 r.pos = openCurly.match + 1;
 
-                ASTFn* decl = ctx.alloc<ASTFn>(malloc_token_name(r, name));
+                ASTFn* decl = ctx.alloc<ASTFn>(ctx, malloc_token_name(r, name));
 
                 if (!ctx.declare(decl->name, (ASTNode*)decl))
                     return false;
@@ -463,48 +462,42 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
 bool parse_decl_statement(Context& ctx, TokenReader& r);
 ASTNode* parse_expr(Context& ctx, TokenReader& r, TokenType delim);
 
-Block* parse_block(Context& parent, TokenReader& r, Context* ctx = nullptr) {
-
+bool parse_block(Block& block, TokenReader& r) {
     if (!r.expect(TOK('{')).type)
-        return nullptr;
+        return false;
 
-    if (!ctx) {
-        ctx = new Context();
-        ctx->parent = &parent;
-        ctx->global = parent.global;
-    }
-    
-    if (!skim(*ctx, r))
-        return nullptr;
-
-    Block* block = new Block();
-    block->ctx = ctx;
+    if (!skim(block.ctx, r))
+        return false;
 
     while (true) {
-        if (parse_decl_statement(*ctx, r))
+        if (parse_decl_statement(block.ctx, r))
             continue;
-
-        if (r.peek().type == KW_RETURN) {
-            r.pop();
-            
-            ASTReturn* ret = ctx->alloc<ASTReturn>(parse_expr(*ctx, r, TOK(';')));
-            if (!ret->value)
-                return nullptr;
-            block->statements.push_back((ASTNode*)ret);
-        }
-
-        if (r.peek().type == TOK('}')) {
-            r.pop();
-            break;
-        }
-        else {
-            ASTNode* expr = parse_expr(*ctx, r, TOK(';'));
-            if (!expr)
-                return nullptr;
-            block->statements.push_back(expr);
+        
+        switch(r.peek().type) {
+            case KW_RETURN: {
+                r.pop();
+                ASTReturn* ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r, TOK(';')));
+                if (!ret->value)
+                    return false;
+                block.statements.push_back((ASTNode*)ret);
+                break;
+            }
+            case KW_IF: {
+                assert(!"not impol");
+                r.pop();
+            }
+            case TOK('}'): {
+                r.pop();
+                return true;
+            }
+            default: {
+                ASTNode* expr = parse_expr(block.ctx, r, TOK(';'));
+                if (!expr)
+                    return false;
+                block.statements.push_back(expr);
+            }
         }
     }
-    return block;
 }
 
 ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
@@ -521,7 +514,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         free(name_);
     }
     else {
-        ASTFn* decl = ctx.alloc<ASTFn>(nullptr);
+        ASTFn* decl = ctx.alloc<ASTFn>(ctx, nullptr);
     }
 
     if (!r.expect(TOK('(')).type)
@@ -539,19 +532,15 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
             return nullptr;
     }
 
-    Context* fn_ctx = new Context();
-    fn_ctx->parent = &ctx;
-    fn_ctx->global = ctx.global;
-    fn_ctx->declare("returntype", rettype);
+    fn->block.ctx.declare("returntype", rettype);
 
     int argid = 0;
     for (const auto& entry : fn->args.entries) {
         ASTVar* decl = ctx.alloc<ASTVar>(entry.name, entry.type, nullptr, argid++);
-        fn_ctx->declare(entry.name, (ASTNode*)decl);
+        fn->block.ctx.declare(entry.name, (ASTNode*)decl);
     }
 
-    fn->block = parse_block(ctx, r, fn_ctx);
-    if (!fn->block)
+    if (parse_block(fn->block, r))
         return nullptr;
 
     return fn;

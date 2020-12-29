@@ -15,6 +15,7 @@ enum ASTNodeType : u8 {
     AST_RETURN,
     AST_CAST,
     AST_NUMBER,
+    AST_IF,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -26,8 +27,9 @@ enum PrimitiveTypeKind : u8 {
 };
 
 struct Block {
-    Context* ctx;
+    Context ctx;
     std::vector<ASTNode*> statements;
+    inline Block(Context& parent) : ctx(parent) {}
 };
 
 struct ASTNode {
@@ -91,6 +93,13 @@ struct ASTNumber : ASTNode {
     ASTNumber(u64 floorabs);
 };
 
+struct ASTIf : ASTNode {
+    ASTNode* condition;
+    Block block;
+
+    inline ASTIf(Context& parent_ctx) : block(parent_ctx), ASTNode(AST_IF) {}
+};
+
 struct ASTCast : ASTNode {
     ASTType* newtype;
     ASTNode* inner;
@@ -116,8 +125,8 @@ struct ASTReturn : ASTNode {
 struct ASTFn : ASTNode {
     const char* name;
     TypeList args;
-    Block* block;
-    inline ASTFn(const char* name) : ASTNode(AST_FN), name(name) {}
+    Block block;
+    inline ASTFn(Context& parent_ctx, const char* name) : block(parent_ctx), ASTNode(AST_FN), name(name) {}
 };
 
 void print(std::ostream& o, ASTNode* node, bool decl);

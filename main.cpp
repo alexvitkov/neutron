@@ -4,7 +4,7 @@
 #include "ast.h"
 #include "backends/bytecode/bytecode.h"
 
-Context global { .global = &global };
+Context global(nullptr);
 
 void exit_with_error() {
 	for (auto& err : global.errors) {
@@ -41,6 +41,14 @@ int main(int argc, const char** argv) {
         exit_with_error();
     }
 
+    printf("----------\n\n");
+    for (const auto& decl : global.defines) {
+        print(std::cout, decl.second, true);
+        std::cout << '\n';
+    }
+
+    printf("----------\n\n");
+
     if (!typecheck_all(global)) {
         printf("type checker failed\n");
         exit_with_error();
@@ -48,11 +56,6 @@ int main(int argc, const char** argv) {
 
     void* code = malloc(10 * 1024 * 1024);
     void* stac = malloc(10 * 1024);
-
-    for (const auto& decl : global.defines) {
-        print(std::cout, decl.second, true);
-        std::cout << '\n';
-    }
 
     void* end = bytecode_compile(global, code, stac);
 

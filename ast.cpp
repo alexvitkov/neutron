@@ -34,7 +34,7 @@ void indent_line(std::ostream& o) {
 void print(std::ostream& o, Block& bl) {
     indent ++;
     o << "{ \n";
-    for (const auto& x : bl.ctx->defines) {
+    for (const auto& x : bl.ctx.defines) {
         indent_line(o);
 
         switch (x.second->nodetype) {
@@ -83,13 +83,13 @@ void print(std::ostream& o, ASTFn* node, bool decl) {
         print(o, fn->args);
         o << ")";
 
-        ASTType* rettype = (ASTType*)node->block->ctx->resolve("returntype");
+        ASTType* rettype = (ASTType*)node->block.ctx.resolve("returntype");
         if (rettype) {
             o << ": ";
             print(o, rettype, false);
         }
         o << ' ';
-        print(o, *node->block);
+        print(o, node->block);
     }
     else {
         o << node->name;

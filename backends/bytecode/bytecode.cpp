@@ -177,7 +177,7 @@ void compile_fn(Emitter& em, ASTFn* fn) {
     u32 frame_size = 0;
 
     // init the stack frame
-    for (const auto& decl : fn->block->ctx->defines) {
+    for (const auto& decl : fn->block.ctx.defines) {
         if (decl.second->nodetype == AST_VAR) {
             ASTVar* var = (ASTVar*)decl.second;
 
@@ -196,7 +196,7 @@ void compile_fn(Emitter& em, ASTFn* fn) {
         }
     }
 
-    for (ASTNode* node : fn->block->statements) {
+    for (ASTNode* node : fn->block.statements) {
         if (node->nodetype == AST_RETURN) {
             ASTReturn* ret = (ASTReturn*)node;
             compile_expr(em, OP_MOV, lreg(RRET), ret->value);
