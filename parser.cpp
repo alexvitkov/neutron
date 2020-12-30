@@ -372,8 +372,7 @@ bool skim(Context& ctx, TokenReader& r) {
                     Token namet = r.peek();
                     if (namet.type == TOK_ID) {
                         char* name = malloc_token_name(r, namet);
-                        if (!ctx.declare(name, ctx.alloc<ASTFn>(ctx, name)))
-                            return false;
+                        MUST(ctx.declare(name, ctx.alloc<ASTFn>(ctx, name)));
                     }
                     break;
                 }
@@ -383,8 +382,7 @@ bool skim(Context& ctx, TokenReader& r) {
                     Token namet = r.peek();
                     if (namet.type == TOK_ID) {
                         char* name = malloc_token_name(r, namet);
-                        if (!ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, 0)))
-                            return false;
+                        MUST(ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, 0)));
                     }
                 }
                 break;
@@ -433,14 +431,11 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
 
     while (true) {
         Token name = r.expect(TOK_ID);
-        if (!t.type)
-            return false;
-        if (!r.expect(TOK(':')).type)
-            return false;
+        MUST(t.type);
+        MUST(r.expect(TOK(':')).type);
 
-        ASTType* type = parse_type(ctx, r);
-        if (!type)
-            return false;
+        ASTType* type;
+        MUST(type = parse_type(ctx, r));
 
         tl->entries.push_back(TypeList::Entry { .name = malloc_token_name(r, name), .type = type });
 
@@ -449,8 +444,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
             r.pop();
             return true;
         } else {
-            if (!r.expect(TOK(',')).type)
-                return false;
+            MUST(r.expect(TOK(',')).type);
         }
     }
     return true;
@@ -461,11 +455,8 @@ trool parse_decl_statement(Context& ctx, TokenReader& r);
 ASTNode* parse_expr(Context& ctx, TokenReader& r);
 
 bool parse_block(ASTBlock& block, TokenReader& r) {
-    if (!r.expect(TOK('{')).type)
-        return false;
-
-    if (!skim(block.ctx, r))
-        return false;
+    MUST(r.expect(TOK('{')).type);
+    MUST(skim(block.ctx, r));
 
     while (true) {
 X:
@@ -487,21 +478,17 @@ X:
                 }
                 else {
                     ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r));
-                    if (!ret->value)
-                        return false;
+                    MUST(ret->value);
                 }
                 block.statements.push_back((ASTNode*)ret);
-                if (!r.expect(TOK(';')).type)
-                    return false;
+                MUST(r.expect(TOK(';')).type);
                 break;
             }
             case KW_IF: {
                 ASTIf* ifs = block.ctx.alloc<ASTIf>(block.ctx);
                 ifs->condition = parse_expr(block.ctx, r);
-                if (!ifs->condition)
-                    return false;
-                if (!parse_block(ifs->block, r))
-                    return false;
+                MUST(ifs->condition);
+                MUST(parse_block(ifs->block, r));
                 block.statements.push_back(ifs);
                 break;
             }
@@ -511,10 +498,8 @@ X:
             }
             default: {
                 ASTNode* expr = parse_expr(block.ctx, r);
-                if (!expr)
-                    return false;
-                if (!r.expect(TOK(';')).type)
-                    return false;
+                MUST(expr);
+                MUST(r.expect(TOK(';')).type);
                 block.statements.push_back(expr);
                 break;
             }
@@ -524,8 +509,7 @@ X:
 
 ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     Token name;
-    if (!r.expect(KW_FN).type)
-        return nullptr;
+    MUST(r.expect(KW_FN).type);
 
     ASTFn* fn;
     if (decl) {
@@ -539,19 +523,14 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         ASTFn* decl = ctx.alloc<ASTFn>(ctx, nullptr);
     }
 
-    if (!r.expect(TOK('(')).type)
-        return nullptr;
-
-    if (!parse_type_list(ctx, r, TOK(')'), &fn->args))
-        return nullptr;
+    MUST(r.expect(TOK('(')).type);
+    MUST(parse_type_list(ctx, r, TOK(')'), &fn->args));
 
     ASTType* rettype = nullptr;
 
     if (r.peek().type == TOK(':')) {
         r.pop();
-        rettype = parse_type(ctx, r);
-        if (!rettype)
-            return nullptr;
+        MUST(rettype = parse_type(ctx, r));
     }
 
     if (rettype)
@@ -563,9 +542,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         fn->block.ctx.declare(entry.name, (ASTNode*)decl);
     }
 
-    if (!parse_block(fn->block, r))
-        return nullptr;
-
+    MUST(parse_block(fn->block, r));
     return fn;
 }
 
@@ -651,8 +628,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
             }
             case TOK(')'): {
                 while (s.stack.back() != TOK('('))
-                    if (!pop(s))
-                        return nullptr;
+                    MUST (pop(s));
                 s.stack.pop_back(); // disacrd the (
                 prev_was_value = true;
                 break;
@@ -670,8 +646,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                 prev_was_value = false;
                 if (is_operator(t.type)) {
                     while (!s.stack.empty() && s.stack.back() != TOK('(') && PREC(s.stack.back()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
-                        if (!pop(s))
-                            return nullptr;
+                        MUST(pop(s));
                     s.stack.push_back(t.type);
                     prev_was_value = false;
                 }
@@ -681,8 +656,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
 
 Done:
     while (!s.stack.empty()) 
-        if (!pop(s))
-            return nullptr;
+        MUST(pop(s));
 
     if (s.output.size() != 1) {
         s.ctx.error({
@@ -694,19 +668,17 @@ Done:
 }
 
 bool parse_let(Context& ctx, TokenReader& r) {
-    if (!r.expect(KW_LET).type)
-        return false;
+    MUST(r.expect(KW_LET).type);
 
     Token name = r.expect(TOK_ID);
     char* name_ = malloc_token_name(r, name);
     ASTVar* var = (ASTVar*)ctx.resolve(name_);
     free(name_);
 
-    if (!r.expect(TOK(':')).type)
-        return false;
+    MUST (r.expect(TOK(':')).type);
+
     var->type = parse_type(ctx, r);
-    if (!var->type)
-        return false;
+    MUST(var->type);
 
     if (r.peek().type == TOK('=')) {
         r.pop();
@@ -744,16 +716,13 @@ bool parse_top_level(Context& ctx, TokenReader r) {
 
 bool parse_all_files(Context& global) {
     for (int i = 0; i < sources.size(); i++) {
-        if (!tokenize(global, sources[i]))
-            return false;
+        MUST (tokenize(global, sources[i]));
         TokenReader r { .sf = sources[i], .ctx = global };
-        if (!skim(global, r))
-            return false;
+        MUST(skim(global, r));
     }
     for (int i = 0; i < sources.size(); i++) {
         TokenReader r { .sf = sources[i], .ctx = global };
-        if (!parse_top_level(global, r))
-            return false;
+        MUST(parse_top_level(global, r));
     }
 
     return true;

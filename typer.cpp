@@ -19,8 +19,7 @@ ASTPrimitiveType t_void (PRIMITIVE_TYPE,    0, "void");
 
 bool implicit_cast(Context& ctx, ASTNode** dst, ASTType* type) {
     ASTType* dstt = gettype(ctx, *dst);
-    if (!dstt)
-        return false;
+    MUST(dstt);
 
     if (dstt == type) 
         return true;
@@ -65,8 +64,7 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
 
             ASTType* lhst = gettype(ctx, bin->lhs);
             ASTType* rhst = gettype(ctx, bin->rhs);
-            if (!lhst || !rhst)
-                return nullptr;
+            MUST(lhst && rhst);
 
             if (implicit_cast(ctx, &bin->rhs, lhst))
                 return (bin->type = lhst);
@@ -93,8 +91,7 @@ bool typecheck(Context& ctx, ASTNode* node) {
         case AST_BLOCK: {
             ASTBlock* block = (ASTBlock*)node;
             for (const auto& stmt : block->statements)
-                if (!typecheck(block->ctx, stmt))
-                    return false;
+                MUST(typecheck(block->ctx, stmt));
             return true;
         }
         case AST_FN: {
@@ -132,10 +129,8 @@ bool typecheck(Context& ctx, ASTNode* node) {
         }
         case AST_IF: {
             ASTIf* ifs = (ASTIf*)node;
-            if (!typecheck(ctx, ifs->condition))
-                return false;
-            if (!typecheck(ctx, ifs->condition))
-                return false;
+            MUST(typecheck(ctx, ifs->condition));
+            MUST(typecheck(ctx, ifs->condition));
             return true;
         }
         default:
@@ -144,9 +139,7 @@ bool typecheck(Context& ctx, ASTNode* node) {
 }
 
 bool typecheck_all(Context& global) {
-    for (auto& decl : global.defines) {
-        if (!typecheck(global, decl.second))
-            return false;
-    }
+    for (auto& decl : global.defines)
+        MUST(typecheck(global, decl.second));
     return true;
 }

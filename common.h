@@ -19,6 +19,9 @@
 
 #define PREC(tt) (prec[tt] & PREC_MASK)
 
+#define MUST(v) if (!(v)) return 0;
+        
+
 enum TokenType : u8 {
 	TOK_NONE = 0,
 
