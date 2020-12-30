@@ -315,88 +315,74 @@ void printregname(u8 reg) {
 }
 
 void bytecode_disassemble(u8* start, u8* end) {
+
 Next:
     while (start < end) {
-        switch (start[0]) {
+        Instr* i = (Instr*)start;
+        printf("%-5s", instruction_names[i->op]);
+
+        switch (i->op) {
             case OP_RET:   
-                printf("RET\n");   
-                start += 8;
+                start += sizeof(*i);
                 goto Next;
             case OP_EXIT:  
-                printf("EXIT 0x%x\n", start[1]);  
+                printf("0x%x\n", start[1]);  
+                start += sizeof(*i);
                 goto Next;
-            case OP_JMP:   printf("JMP   ");  break;
+            case OP_JMP:
+                printf("\n");
+                start += sizeof(*i);
+                goto Next;
             case OP_JNZ: 
-                printf("JNZ  %p\n", ((MemInstr*)start)->addr);
+                printf("%p\n", ((MemInstr*)start)->addr);
                 start += sizeof(MemInstr);
                 goto Next;
             case OP_JZ: 
-                printf("JZ   %p\n", ((MemInstr*)start)->addr);
+                printf("%p\n", ((MemInstr*)start)->addr);
                 start += sizeof(MemInstr);
                 goto Next;
-            case OP_CALL:  printf("CALL ");  break;
-            case OP_ADD:   printf("ADD  ");  break;
-            case OP_SUB:   printf("SUB  ");  break;
-            case OP_MOV:   printf("MOV  ");  break;
-            case OP_MULS:  printf("MULS ");  break;
-            case OP_MULU:  printf("MULU ");  break;
-            case OP_EQ:    printf("EQ   ");  break;
-            case OP_GTS:   printf("GTS  ");  break;
-            case OP_LTS:   printf("LTS  ");  break;
-            case OP_GTU:   printf("GTU  ");  break;
-            case OP_LTU:   printf("LTU  ");  break;
-            case OP_GTF:   printf("GTF  ");  break;
-            case OP_LTF:   printf("LTF  ");  break;
-            case OP_GTES:  printf("GTES ");  break;
-            case OP_LTES:  printf("LTES ");  break;
-            case OP_GTEU:  printf("GTEU ");  break;
-            case OP_LTEU:  printf("LTEU ");  break;
-            case OP_GTEF:  printf("GTEF ");  break;
-            case OP_LTEF:  printf("LTEF ");  break;
             default:
-                printf("Invalid instruction %x\n", start[0]);
+                if (i->op & OP_ADDRESSABLE)
+                    break;
+                printf("Invalid instruction %x\n", i->op);
                 assert(0);
                 return;
         }
 
-        if (start[0] >= OP_ADDRESSABLE) {
-            Instr* i = (Instr*)start;
-
-            switch (i->addrmode & AM_DST_BITS) {
-                case AM_DSTREG:
-                    printregname(i->dstreg);
-                    printf(", ");
-                    break;
-                case AM_DSTMEM:
-                    printf("%p, ", (u64*)((MemInstr*)i)->addr);
-                    break;
-                case AM_DSTDEREF:
-                    printf("[");
-                    printregname(i->dstreg);
-                    printf("], ");
-                    break;
-            }
-
-            switch (i->addrmode & AM_SRC_BITS) {
-                case AM_SRCREG:
-                    printregname(i->srcreg);
-                    break;
-                case AM_SRCMEM:
-                    printf("%p", (u64*)((MemInstr*)i)->addr);
-                    break;
-                case AM_SRCDEREF:
-                    printf("[");
-                    printregname(i->srcreg);
-                    printf("]");
-                    break;
-                case AM_SRCVAL:
-                    printf("%lu", ((ValInstr*)i)->val);
-                    break;
-            }
-
-            printf("\n");
-            start += instr_size(i->addrmode);
+        switch (i->addrmode & AM_DST_BITS) {
+            case AM_DSTREG:
+                printregname(i->dstreg);
+                printf(", ");
+                break;
+            case AM_DSTMEM:
+                printf("%p, ", (u64*)((MemInstr*)i)->addr);
+                break;
+            case AM_DSTDEREF:
+                printf("[");
+                printregname(i->dstreg);
+                printf("], ");
+                break;
         }
+
+        switch (i->addrmode & AM_SRC_BITS) {
+            case AM_SRCREG:
+                printregname(i->srcreg);
+                break;
+            case AM_SRCMEM:
+                printf("%p", (u64*)((MemInstr*)i)->addr);
+                break;
+            case AM_SRCDEREF:
+                printf("[");
+                printregname(i->srcreg);
+                printf("]");
+                break;
+            case AM_SRCVAL:
+                printf("%lu", ((ValInstr*)i)->val);
+                break;
+        }
+
+        printf("\n");
+        start += instr_size(i->addrmode);
     }
 }
 
