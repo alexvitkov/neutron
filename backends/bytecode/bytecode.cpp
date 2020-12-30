@@ -421,6 +421,8 @@ Next:
             case AM_DSTDEREF:
                 printf("[");
                 printregname(i->dstreg);
+                if (i->mem_offset)
+                    printf(" + %x", i->mem_offset);
                 printf("], ");
                 break;
         }
@@ -435,6 +437,8 @@ Next:
             case AM_SRCDEREF:
                 printf("[");
                 printregname(i->srcreg);
+                if (i->mem_offset)
+                    printf(" + %x", i->mem_offset);
                 printf("]");
                 break;
             case AM_SRCVAL:

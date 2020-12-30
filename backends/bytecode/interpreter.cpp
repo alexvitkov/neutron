@@ -70,7 +70,7 @@ NEXT:
                     src = *(u64*)((MemInstr*)i)->addr;
                     break;
                 case AM_SRCDEREF:
-                    src = *(u64*)(reg[i->srcreg]);
+                    src = *(u64*)(reg[i->srcreg] + i->mem_offset);
                     break;
                 case AM_SRCVAL:
                     src = ((ValInstr*)i)->val;
@@ -84,7 +84,7 @@ NEXT:
                     dstp = (u64*)((MemInstr*)i)->addr;
                     break;
                 case AM_DSTDEREF:
-                    dstp = (u64*)(reg[i->dstreg]);
+                    dstp = (u64*)(reg[i->dstreg] + i->mem_offset);
                     break;
             }
 
