@@ -559,10 +559,34 @@ bool pop(SYState& s) {
         });
         return false;
     }
-    ASTBinaryOp* bin = s.ctx.alloc<ASTBinaryOp>(
-            s.stack.back(), 
-            s.output[s.output.size() - 2], 
-            s.output[s.output.size() - 1]);
+
+    TokenType op = s.stack.back();
+    ASTBinaryOp* bin;
+    ASTNode* lhs = s.output[s.output.size() - 2];
+    ASTNode* rhs = s.output[s.output.size() - 1];
+
+    if ((prec[op] & ASSIGNMENT) && op != TOK('=')) {
+
+        switch (op) {
+            case OP_ADDASSIGN: op = TOK('+'); break;
+            case OP_SUBASSIGN: op = TOK('-'); break;
+            case OP_MULASSIGN: op = TOK('*'); break;
+            case OP_DIVASSIGN: op = TOK('/'); break;
+            case OP_MODASSIGN: op = TOK('%'); break;
+            case OP_SHIFTLEFTASSIGN: op = OP_SHIFTLEFT; break;
+            case OP_SHIFTRIGHTASSIGN: op = OP_SHIFTRIGHT; break;
+            case OP_BITANDASSIGN: op = TOK('&'); break;
+            case OP_BITXORASSIGN: op = TOK('|'); break;
+            case OP_BITORASSIGN: op = TOK('^'); break;
+            default:
+                assert(0);
+        }
+        rhs = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
+        bin = s.ctx.alloc<ASTBinaryOp>(TOK('='), lhs, rhs);
+    }
+    else {
+        bin = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
+    }
     s.stack.pop_back();
     s.output.pop_back();
     s.output[s.output.size() - 1] = (ASTNode*)bin;

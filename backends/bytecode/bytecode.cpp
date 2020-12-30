@@ -23,10 +23,59 @@ const char* instruction_names[256] = {
     0,       0,      0,      0,      0,      0,      0,      0,      
     0,       0,      0,      0,      0,      0,      0,      0,      
     0,       0,      0,      0,      0,      0,      0,      0,      
+
     // OPC_ADDRESSABLE = 0xF0
-    "ADD",   "SUB",  "MOV",  "MULS", "MULU", "EQ",   "GTS",  "LTS", 
-    "GTU",   "LTU",  "GTF",  "LTF",  "GTES", "LTES", "GTEU", "LTEU", 
-    "GTEF",  "LTEF", 0,      0,      0,      0,      0,      0,
+    "ADD",
+    "ADDF",
+    "SUB",
+    "SUBF",
+    "MOV",
+    "MULS",
+    "MULU",
+    "MULF",
+    "DIVS",
+    "DIVU",
+    "DIVF",
+    "EQ",
+    "GTS",
+    "LTS",
+    "GTU",
+    "LTU",
+    "GTF",
+    "LTF",
+    "GTES",
+    "LTES",
+    "GTEU",
+    "LTEU",
+    "GTEF",
+    "LTEF",
+    "BOR",
+    "BXOR",
+    "BAND",
+    "SHL",
+    "SHR",
+    "MODS",
+    "MODU",
+};
+
+struct PrimitiveOpCodes {
+    OpCode add, sub, mul, div, mod;
+};
+
+std::unordered_map<ASTPrimitiveType*, PrimitiveOpCodes> map = {
+    { 
+        { &t_bool, { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULU, .div = OPC_DIVU, .mod = OPC_MODU } },
+        { &t_u8,   { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULU, .div = OPC_DIVU, .mod = OPC_MODU } },
+        { &t_u16,  { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULU, .div = OPC_DIVU, .mod = OPC_MODU } },
+        { &t_u32,  { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULU, .div = OPC_DIVU, .mod = OPC_MODU } },
+        { &t_u64,  { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULU, .div = OPC_DIVU, .mod = OPC_MODU } },
+        { &t_i8,   { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULS, .div = OPC_DIVS, .mod = OPC_MODS } },
+        { &t_i16,  { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULS, .div = OPC_DIVS, .mod = OPC_MODS } },
+        { &t_i32,  { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULS, .div = OPC_DIVS, .mod = OPC_MODS } },
+        { &t_i64,  { .add = OPC_ADD,  .sub = OPC_SUB,  .mul = OPC_MULS, .div = OPC_DIVS, .mod = OPC_MODS } },
+        { &t_f32,  { .add = OPC_ADDF, .sub = OPC_SUBF, .mul = OPC_MULF, .div = OPC_DIVF, } },
+        { &t_f64,  { .add = OPC_ADDF, .sub = OPC_SUBF, .mul = OPC_MULF, .div = OPC_DIVF, } },
+    }
 };
 
 Loc lvalue(Emitter& em, ASTNode* expr) {
@@ -65,26 +114,12 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
                     em.emit(OPC_EQ, lreg(RTMP), lreg(RTMP - 1));
                     break;
                 }
+                case '=': {
+                    Loc lval = lvalue(em, bin->lhs);
+                    compile_expr(em, OPC_MOV, lval, bin->rhs);
+                    break;
+                }
                 default:
-                    if (prec[bin->op] & ASSIGNMENT) {
-                        Loc loc = lvalue(em, bin->lhs);
-                        OpCode op;
-                        break;
-                        switch (bin->op) {
-                            case '=':                 op = OPC_MOV; break;
-                            case OP_ADDASSIGN:        op = OPC_ADD; break;
-                            case OP_SUBASSIGN:        op = OPC_SUB; break;
-                            //case OP_MULASSIGN:        op = OPC_MUL; break;
-                            //case OP_DIVASSIGN:        op = OPC_DIV; break;
-                            //case OP_MODASSIGN:        op = OPC_MOD; break;
-                            case OP_SHIFTLEFTASSIGN:  op = OPC_SHIFTLEFT;  break;
-                            case OP_SHIFTRIGHTASSIGN: op = OPC_SHIFTRIGHT; break;
-                            case OP_BITANDASSIGN:     op = OPC_BITAND;     break;
-                            case OP_BITXORASSIGN:     op = OPC_BITXOR;     break;
-                            case OP_BITORASSIGN:      op = OPC_BITOR;      break;
-                        }
-                        compile_expr(em, OPC_MOV, loc, bin->rhs);
-                    }
                     assert(!"binary operator not implemented");
             }
             break;
