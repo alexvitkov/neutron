@@ -382,7 +382,7 @@ bool skim(Context& ctx, TokenReader& r) {
                     Token namet = r.peek();
                     if (namet.type == TOK_ID) {
                         char* name = malloc_token_name(r, namet);
-                        MUST(ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, 0)));
+                        MUST(ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, -1)));
                     }
                 }
                 break;
@@ -706,9 +706,10 @@ bool parse_let(Context& ctx, TokenReader& r) {
 
     if (r.peek().type == TOK('=')) {
         r.pop();
-        return (var->initial_value = parse_expr(ctx, r));
+        MUST(var->initial_value = parse_expr(ctx, r));
     };
-    return r.expect(TOK(';')).type;
+    MUST(r.expect(TOK(';')).type);
+    return true;
 }
 
 

@@ -301,6 +301,16 @@ void compile_fn(Emitter& em, ASTFn* fn) {
         }
     }
 
+    // For the variables that have an initializer, initialize them
+    for (const auto& i : fn->block.ctx.defines) {
+        ASTNode* node = i.second;
+        if (node->nodetype == AST_VAR) {
+            ASTVar* var = (ASTVar*)node;
+            if (var->initial_value)
+                compile_expr(em, OPC_MOV, var->location, var->initial_value);
+        }
+    }
+
     for (ASTNode* node : fn->block.statements)
         compile_expr(em, OPC_NONE, lreg(0), node);
 
