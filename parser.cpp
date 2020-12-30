@@ -441,7 +441,7 @@ enum trool { MORE, DONE, FAIL };
 trool parse_decl_statement(Context& ctx, TokenReader& r);
 ASTNode* parse_expr(Context& ctx, TokenReader& r);
 
-bool parse_block(Block& block, TokenReader& r) {
+bool parse_block(ASTBlock& block, TokenReader& r) {
     if (!r.expect(TOK('{')).type)
         return false;
 

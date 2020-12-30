@@ -16,6 +16,7 @@ enum ASTNodeType : u8 {
     AST_CAST,
     AST_NUMBER,
     AST_IF,
+    AST_BLOCK,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -26,15 +27,15 @@ enum PrimitiveTypeKind : u8 {
     PRIMITIVE_TYPE
 };
 
-struct Block {
-    Context ctx;
-    std::vector<ASTNode*> statements;
-    inline Block(Context& parent) : ctx(&parent) {}
-};
-
 struct ASTNode {
 	ASTNodeType nodetype;
     inline ASTNode(ASTNodeType nt) : nodetype(nt) {}
+};
+
+struct ASTBlock : ASTNode {
+    Context ctx;
+    std::vector<ASTNode*> statements;
+    inline ASTBlock(Context& parent) : ASTNode(AST_BLOCK), ctx(&parent) {}
 };
 
 struct ASTType : ASTNode {
@@ -108,7 +109,7 @@ struct ASTNumber : ASTNode {
 
 struct ASTIf : ASTNode {
     ASTNode* condition;
-    Block block;
+    ASTBlock block;
 
     inline ASTIf(Context& parent_ctx) : ASTNode(AST_IF), block(parent_ctx) {}
 };
@@ -137,7 +138,7 @@ struct ASTReturn : ASTNode {
 struct ASTFn : ASTNode {
     const char* name;
     TypeList args;
-    Block block;
+    ASTBlock block;
     inline ASTFn(Context& parent_ctx, const char* name) : block(parent_ctx), ASTNode(AST_FN), name(name) {}
 };
 
@@ -150,5 +151,6 @@ void print(std::ostream& o, ASTReturn* node);
 void print(std::ostream& o, ASTCast* node);
 void print(std::ostream& o, ASTNumber* node);
 void print(std::ostream& o, ASTIf* node);
+void print(std::ostream& o, ASTBlock* bl);
 
 #endif // guard
