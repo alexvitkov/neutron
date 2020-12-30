@@ -104,7 +104,7 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
             if (ret->value)
                 compile_expr(em, OP_MOV, lreg(RRET), ret->value);
             *em.s = OP_RET;
-            em.s += 8;
+            em.s += sizeof(Instr);
             break;
         }
 
@@ -256,6 +256,10 @@ void compile_fn(Emitter& em, ASTFn* fn) {
 
     for (ASTNode* node : fn->block.statements)
         compile_expr(em, OP_NONE, lreg(0), node);
+
+    // Add a RET after the function body
+    *em.s = OP_RET;
+    em.s += sizeof(Instr);
 
 }
 
