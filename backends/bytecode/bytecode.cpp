@@ -23,7 +23,7 @@ const char* instruction_names[256] = {
     0,       0,      0,      0,      0,      0,      0,      0,      
     0,       0,      0,      0,      0,      0,      0,      0,      
     0,       0,      0,      0,      0,      0,      0,      0,      
-    // OP_ADDRESSABLE = 0xF0
+    // OPC_ADDRESSABLE = 0xF0
     "ADD",   "SUB",  "MOV",  "MULS", "MULU", "EQ",   "GTS",  "LTS", 
     "GTU",   "LTU",  "GTF",  "LTF",  "GTES", "LTES", "GTEU", "LTEU", 
     "GTEF",  "LTEF", 0,      0,      0,      0,      0,      0,
@@ -40,7 +40,6 @@ Loc lvalue(Emitter& em, ASTNode* expr) {
     }
 }
 
-
 void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
     switch (expr->nodetype) {
         case AST_NUMBER: {
@@ -54,25 +53,38 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
 
             switch (bin->op) {
                 case '+': {
-                    compile_expr(em, OP_MOV, lreg(RTMP), bin->lhs);
-                    compile_expr(em, OP_ADD, lreg(RTMP), bin->rhs);
-                    if (op && !(op == OP_MOV && dst.reg == RTMP && dst.type == Loc::REGISTER))
+                    compile_expr(em, OPC_MOV, lreg(RTMP), bin->lhs);
+                    compile_expr(em, OPC_ADD, lreg(RTMP), bin->rhs);
+                    if (op && !(op == OPC_MOV && dst.reg == RTMP && dst.type == Loc::REGISTER))
                         em.emit(op, dst, lreg(RTMP));
                     break;
                 }
-                case '=': {
-                    // TODO typer should make sure its a valid lvalue
-                    Loc loc = lvalue(em, bin->lhs);
-                    compile_expr(em, OP_MOV, loc, bin->rhs);
-                    break;
-                }
                 case OP_DOUBLEEQUALS: {
-                    compile_expr(em, OP_MOV, lreg(RTMP), bin->lhs);
-                    compile_expr(em, OP_MOV, lreg(RTMP - 1), bin->rhs);
-                    em.emit(OP_EQ, lreg(RTMP), lreg(RTMP - 1));
+                    compile_expr(em, OPC_MOV, lreg(RTMP), bin->lhs);
+                    compile_expr(em, OPC_MOV, lreg(RTMP - 1), bin->rhs);
+                    em.emit(OPC_EQ, lreg(RTMP), lreg(RTMP - 1));
                     break;
                 }
                 default:
+                    if (prec[bin->op] & ASSIGNMENT) {
+                        Loc loc = lvalue(em, bin->lhs);
+                        OpCode op;
+                        break;
+                        switch (bin->op) {
+                            case '=':                 op = OPC_MOV; break;
+                            case OP_ADDASSIGN:        op = OPC_ADD; break;
+                            case OP_SUBASSIGN:        op = OPC_SUB; break;
+                            //case OP_MULASSIGN:        op = OPC_MUL; break;
+                            //case OP_DIVASSIGN:        op = OPC_DIV; break;
+                            //case OP_MODASSIGN:        op = OPC_MOD; break;
+                            case OP_SHIFTLEFTASSIGN:  op = OPC_SHIFTLEFT;  break;
+                            case OP_SHIFTRIGHTASSIGN: op = OPC_SHIFTRIGHT; break;
+                            case OP_BITANDASSIGN:     op = OPC_BITAND;     break;
+                            case OP_BITXORASSIGN:     op = OPC_BITXOR;     break;
+                            case OP_BITORASSIGN:      op = OPC_BITOR;      break;
+                        }
+                        compile_expr(em, OPC_MOV, loc, bin->rhs);
+                    }
                     assert(!"binary operator not implemented");
             }
             break;
@@ -81,18 +93,18 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
         case AST_IF: {
             ASTIf* ifs = (ASTIf*)expr;
 
-            compile_expr(em, OP_MOV, lreg(RTMP), ifs->condition);
+            compile_expr(em, OPC_MOV, lreg(RTMP), ifs->condition);
 
             // Jump will be taken if the expression is false
             // we don't know the address we'll jump to yet, we'll fill it in when we're with the bloc
             MemInstr* jmp = (MemInstr*)em.s;
             jmp->srcreg = RRES;
-            jmp->op = OP_JZ;
+            jmp->op = OPC_JZ;
 
             em.s += sizeof(*jmp);
 
             for (ASTNode* node : ifs->block.statements)
-                compile_expr(em, OP_NONE, lreg(0), node);
+                compile_expr(em, OPC_NONE, lreg(0), node);
 
             // We're now right after the if's block, fill in the address
             jmp->addr = em.s;
@@ -102,8 +114,8 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
         case AST_RETURN: {
             ASTReturn* ret = (ASTReturn*)expr;
             if (ret->value)
-                compile_expr(em, OP_MOV, lreg(RRET), ret->value);
-            *em.s = OP_RET;
+                compile_expr(em, OPC_MOV, lreg(RRET), ret->value);
+            *em.s = OPC_RET;
             em.s += sizeof(Instr);
             break;
         }
@@ -255,10 +267,10 @@ void compile_fn(Emitter& em, ASTFn* fn) {
     }
 
     for (ASTNode* node : fn->block.statements)
-        compile_expr(em, OP_NONE, lreg(0), node);
+        compile_expr(em, OPC_NONE, lreg(0), node);
 
     // Add a RET after the function body
-    *em.s = OP_RET;
+    *em.s = OPC_RET;
     em.s += sizeof(Instr);
 
 }
@@ -297,13 +309,13 @@ void* bytecode_compile(Context& global, void* code_start, void** main_addr) {
 Emitter::Emitter(Context& global, void* code_start) : global(global), s((u8*)code_start) {}
 
 void Emitter::emitexit(u8 code) {
-    s[0] = OP_EXIT;
+    s[0] = OPC_EXIT;
     s[1] = code;
     s += 8;
 }
 
 void Emitter::emitcall(u64 ptr) {
-    s[0] = OP_CALL; 
+    s[0] = OPC_CALL; 
     ((u64*)s)[1] = ptr;
     s += 16;
 }
@@ -326,27 +338,27 @@ Next:
         printf("%-5s", instruction_names[i->op]);
 
         switch (i->op) {
-            case OP_RET:   
+            case OPC_RET:   
                 start += sizeof(*i);
                 goto Next;
-            case OP_EXIT:  
+            case OPC_EXIT:  
                 printf("0x%x\n", start[1]);  
                 start += sizeof(*i);
                 goto Next;
-            case OP_JMP:
+            case OPC_JMP:
                 printf("\n");
                 start += sizeof(*i);
                 goto Next;
-            case OP_JNZ: 
+            case OPC_JNZ: 
                 printf("%p\n", ((MemInstr*)start)->addr);
                 start += sizeof(MemInstr);
                 goto Next;
-            case OP_JZ: 
+            case OPC_JZ: 
                 printf("%p\n", ((MemInstr*)start)->addr);
                 start += sizeof(MemInstr);
                 goto Next;
             default:
-                if (i->op & OP_ADDRESSABLE)
+                if (i->op & OPC_ADDRESSABLE)
                     break;
                 printf("Invalid instruction %x\n", i->op);
                 assert(0);

@@ -20,50 +20,55 @@
 // make sure to add the entry in instruction_names
 
 // If you're adding new instructions it matters whether you add them
-// before or after OP_ADDRESSABLE, see its comment
+// before or after OPC_ADDRESSABLE, see its comment
 enum OpCode : u8 {
-    OP_NONE = 0x00,
+    OPC_NONE = 0x00,
 
     // | OPCODE EXITCODE(u1) 0x00 0x00 | 0x00 0x00 0x00 0x00 |
-    OP_EXIT  = 0x01,
+    OPC_EXIT  = 0x01,
 
     // | OPCODE 0x00 0x00 0x00 | 0x00 0x00 0x00 0x00 | ADDR |
     // JMP is an unconditional jump to ADDR
-    OP_JMP,
+    OPC_JMP,
 
     // JNZ will only jump if the value of TESTREG is non-zero
     // JZ jumps if it is zero
     // Right now for TESTREG we only use the 'RRES' register
     // that's similar to how x86 handles it with the FLAGS register
     // | OPCODE 0x00 0x00 TESTREG | 0x00 0x00 0x00 0x00 | ADDR |
-    OP_JNZ,
-    OP_JZ,
+    OPC_JNZ,
+    OPC_JZ,
 
-    OP_CALL,
-    OP_RET,
+    OPC_CALL,
+    OPC_RET,
 
-    // The instructions after OP_ADDRESSABLE take in a source and destination
-    // You can checck whether an instruction is addressable with OPCODE & OP_ADDRESSABLE
-    OP_ADDRESSABLE = 0x80,
+    // The instructions after OPC_ADDRESSABLE take in a source and destination
+    // You can checck whether an instruction is addressable with OPCODE & OPC_ADDRESSABLE
+    OPC_ADDRESSABLE = 0x80,
 
-    OP_ADD = OP_ADDRESSABLE,
-    OP_SUB,
-    OP_MOV,
-    OP_MULS,
-    OP_MULU,
-    OP_EQ,
-    OP_GTS,
-    OP_LTS,
-    OP_GTU,
-    OP_LTU,
-    OP_GTF,
-    OP_LTF,
-    OP_GTES,
-    OP_LTES,
-    OP_GTEU,
-    OP_LTEU,
-    OP_GTEF,
-    OP_LTEF,
+    OPC_ADD = OPC_ADDRESSABLE,
+    OPC_SUB,
+    OPC_MOV,
+    OPC_MULS,
+    OPC_MULU,
+    OPC_EQ,
+    OPC_GTS,
+    OPC_LTS,
+    OPC_GTU,
+    OPC_LTU,
+    OPC_GTF,
+    OPC_LTF,
+    OPC_GTES,
+    OPC_LTES,
+    OPC_GTEU,
+    OPC_LTEU,
+    OPC_GTEF,
+    OPC_LTEF,
+    OPC_BITOR,
+    OPC_BITXOR,
+    OPC_BITAND,
+    OPC_SHIFTLEFT,
+    OPC_SHIFTRIGHT,
 };
 
 extern const char* instruction_names[256];
