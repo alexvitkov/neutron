@@ -19,6 +19,6 @@ extern ASTPrimitiveType t_type;
 extern ASTPrimitiveType t_void;
 
 bool typecheck_all(Context& global);
-ASTType* typecheck(Context& ctx, ASTNode* node);
+ASTType* gettype(Context& ctx, ASTNode* node);
 
 #endif // guard

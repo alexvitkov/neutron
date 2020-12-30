@@ -110,7 +110,7 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
 
         case AST_CAST: {
             ASTCast* cast = (ASTCast*)expr;
-            ASTType* oldType = typecheck(em.global, cast->inner);
+            ASTType* oldType = gettype(em.global, cast->inner);
             compile_expr(em, op, dst, cast->inner);
 
             // TODO cast is ignored

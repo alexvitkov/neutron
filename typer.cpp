@@ -1,4 +1,5 @@
 #include "typer.h"
+#include "ast.h"
 
 ASTPrimitiveType t_bool (PRIMITIVE_BOOL,    1, "bool");
 ASTPrimitiveType t_u8  (PRIMITIVE_UNSIGNED, 1, "u8");
@@ -15,10 +16,8 @@ ASTPrimitiveType t_type (PRIMITIVE_TYPE,    0, "type");
 ASTPrimitiveType t_fn   (PRIMITIVE_TYPE,    0, "fntype"); // TODO remove this
 ASTPrimitiveType t_void (PRIMITIVE_TYPE,    0, "void");
 
-ASTType* typecheck(Context& ctx, ASTNode* node);
-
 bool implicit_cast(Context& ctx, ASTNode** dst, ASTType* type) {
-    ASTType* dstt = typecheck(ctx, *dst);
+    ASTType* dstt = gettype(ctx, *dst);
     if (!dstt)
         return false;
 
@@ -46,84 +45,91 @@ bool implicit_cast(Context& ctx, ASTNode** dst, ASTType* type) {
     return false;
 }
 
-
-ASTType* typecheck(Context& ctx, ASTNode* node) {
+ASTType* gettype(Context& ctx, ASTNode* node) {
     switch (node->nodetype) {
         case AST_PRIMITIVE_TYPE:
             return &t_type;
+        case AST_FN:
+            assert(!"Function types aren't implemented");
+        case AST_VAR:
+            return ((ASTVar*)node)->type;
+        case AST_CAST:
+            return ((ASTCast*)node)->newtype;
+        case AST_NUMBER:
+            return ((ASTNumber*)node)->type;
+        case AST_BINARY_OP: {
+            ASTBinaryOp* bin = (ASTBinaryOp*)node;
+            if (bin->type)
+                return bin->type;
+
+            ASTType* lhst = gettype(ctx, bin->lhs);
+            ASTType* rhst = gettype(ctx, bin->rhs);
+            if (!lhst || !rhst) {
+                ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
+                return nullptr;
+            }
+
+            if (implicit_cast(ctx, &bin->rhs, lhst))
+                return (bin->type = lhst);
+            if (!(prec[bin->op] & ASSIGNMENT) && implicit_cast(ctx, &bin->lhs, rhst))
+                return (bin->type = rhst);
+
+            ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
+            return nullptr;
+        }
+        default:
+            printf("gettype is not supported/implemented for nodetype %d\n", node->nodetype);
+            assert(0);
+    }
+}
+
+bool typecheck(Context& ctx, ASTNode* node) {
+    switch (node->nodetype) {
+        case AST_BLOCK: {
+            ASTBlock* block = (ASTBlock*)node;
+            for (const auto& stmt : block->statements)
+                if (!typecheck(block->ctx, stmt))
+                    return false;
+            return true;
+        }
         case AST_FN: {
             ASTFn* fn = (ASTFn*)node;
-            for (const auto& stmt : fn->block.statements) {
-                if (!typecheck(fn->block.ctx, stmt))
-                    return nullptr;
-            }
-            return &t_fn;
-        }
-        case AST_VAR: {
-            return ((ASTVar*)node)->type;
-        }
-        case AST_CAST: {
-            return ((ASTCast*)node)->newtype;
+            return typecheck(fn->block.ctx, &fn->block);
         }
         case AST_RETURN: {
+            // TODO child void functions right now inherit the returntype of the 
+            // parent funciton if the child fn's return type is void
+            // this is wrong
             ASTReturn* ret = (ASTReturn*)node;
             ASTType* rettype = (ASTType*)ctx.resolve("returntype");
 
             if (rettype) {
                 if (!ret->value) {
                     ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "invalid return 1"});
-                    return nullptr;
+                    return false;
                 }
-                if (!implicit_cast(ctx, &ret->value, rettype)) {
-                    return nullptr;
-                }
+                if (!implicit_cast(ctx, &ret->value, rettype))
+                    return false;
             }
-            else {
-                if (ret->value) {
-                    ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "invalid return 2"});
-                    return nullptr;
-                }
+            else if (ret->value) {
+                ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "invalid return 2"});
+                return false;
             }
-
-            return (ASTType*)1;
+            return true;
         }
         case AST_BINARY_OP: {
-            ASTBinaryOp* bin = (ASTBinaryOp*)node;
-
-            ASTType* lhst = typecheck(ctx, bin->lhs);
-            ASTType* rhst = typecheck(ctx, bin->rhs);
-
-            if (!lhst || !rhst) {
-                ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
-                return nullptr;
-            }
-            
-            if (implicit_cast(ctx, &bin->rhs, lhst))
-                return lhst;
-
-            if (!(prec[bin->op] & ASSIGNMENT) && implicit_cast(ctx, &bin->lhs, rhst))
-                return rhst;
-
-            ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
-            return nullptr;
-        }
-        case AST_NUMBER: {
-            ASTNumber* num = (ASTNumber*)node;
-            return num->type;
+            return gettype(ctx, node);
         }
         case AST_IF: {
             ASTIf* ifs = (ASTIf*)node;
-            typecheck(ctx, ifs->condition);
-            for (const auto& stmt : ifs->block.statements) {
-                if (!typecheck(ifs->block.ctx, stmt))
-                    return nullptr;
-            }
-            return (ASTType*)1; // TODO TODO TODO TODO TODO
+            if (!typecheck(ctx, ifs->condition))
+                return false;
+            if (!typecheck(ctx, ifs->condition))
+                return false;
+            return true;
         }
-        default: {
-                ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "unsupported node type"});
-                return nullptr;
-        }
+        default:
+            return true;
     }
 }
 

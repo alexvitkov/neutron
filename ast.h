@@ -124,6 +124,7 @@ struct ASTCast : ASTNode {
 
 struct ASTBinaryOp : ASTNode {
     TokenType op;
+    ASTType* type;
     ASTNode *lhs, *rhs;
 
     inline ASTBinaryOp(TokenType op, ASTNode* lhs, ASTNode* rhs)
