@@ -35,7 +35,7 @@
 #line 7 "keywords.gperf"
 struct tok { const char* name; TokenType type; };
 
-#define TOTAL_KEYWORDS 38
+#define TOTAL_KEYWORDS 39
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 6
 #define MIN_HASH_VALUE 2
@@ -65,8 +65,8 @@ Perfect_Hash::hash (const char *str, size_t len)
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 35, 93, 41, 93, 93,  0,  5, 93,
-      93,  5, 15, 93, 93, 10, 93, 93,  0, 93,
-      40,  0, 93, 93,  0,  0,  0, 35, 93, 93,
+      93,  5, 15, 93,  0, 10, 93, 93,  0, 93,
+      40,  0, 93, 93,  0,  0,  0, 35, 93,  0,
       93, 93, 93, 93, 25, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
@@ -91,16 +91,17 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
   static struct tok wordlist[] =
     {
       {""}, {""},
-#line 30 "keywords.gperf"
+#line 31 "keywords.gperf"
       {">>",     OP_SHIFTRIGHT},
-#line 43 "keywords.gperf"
+#line 44 "keywords.gperf"
       {">>=",    OP_SHIFTRIGHTASSIGN},
 #line 24 "keywords.gperf"
       {"true",   KW_TRUE},
-      {""},
+#line 27 "keywords.gperf"
+      {"while",  KW_WHILE},
 #line 21 "keywords.gperf"
       {"struct", KW_STRUCT},
-#line 32 "keywords.gperf"
+#line 33 "keywords.gperf"
       {">=",     OP_GREATEREQUALS},
 #line 22 "keywords.gperf"
       {"let",    KW_LET},
@@ -109,14 +110,14 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
       {""},
 #line 23 "keywords.gperf"
       {"return", KW_RETURN},
-#line 33 "keywords.gperf"
+#line 34 "keywords.gperf"
       {"==",     OP_DOUBLEEQUALS},
 #line 16 "keywords.gperf"
       {"i64",    KW_I64},
-#line 36 "keywords.gperf"
+#line 37 "keywords.gperf"
       {"!=",     OP_NOTEQUALS},
       {""}, {""},
-#line 31 "keywords.gperf"
+#line 32 "keywords.gperf"
       {"<=",     OP_LESSEREQUALS},
 #line 19 "keywords.gperf"
       {"f64",    KW_F64},
@@ -124,9 +125,9 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
 #line 25 "keywords.gperf"
       {"false",  KW_FALSE},
       {""},
-#line 29 "keywords.gperf"
+#line 30 "keywords.gperf"
       {"<<",     OP_SHIFTLEFT},
-#line 42 "keywords.gperf"
+#line 43 "keywords.gperf"
       {"<<=",    OP_SHIFTLEFTASSIGN},
       {""}, {""}, {""},
 #line 26 "keywords.gperf"
@@ -134,39 +135,39 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
 #line 15 "keywords.gperf"
       {"i32",    KW_I32 },
       {""}, {""}, {""},
-#line 46 "keywords.gperf"
+#line 47 "keywords.gperf"
       {"|=",     OP_BITORASSIGN},
 #line 18 "keywords.gperf"
       {"f32",    KW_F32},
       {""}, {""}, {""},
-#line 38 "keywords.gperf"
+#line 39 "keywords.gperf"
       {"-=",     OP_SUBASSIGN},
 #line 12 "keywords.gperf"
       {"u64",    KW_U64},
       {""}, {""}, {""},
-#line 37 "keywords.gperf"
+#line 38 "keywords.gperf"
       {"+=",     OP_ADDASSIGN},
 #line 14 "keywords.gperf"
       {"i16",    KW_I16 },
       {""}, {""}, {""},
-#line 44 "keywords.gperf"
-      {"&=",     OP_BITANDASSIGN},
 #line 45 "keywords.gperf"
+      {"&=",     OP_BITANDASSIGN},
+#line 46 "keywords.gperf"
       {"^=",     OP_BITXORASSIGN},
       {""}, {""}, {""},
-#line 35 "keywords.gperf"
+#line 36 "keywords.gperf"
       {"||",     OP_OR},
 #line 11 "keywords.gperf"
       {"u32",    KW_U32 },
       {""}, {""}, {""},
 #line 20 "keywords.gperf"
       {"fn",     KW_FN},
-#line 40 "keywords.gperf"
+#line 41 "keywords.gperf"
       {"/=",     OP_DIVASSIGN},
       {""}, {""}, {""},
-#line 28 "keywords.gperf"
+#line 29 "keywords.gperf"
       {"--",     OP_MINUSMINUS},
-#line 39 "keywords.gperf"
+#line 40 "keywords.gperf"
       {"*=",     OP_MULASSIGN},
       {""}, {""}, {""},
 #line 13 "keywords.gperf"
@@ -174,12 +175,12 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
 #line 10 "keywords.gperf"
       {"u16",    KW_U16 },
       {""}, {""}, {""},
-#line 27 "keywords.gperf"
+#line 28 "keywords.gperf"
       {"++",     OP_PLUSPLUS},
-#line 41 "keywords.gperf"
+#line 42 "keywords.gperf"
       {"\\%=",    OP_MODASSIGN},
       {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
-#line 34 "keywords.gperf"
+#line 35 "keywords.gperf"
       {"&&",     OP_AND},
       {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
 #line 9 "keywords.gperf"

@@ -12,8 +12,9 @@
 #define RRES  (NREG - 2)
 #define IP    (NREG - 3)
 
-#define RRET (NREG - 4)
-#define RTMP (NREG - 5)
+#define RRET  (NREG - 4)
+#define RTMP1 (NREG - 5)
+#define RTMP2 (NREG - 6)
 
 // @VOLATILE
 // If you add new instructions or change their order

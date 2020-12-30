@@ -89,12 +89,12 @@ Loc lvalue(Emitter& em, ASTNode* expr) {
     }
 }
 
-void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
+Loc compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
     switch (expr->nodetype) {
         case AST_NUMBER: {
             ASTNumber* num = (ASTNumber*)expr;
             em.emit(op, dst, lval(num->floorabs));
-            break;
+            return dst;
         }
 
         case AST_BINARY_OP: {
@@ -102,22 +102,27 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
 
             switch (bin->op) {
                 case '+': {
-                    compile_expr(em, OPC_MOV, lreg(RTMP), bin->lhs);
-                    compile_expr(em, OPC_ADD, lreg(RTMP), bin->rhs);
-                    if (op && !(op == OPC_MOV && dst.reg == RTMP && dst.type == Loc::REGISTER))
-                        em.emit(op, dst, lreg(RTMP));
-                    break;
+                    compile_expr(em, OPC_MOV, lreg(RTMP1), bin->lhs);
+                    compile_expr(em, OPC_ADD, lreg(RTMP1), bin->rhs);
+                    return lreg(RTMP1);
                 }
                 case OP_DOUBLEEQUALS: {
-                    compile_expr(em, OPC_MOV, lreg(RTMP), bin->lhs);
-                    compile_expr(em, OPC_MOV, lreg(RTMP - 1), bin->rhs);
-                    em.emit(OPC_EQ, lreg(RTMP), lreg(RTMP - 1));
-                    break;
+                    compile_expr(em, OPC_MOV, lreg(RTMP1), bin->lhs);
+                    compile_expr(em, OPC_MOV, lreg(RTMP2), bin->rhs);
+                    em.emit(OPC_EQ, lreg(RTMP1), lreg(RTMP2));
+                    return lreg(RRES);
+                }
+                case '<': {
+                    compile_expr(em, OPC_MOV, lreg(RTMP1), bin->lhs);
+                    compile_expr(em, OPC_MOV, lreg(RTMP2), bin->rhs);
+                    em.emit(OPC_LTU, lreg(RTMP1), lreg(RTMP2));
+                    return lreg(RRES);
                 }
                 case '=': {
                     Loc lval = lvalue(em, bin->lhs);
-                    compile_expr(em, OPC_MOV, lval, bin->rhs);
-                    break;
+                    Loc res = compile_expr(em, OPC_MOV, lval, bin->rhs);
+                    em.emit(OPC_MOV, lval, res);
+                    return lval;
                 }
                 default:
                     assert(!"binary operator not implemented");
@@ -128,14 +133,13 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
         case AST_IF: {
             ASTIf* ifs = (ASTIf*)expr;
 
-            compile_expr(em, OPC_MOV, lreg(RTMP), ifs->condition);
+            Loc result = compile_expr(em, OPC_MOV, lreg(RTMP1), ifs->condition);
 
             // Jump will be taken if the expression is false
             // we don't know the address we'll jump to yet, we'll fill it in when we're with the bloc
             MemInstr* jmp = (MemInstr*)em.s;
-            jmp->srcreg = RRES;
+            jmp->srcreg = result.reg;
             jmp->op = OPC_JZ;
-
             em.s += sizeof(*jmp);
 
             for (ASTNode* node : ifs->block.statements)
@@ -143,6 +147,32 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
 
             // We're now right after the if's block, fill in the address
             jmp->addr = em.s;
+            break;
+        }
+
+        case AST_WHILE: {
+            ASTWhile* whiles = (ASTWhile*)expr;
+
+            void* loop_start = em.s;
+            Loc result = compile_expr(em, OPC_MOV, lreg(4), whiles->condition);
+
+            // Jump will be taken if the expression is false
+            // we don't know the address we'll jump to yet, we'll fill it in when we're with the bloc
+            MemInstr* loop_over_jmp = (MemInstr*)em.s;
+            loop_over_jmp->srcreg = result.reg;
+            loop_over_jmp->op = OPC_JZ;
+            em.s += sizeof(*loop_over_jmp);
+
+            for (ASTNode* node : whiles->block.statements)
+                compile_expr(em, OPC_NONE, lreg(0), node);
+
+            MemInstr* jmp_to_top = (MemInstr*)em.s;
+            jmp_to_top->op = OPC_JMP;
+            jmp_to_top->addr = loop_start;
+            em.s += sizeof(MemInstr);
+
+            // We're now right after the if's block, fill in the address
+            loop_over_jmp->addr = em.s;
             break;
         }
 
@@ -366,12 +396,16 @@ void Emitter::emitcall(u64 ptr) {
 }
 
 void printregname(u8 reg) {
-    if (reg == RTMP)
-        printf("RTMP");
+    if (reg == RTMP1)
+        printf("RTMP1");
+    else if (reg == RTMP2)
+        printf("RTMP2");
     else if (reg == RRET)
         printf("RRET");
     else if (reg == SP)
         printf("SP");
+    else if (reg == RRES)
+        printf("RRES");
     else printf("R%d", reg);
 }
 
@@ -385,21 +419,24 @@ Next:
         switch (i->op) {
             case OPC_RET:   
                 start += sizeof(*i);
+                printf("\n");
                 goto Next;
             case OPC_EXIT:  
                 printf("0x%x\n", start[1]);  
                 start += sizeof(*i);
                 goto Next;
             case OPC_JMP:
-                printf("\n");
-                start += sizeof(*i);
-                goto Next;
-            case OPC_JNZ: 
                 printf("%p\n", ((MemInstr*)start)->addr);
                 start += sizeof(MemInstr);
                 goto Next;
+            case OPC_JNZ: 
+                printregname(i->srcreg);
+                printf(", %p\n", ((MemInstr*)start)->addr);
+                start += sizeof(MemInstr);
+                goto Next;
             case OPC_JZ: 
-                printf("%p\n", ((MemInstr*)start)->addr);
+                printregname(i->srcreg);
+                printf(", %p\n", ((MemInstr*)start)->addr);
                 start += sizeof(MemInstr);
                 goto Next;
             default:

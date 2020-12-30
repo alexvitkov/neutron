@@ -16,6 +16,7 @@ enum ASTNodeType : u8 {
     AST_CAST,
     AST_NUMBER,
     AST_IF,
+    AST_WHILE,
     AST_BLOCK,
 };
 
@@ -114,6 +115,13 @@ struct ASTIf : ASTNode {
     inline ASTIf(Context& parent_ctx) : ASTNode(AST_IF), block(parent_ctx) {}
 };
 
+struct ASTWhile : ASTNode {
+    ASTNode* condition;
+    ASTBlock block;
+
+    inline ASTWhile(Context& parent_ctx) : ASTNode(AST_WHILE), block(parent_ctx) {}
+};
+
 struct ASTCast : ASTNode {
     ASTType* newtype;
     ASTNode* inner;
@@ -152,6 +160,7 @@ void print(std::ostream& o, ASTReturn* node);
 void print(std::ostream& o, ASTCast* node);
 void print(std::ostream& o, ASTNumber* node);
 void print(std::ostream& o, ASTIf* node);
+void print(std::ostream& o, ASTWhile* node);
 void print(std::ostream& o, ASTBlock* bl);
 
 #endif // guard

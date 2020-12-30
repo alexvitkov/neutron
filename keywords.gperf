@@ -24,6 +24,7 @@ return, KW_RETURN
 true,   KW_TRUE
 false,  KW_FALSE
 if,     KW_IF
+while,  KW_WHILE
 ++,     OP_PLUSPLUS
 --,     OP_MINUSMINUS
 <<,     OP_SHIFTLEFT

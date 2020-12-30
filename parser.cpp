@@ -492,6 +492,14 @@ X:
                 block.statements.push_back(ifs);
                 break;
             }
+            case KW_WHILE: {
+                ASTWhile* whiles = block.ctx.alloc<ASTWhile>(block.ctx);
+                whiles->condition = parse_expr(block.ctx, r);
+                MUST(whiles->condition);
+                MUST(parse_block(whiles->block, r));
+                block.statements.push_back(whiles);
+                break;
+            }
             case TOK('}'): {
                 r.pop();
                 return true;

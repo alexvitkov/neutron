@@ -72,6 +72,7 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
         case AST_CAST:           print(o, (ASTCast*)node); break;
         case AST_NUMBER:         print(o, (ASTNumber*)node); break;
         case AST_IF:             print(o, (ASTIf*)node); break;
+        case AST_WHILE:          print(o, (ASTWhile*)node); break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
@@ -188,6 +189,13 @@ void print(std::ostream& o, ASTNumber* node) {
 
 void print(std::ostream& o, ASTIf* node) {
     o << "if ";
+    print(o, node->condition, false);
+    o << " ";
+    print(o, &node->block);
+}
+
+void print(std::ostream& o, ASTWhile* node) {
+    o << "while ";
     print(o, node->condition, false);
     o << " ";
     print(o, &node->block);

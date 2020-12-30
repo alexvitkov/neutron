@@ -66,6 +66,7 @@ enum TokenType : u8 {
 	KW_TRUE,
 	KW_FALSE,
     KW_IF,
+    KW_WHILE,
 
 	TOK_ID,
 	TOK_NUMBER,

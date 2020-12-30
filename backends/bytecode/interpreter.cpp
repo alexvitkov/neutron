@@ -14,7 +14,7 @@ int interpret(u64* reg, void* main, void* stack) {
 NEXT:
         Instr* i = (Instr*)reg[IP];
 
-        printf("%-5s %p\n", instruction_names[i->op], (void*)reg[IP]);
+        // printf("%-5s %p\n", instruction_names[i->op], (void*)reg[IP]);
 
         switch (i->op) {
             case OPC_EXIT: { 
@@ -96,7 +96,9 @@ NEXT:
                 case OPC_MULU: *(int64_t*)dstp  *= *(int64_t*)&src; break; 
                 case OPC_EQ:   reg[RRES] =           *dstp ==             src; break;
                 case OPC_GTU:  reg[RRES] =           *dstp >              src; break;
-                case OPC_LTU:  reg[RRES] =           *dstp <              src; break;
+                case OPC_LTU:  
+                               //printf("%lu < %lu\n", *dstp, src);
+                               reg[RRES] =           *dstp <              src; break;
                 case OPC_GTS:  reg[RRES] = *(int64_t*)dstp >  *(int64_t*)&src; break;
                 case OPC_LTS:  reg[RRES] = *(int64_t*)dstp <  *(int64_t*)&src; break;
                 case OPC_GTF:  reg[RRES] =  *(double*)dstp >   *(double*)&src; break;
