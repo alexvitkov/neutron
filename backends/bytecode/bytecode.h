@@ -15,28 +15,38 @@
 #define RRET (NREG - 4)
 #define RTMP (NREG - 5)
 
-enum OpCode : u8 {
-    OP_DISCARD = 0x00,
+// @VOLATILE
+// If you add new instructions or change their order
+// make sure to add the entry in instruction_names
 
-    // 0x00 EXITCODE(u1)
+// If you're adding new instructions it matters whether you add them
+// before or after OP_ADDRESSABLE, see its comment
+enum OpCode : u8 {
+    OP_NONE = 0x00,
+
+    // | OPCODE EXITCODE(u1) 0x00 0x00 | 0x00 0x00 0x00 0x00 |
     OP_EXIT  = 0x01,
 
     // | OPCODE 0x00 0x00 0x00 | 0x00 0x00 0x00 0x00 | ADDR |
-    // will always jump to addr
+    // JMP is an unconditional jump to ADDR
     OP_JMP,
 
+    // JNZ will only jump if the value of TESTREG is non-zero
+    // JZ jumps if it is zero
+    // Right now for TESTREG we only use the 'RRES' register
+    // that's similar to how x86 handles it with the FLAGS register
     // | OPCODE 0x00 0x00 TESTREG | 0x00 0x00 0x00 0x00 | ADDR |
-    // Will only jump if value of TESTREG is not zero
     OP_JNZ,
-    // Will only jump if value of TESTREG is zero
     OP_JZ,
 
     OP_CALL,
     OP_RET,
 
-    // ADDRESSABLE
+    // The instructions after OP_ADDRESSABLE take in a source and destination
+    // You can checck whether an instruction is addressable with OPCODE & OP_ADDRESSABLE
     OP_ADDRESSABLE = 0x80,
-    OP_ADD,
+
+    OP_ADD = OP_ADDRESSABLE,
     OP_SUB,
     OP_MOV,
     OP_MULS,
@@ -55,6 +65,8 @@ enum OpCode : u8 {
     OP_GTEF,
     OP_LTEF,
 };
+
+extern const char* instruction_names[256];
 
 enum AddrModeBits : u8 {
     // lower 4 bits describe the source
@@ -93,10 +105,12 @@ struct Val2MemInstr : public Instr {
     u64 val;
 };
 
+// The size of an addressable instruction can be inferred from its addressing mode
+u8 instr_size(u8 addrmode);
 
-void* bytecode_compile(Context& ctx, void* code_start, void* stack_start);
+void* bytecode_compile(Context& global, void* code_start, void** main_addr);
 void bytecode_disassemble(u8* start, u8* end);
-int interpret(uint64_t* reg);
+int interpret(u64* reg, void* main, void* stack);
 
 Loc lstack(u64 offset);
 Loc lreg(u8 regid);
@@ -113,11 +127,10 @@ struct Emitter {
 
     Context& global;
     u8 *s;
-    u64* stack;
 
     void nodeaddr(ASTNode* node, void** addr);
 
-    Emitter(Context& global, void* code_start, void* stack_start);
+    Emitter(Context& global, void* code_start);
 };
 
 #endif // guard

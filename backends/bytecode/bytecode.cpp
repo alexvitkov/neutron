@@ -6,7 +6,28 @@
 #include <algorithm>
 #include <assert.h>
 
-
+const char* instruction_names[256] = {
+    "NONE",  "EXIT", "JMP",  "JNZ",  "JZ",   "CALL", "RET",  0,
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    0,       0,      0,      0,      0,      0,      0,      0,      
+    // OP_ADDRESSABLE = 0xF0
+    "ADD",   "SUB",  "MOV",  "MULS", "MULU", "EQ",   "GTS",  "LTS", 
+    "GTU",   "LTU",  "GTF",  "LTF",  "GTES", "LTES", "GTEU", "LTEU", 
+    "GTEF",  "LTEF", 0,      0,      0,      0,      0,      0,
+};
 
 Loc lvalue(Emitter& em, ASTNode* expr) {
     switch (expr->nodetype) {
@@ -71,7 +92,7 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
             em.s += sizeof(*jmp);
 
             for (ASTNode* node : ifs->block.statements)
-                compile_expr(em, OP_DISCARD, lreg(0), node);
+                compile_expr(em, OP_NONE, lreg(0), node);
 
             // We're now right after the if's block, fill in the address
             jmp->addr = em.s;
@@ -108,7 +129,6 @@ void compile_expr(Emitter& em, OpCode op, Loc dst, ASTNode *expr) {
     }
 }
 
-// The size of the instruciton can be inferred from the addressing mode
 u8 instr_size(u8 addrmode) {
     if (addrmode == (AM_SRCVAL | AM_DSTMEM))
         return sizeof(Val2MemInstr);
@@ -235,7 +255,7 @@ void compile_fn(Emitter& em, ASTFn* fn) {
     }
 
     for (ASTNode* node : fn->block.statements)
-        compile_expr(em, OP_DISCARD, lreg(0), node);
+        compile_expr(em, OP_NONE, lreg(0), node);
 
 }
 
@@ -250,8 +270,8 @@ void Emitter::nodeaddr(ASTNode* node, void** addr) {
     }
 }
 
-void* bytecode_compile(Context& global, void* code_start, void* stack_start) {
-    Emitter em(global, code_start, stack_start);
+void* bytecode_compile(Context& global, void* code_start, void** main_addr) {
+    Emitter em(global, code_start);
 
     for (const auto& decl : global.defines) {
         if (decl.second->nodetype == AST_VAR) {
@@ -261,13 +281,16 @@ void* bytecode_compile(Context& global, void* code_start, void* stack_start) {
             compile_fn(em, (ASTFn*)decl.second);
         }
     }
-    
+
+    *main_addr = 0;
+    ASTFn* main_fn = (ASTFn*)global.resolve("main");
+    if (main_fn && main_fn->nodetype == AST_FN) {
+        *main_addr = em.addresses[main_fn];
+    }
     return em.s;
 }
 
-Emitter::Emitter(Context& global, void* code_start, void* stack_start) 
-    : global(global), s((u8*)code_start), stack((u64*)stack_start) {}
-
+Emitter::Emitter(Context& global, void* code_start) : global(global), s((u8*)code_start) {}
 
 void Emitter::emitexit(u8 code) {
     s[0] = OP_EXIT;

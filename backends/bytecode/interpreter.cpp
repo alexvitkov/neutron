@@ -1,9 +1,20 @@
 #include "bytecode.h"
 
-int interpret(u64* reg, void* main, void* code_end) {
+int interpret(u64* reg, void* main, void* stack) {
+    // TODO remove this
+    // This tells us how many function calls deep in we are
+    // We use it so we know when we've exited main() with a RET
+    int depth = 0;
+
+    // @POINTERSIZE - We're assuming REGSIZE = POINTERSIZE = 64
+    reg[SP] = (u64)stack;
+    reg[IP] = (u64)main;
+
     while (true) {
 NEXT:
-        Instr* i = (Instr*)main;
+        Instr* i = (Instr*)reg[IP];
+
+        printf("%-5s %p\n", instruction_names[i->op], (void*)reg[IP]);
 
         switch (i->op) {
             case OP_EXIT: { 
@@ -32,12 +43,20 @@ NEXT:
                 reg[SP] += 8;
                 goto NEXT;
             }
+            */
             case OP_RET: {
+                if (depth-- == 0) {
+                    printf("Exited main with %lu\n", reg[RRET]);
+                    return 0;
+                }
                 reg[SP] -= 8;
-                reg[IP] = *(u64*)(mem + reg[SP]);
+                reg[IP] = *(u64*)reg[SP];
                 goto NEXT;
             }
-            */
+            default: {
+                if (!(i -> op && OP_ADDRESSABLE))
+                    assert(!"instruction not implemented");
+            }
         }
 
         if (i->op & OP_ADDRESSABLE) {
@@ -70,28 +89,30 @@ NEXT:
             }
 
             switch (i->op) {
-                case OP_ADD: *dstp += src; goto NEXT; 
-                case OP_SUB: *dstp -= src; goto NEXT; 
-                case OP_MOV: *dstp  = src; goto NEXT; 
-                case OP_MULS: *dstp  *= src; goto NEXT; 
-                case OP_MULU: *(int64_t*)dstp  *= *(int64_t*)&src; goto NEXT; 
-                case OP_EQ:   reg[RRES] =           *dstp ==             src; goto NEXT;
-                case OP_GTU:  reg[RRES] =           *dstp >              src; goto NEXT;
-                case OP_LTU:  reg[RRES] =           *dstp <              src; goto NEXT;
-                case OP_GTS:  reg[RRES] = *(int64_t*)dstp >  *(int64_t*)&src; goto NEXT;
-                case OP_LTS:  reg[RRES] = *(int64_t*)dstp <  *(int64_t*)&src; goto NEXT;
-                case OP_GTF:  reg[RRES] =  *(double*)dstp >   *(double*)&src; goto NEXT;
-                case OP_LTF:  reg[RRES] =  *(double*)dstp <   *(double*)&src; goto NEXT;
-                case OP_GTEU: reg[RRES] =           *dstp >=             src; goto NEXT;
-                case OP_LTEU: reg[RRES] =           *dstp <=             src; goto NEXT;
-                case OP_GTES: reg[RRES] = *(int64_t*)dstp >= *(int64_t*)&src; goto NEXT;
-                case OP_LTES: reg[RRES] = *(int64_t*)dstp <= *(int64_t*)&src; goto NEXT;
-                case OP_GTEF: reg[RRES] =  *(double*)dstp >=  *(double*)&src; goto NEXT;
-                case OP_LTEF: reg[RRES] =  *(double*)dstp <=  *(double*)&src; goto NEXT;
+                case OP_ADD: *dstp += src; break; 
+                case OP_SUB: *dstp -= src; break; 
+                case OP_MOV: *dstp  = src; break; 
+                case OP_MULS: *dstp  *= src; break; 
+                case OP_MULU: *(int64_t*)dstp  *= *(int64_t*)&src; break; 
+                case OP_EQ:   reg[RRES] =           *dstp ==             src; break;
+                case OP_GTU:  reg[RRES] =           *dstp >              src; break;
+                case OP_LTU:  reg[RRES] =           *dstp <              src; break;
+                case OP_GTS:  reg[RRES] = *(int64_t*)dstp >  *(int64_t*)&src; break;
+                case OP_LTS:  reg[RRES] = *(int64_t*)dstp <  *(int64_t*)&src; break;
+                case OP_GTF:  reg[RRES] =  *(double*)dstp >   *(double*)&src; break;
+                case OP_LTF:  reg[RRES] =  *(double*)dstp <   *(double*)&src; break;
+                case OP_GTEU: reg[RRES] =           *dstp >=             src; break;
+                case OP_LTEU: reg[RRES] =           *dstp <=             src; break;
+                case OP_GTES: reg[RRES] = *(int64_t*)dstp >= *(int64_t*)&src; break;
+                case OP_LTES: reg[RRES] = *(int64_t*)dstp <= *(int64_t*)&src; break;
+                case OP_GTEF: reg[RRES] =  *(double*)dstp >=  *(double*)&src; break;
+                case OP_LTEF: reg[RRES] =  *(double*)dstp <=  *(double*)&src; break;
 
                 default:
-                    assert(!"invalid instr");
+                    assert(!"Instruction not implemented");
             }
+
+            reg[IP] += instr_size(i->addrmode);
         }
     }
 }

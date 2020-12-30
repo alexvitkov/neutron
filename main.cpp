@@ -55,16 +55,18 @@ int main(int argc, const char** argv) {
         exit_with_error();
     }
 
-    void* code = malloc(10 * 1024 * 1024);
-    void* stac = malloc(10 * 1024);
+    void* code  = malloc(10 * 1024 * 1024);
+    void* stack = malloc(10 * 1024);
+    void* main;
 
-    void* end = bytecode_compile(global, code, stac);
+    void* end = bytecode_compile(global, code, &main);
 
-    bytecode_disassemble((u8*)code, (u8*)end);
+    bytecode_disassemble((u8*)main, (u8*)end);
 
-    ASTNode* main_fn = global.resolve("main");
-    if (main_fn) {
+    if (main) {
         printf("\n----------\n\n");
+        u64 reg[100];
+        interpret(reg, main, stack);
     }
 
     return 0;
