@@ -1,10 +1,7 @@
 #ifndef SOURCEFILE_H
 #define SOURCEFILE_H
 
-#include "parser.h"
-
-#include <stdio.h>
-#include <stdlib.h>
+#include "common.h"
 
 struct SourceFile {
 	size_t id;

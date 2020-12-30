@@ -1,4 +1,7 @@
-#include "parser.h"
+#include "common.h"
+#include "ast.h"
+#include "error.h"
+#include "typer.h"
 #include "sourcefile.h"
 
 #include "keywords.gperf.gen.h"
@@ -166,19 +169,28 @@ bool tokenize(Context& global, SourceFile &s) {
 	enum { NONE, WORD, NUMBER } state = NONE;
 
 	struct BracketToken {
-		char tok;
+		Token tok;
 		u64 tokid;
 	};
 	std::vector<BracketToken> bracket_stack;
+
+    u32 line = 0;
+    u64 line_start = 0;
 
 	for (u64 i = 0; i < s.length; i++) {
 		char c = s.buffer[i];
 		CharTraits ct = ctt[c];
 
-		if (!ct) {
-			char* err_msg = (char*)malloc(256);
-			sprintf(err_msg, "unrecognized character 0x%x, or '%c'", c, c);
-			global.errors.push_back({Error::TOKENIZER, Error::ERROR, err_msg});
+		if (ct == CT_ERROR) {
+			global.error({
+                .code = ERR_UNRECOGNIZED_CHARACTER, 
+                .tokens = {{
+                    .length = 1,
+                    .start = i,
+                    .line = line,
+                    .pos_in_line = (u32)(i - line_start),
+                }}
+            });
 			return false;
 		}
 
@@ -189,7 +201,9 @@ bool tokenize(Context& global, SourceFile &s) {
 				s.tokens.push_back({
 					.type = kw ? kw->type : (state == WORD ? TOK_ID : TOK_NUMBER),
 					.length = (u32)(i - word_start),
-					.start = word_start
+					.start = word_start,
+                    .line = line,
+                    .pos_in_line = (u32)(i - line_start),
 				});
 				state = NONE;
 			}
@@ -203,24 +217,44 @@ bool tokenize(Context& global, SourceFile &s) {
 
 		if (ct & (CT_OPERATOR | CT_HELPERTOKEN)) {
 			u64 match = 0;
+
+            u32 length = 1;
+            tok* t;
+            if (i + 2 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 3)))
+                length = 3;
+            else if (i + 1 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 2)))
+                length = 2;
+
+            Token tok =  {
+				.type = t ? t->type : TOK(c),
+				.match = (u32)match,
+				.length = length,
+				.start = i,
+                .line = line,
+                .pos_in_line = (u32)(i - line_start),
+            };
+
 			switch (c) {
-				case '(':
-				case '[':
-				case '{':
-					bracket_stack.push_back({ c, s.tokens.size()});
+				case '(': case '[': case '{': {
+					bracket_stack.push_back({ tok, s.tokens.size()});
 					break;
-				case ')':
-				case ']':
-				case '}': {
+                }
+				case ')': case ']': case '}': {
 					if (bracket_stack.size() == 0) {
-						global.errors.push_back({Error::TOKENIZER, Error::ERROR, "unbalanced brackets"});
+						global.error({
+                            .code = ERR_UNBALANCED_BRACKETS,
+                            .tokens = { tok },
+                        });
 						return false;
 					}
 
 					BracketToken bt = bracket_stack.back();
 					bracket_stack.pop_back();
-					if ((c == ')' && bt.tok != '(') || (c == ']' && bt.tok != '[') || (c == '}' && bt.tok != '{')) {
-						global.errors.push_back({Error::TOKENIZER, Error::ERROR, "unbalanced brackets"});
+					if ((c == ')' && bt.tok.type != '(') || (c == ']' && bt.tok.type != '[') || (c == '}' && bt.tok.type != '{')) {
+						global.error({
+                            .code = ERR_UNBALANCED_BRACKETS,
+                            .tokens = { bt.tok, tok },
+                        });
 						return false;
 					}
                     match = bt.tokid;
@@ -228,27 +262,23 @@ bool tokenize(Context& global, SourceFile &s) {
 				}
 			}
 
-            u32 length = 1;
-
-            tok* t;
-            if (i + 2 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 3)))
-                length = 3;
-            else if (i + 1 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 2)))
-                length = 2;
-
-			s.tokens.push_back({
-				.type = t ? t->type : TOK(c),
-				.match = (u32)match,
-				.length = length,
-				.start = i
-			});
-
+            s.tokens.push_back(tok);
             i += length - 1;
 		}
+
+        if (c == '\n') {
+            line++;
+            line_start = i;
+        }
 	}
 
-    if (bracket_stack.size() != 0)
-		global.errors.push_back({Error::TOKENIZER, Error::ERROR, "unbalanced brackets"});
+    if (bracket_stack.size() != 0) {
+        global.error({
+            .code = ERR_UNBALANCED_BRACKETS,
+            .tokens = { bracket_stack[0].tok },
+        });
+        return false;
+    }
 	return true;
 }
 
@@ -296,24 +326,13 @@ void print_tokens(const SourceFile& sf) {
 }
 
 void unexpected_token(TokenReader& r, Token tok, TokenType expected) {
-    // raise(SIGINT);
-	char* err_msg = (char*)malloc(256);
-    char* w = err_msg;
-
-    w += sprintf(w, "unexpected ");
-
-    if (tok.type)
-	    w += sprintf(w, "'%.*s'", (int)tok.length, r.sf.buffer + tok.start);
-    else
-	    w += sprintf(err_msg, "eof");
-
-    if (expected) {
-        if (expected < 128)
-            w += sprintf(w, " while looking for '%c'", (char)expected);
-        else
-            w += sprintf(w, " while looking for TOK(%d)", (int)expected);
-    }
-    r.ctx.global->errors.push_back({Error::TOKENIZER, Error::ERROR, err_msg});
+    r.ctx.error({
+        .code = ERR_UNEXPECTED_TOKEN,
+        .tokens = {
+            tok,
+            { .type = expected },
+        }
+    });
 }
 
 void print_token(TokenReader& r, Token t) {
@@ -558,7 +577,9 @@ struct SYState {
 
 bool pop(SYState& s) {
     if (s.output.size() < 2) {
-        s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression"});
+        s.ctx.error({
+            .code = ERR_INVALID_EXPRESSION
+        });
         return false;
     }
     ASTBinaryOp* bin = s.ctx.alloc<ASTBinaryOp>(
@@ -589,7 +610,10 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
 
                 ASTNode* resolved = ctx.resolve(r.sf.buffer + t.start, t.length);
                 if (!resolved) {
-                    s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "failed to resolve"});
+                    s.ctx.error({
+                        .code = ERR_NOT_DEFINED,
+                        .tokens = { t },
+                    });
                     return nullptr;
                 }
                 s.output.push_back(resolved);
@@ -661,7 +685,9 @@ Done:
             return nullptr;
 
     if (s.output.size() != 1) {
-        s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression 2"});
+        s.ctx.error({
+            .code = ERR_INVALID_EXPRESSION
+        });
         return nullptr;
     }
     return s.output[0];

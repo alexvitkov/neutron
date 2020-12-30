@@ -1,19 +1,16 @@
 #include "common.h"
+#include "error.h"
 
 bool Context::ok() {
-	for (const auto& err : errors) {
-	if (err.severity == Error::ERROR)
-		return false;
-	}
-	return true;
+    for (const auto& err : global->errors) {
+        if (err.severity == SEVERITY_FATAL)
+            return false;
+    }
+    return true;
 }
 
 bool Context::is_global() {
     return global == this;
-}
-
-void Error::print() {
-	printf("error: %s\n", this->message);
 }
 
 bool Context::declare(const char* name, ASTNode* value) {
@@ -21,7 +18,10 @@ bool Context::declare(const char* name, ASTNode* value) {
 
     auto it = defines.find(str);
     if (it != defines.end()) {
-        global->errors.push_back({ Error::PARSER, Error::ERROR, "redefinition" });
+        // global->errors.push_back({ Error::PARSER, Error::ERROR, "redefinition" });
+        error({
+            .code = ERR_ALREADY_DEFINED,
+        });
         return false;
     }
 
@@ -51,4 +51,8 @@ ASTNode* Context::resolve(char* name, int length) {
     ASTNode* result = resolve(name);
     name[length] = old; 
     return result;
+}
+
+void Context::error(Error err) {
+    global->errors.push_back(err);
 }

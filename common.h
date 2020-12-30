@@ -68,29 +68,13 @@ enum TokenType : u8 {
 	TOK_NUMBER,
 };
 
-struct Error {
-	enum {
-		TOKENIZER,
-		PARSER,
-		TYPER,
-	} kind;
-
-	enum {
-		WARNING,
-		ERROR,
-	} severity;
-
-	const char* message;
-
-	void print();
-};
-
 struct ASTNode;
+struct GlobalContext;
+struct Error;
 
 struct Context {
 	std::unordered_map<std::string, ASTNode*> defines;
-	std::vector<Error> errors;
-    Context* global;
+    GlobalContext* global;
     Context* parent;
 
 	bool ok();
@@ -101,7 +85,7 @@ struct Context {
     bool declare(const char* name, ASTNode* value);
 
     inline Context(Context* parent)
-        : parent(parent), global(parent ? parent->global : this) { }
+        : parent(parent), global(parent ? parent->global : (GlobalContext*)this) { }
 
     Context(Context&) = delete;
     Context(Context&&) = delete;
@@ -112,6 +96,13 @@ struct Context {
         new (buf) T (args...);
         return buf;
     }
+
+    void error(Error err);
+};
+
+struct GlobalContext : Context {
+	std::vector<Error> errors;
+    inline GlobalContext() : Context(nullptr) {}
 };
 
 enum OpTraits : u8 {
@@ -123,5 +114,18 @@ enum OpTraits : u8 {
 
 extern u8 prec[148];
 
+struct Token {
+	TokenType type;
+    u16 file;
+
+	u32 match; // inedex of matching bracket
+	u32 length;
+	u64 start;
+
+    u32 line;
+    u32 pos_in_line;
+};
+
+bool parse_all_files(Context& global);
 
 #endif // guard

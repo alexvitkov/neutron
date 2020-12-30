@@ -1,14 +1,14 @@
 #include "sourcefile.h"
-#include "parser.h"
 #include "typer.h"
 #include "ast.h"
+#include "error.h"
 #include "backends/bytecode/bytecode.h"
 
-Context global(nullptr);
+GlobalContext global;
 
 void exit_with_error() {
 	for (auto& err : global.errors) {
-		err.print();
+        print(global, err);
 	}
     exit(1);
 }

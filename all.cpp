@@ -4,5 +4,6 @@
 #include "parser.cpp"
 #include "sourcefile.cpp"
 #include "typer.cpp"
+#include "error.cpp"
 #include "backends/bytecode/bytecode.cpp"
 #include "backends/bytecode/interpreter.cpp"

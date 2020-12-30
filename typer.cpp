@@ -1,5 +1,6 @@
 #include "typer.h"
 #include "ast.h"
+#include "error.h"
 
 ASTPrimitiveType t_bool (PRIMITIVE_BOOL,    1, "bool");
 ASTPrimitiveType t_u8  (PRIMITIVE_UNSIGNED, 1, "u8");
@@ -64,17 +65,21 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
 
             ASTType* lhst = gettype(ctx, bin->lhs);
             ASTType* rhst = gettype(ctx, bin->rhs);
-            if (!lhst || !rhst) {
-                ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
+            if (!lhst || !rhst)
                 return nullptr;
-            }
 
             if (implicit_cast(ctx, &bin->rhs, lhst))
                 return (bin->type = lhst);
             if (!(prec[bin->op] & ASSIGNMENT) && implicit_cast(ctx, &bin->lhs, rhst))
                 return (bin->type = rhst);
 
-            ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "incompatible types"});
+            ctx.error({
+                .code = ERR_INCOMPATIBLE_TYPES,
+                .nodes = {
+                    lhst,
+                    rhst
+                }
+            });
             return nullptr;
         }
         default:
@@ -105,14 +110,19 @@ bool typecheck(Context& ctx, ASTNode* node) {
 
             if (rettype) {
                 if (!ret->value) {
-                    ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "invalid return 1"});
+                    ctx.error({
+                        .code = ERR_INVALID_RETURN,
+                    });
                     return false;
                 }
                 if (!implicit_cast(ctx, &ret->value, rettype))
                     return false;
             }
             else if (ret->value) {
-                ctx.global->errors.push_back({Error::TYPER, Error::ERROR, "invalid return 2"});
+                ctx.error({
+                    .code = ERR_INVALID_RETURN,
+                    .nodes = { ret->value, }
+                });
                 return false;
             }
             return true;
