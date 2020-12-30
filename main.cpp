@@ -62,6 +62,7 @@ int main(int argc, const char** argv) {
     void* end = bytecode_compile(global, code, &main);
 
     bytecode_disassemble((u8*)main, (u8*)end);
+    return 0;
 
     if (main) {
         printf("\n----------\n\n");

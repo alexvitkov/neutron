@@ -1,13 +1,15 @@
 #include "parser.h"
 #include "sourcefile.h"
 
-#include <signal.h>
-
 #include "keywords.gperf.gen.h"
 
-
+// Convert a 'char' to TokenType
+// this is not really needed, but it helps avoid stupid compiler warnings
 #define TOK(c) ((TokenType)c)
 
+// Each ASCII character has a bitmask associated with them (see ctt)
+// Whne the lexer hits a character, it first looks at this bitmask
+// to get a rough idea of what that character is
 enum CharTraits : u8 {
 	CT_ERROR               = 0x00,
 	CT_LETTER              = 0x01,
@@ -96,6 +98,8 @@ CharTraits ctt[128] {
 /* 127 -     */ CT_ERROR,
 };
 
+
+// An operator with precedence of 1 is right associative
 #define IS_RIGHT_ASSOC(tt) (PREC(tt) == 1)
 
 inline bool is_operator(TokenType tt) {
@@ -104,9 +108,11 @@ inline bool is_operator(TokenType tt) {
 }
 
 // PRECEDENCE TABLE
-// prec[OP_SHIFTLEFT] & PREC_MASK is the precedence of the << operator
-// if the PREFIX or POSTFIX bit is set, the operator can also be postfix/prefix
-// if PREC = 1, then it's right associative
+// Lowest 4 bits are the precedence of an operator
+// For ex. (prec[OP_SHIFTLEFT] & PREC_MASK) is the precedence of the << operator
+// There's a macro PREC(OP_SHIFTLEFT) that does just that
+
+// if the PREFIX or POSTFIX bits is set, the operator can also be postfix/prefix
 u8 prec[148] = {
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 /* ! */        PREFIX, 
@@ -678,7 +684,7 @@ bool parse_let(Context& ctx, TokenReader& r) {
 
     if (r.peek().type == TOK('=')) {
         r.pop();
-        return (var->value = parse_expr(ctx, r));
+        return (var->initial_value = parse_expr(ctx, r));
     };
     return r.expect(TOK(';')).type;
 }

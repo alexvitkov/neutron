@@ -153,9 +153,9 @@ void print(std::ostream& o, ASTVar* node, bool decl) {
     if (decl) {
         o << "let " << node->name << ": ";
         print(o, node->type, false);
-        if (node->value) {
+        if (node->initial_value) {
             o << " = " ;
-            print(o, node->value, false);
+            print(o, node->initial_value, false);
         }
 
         o << ";\n";

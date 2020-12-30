@@ -83,25 +83,43 @@ enum AddrModeBits : u8 {
     AM_DSTMEM   = 0x40,
 };
 
+// Instr is the smallest instruction supported, currently 16 bytes long.
+// Its layout looks like | OPCODE ADDRMODE DSTREG SRCREG | 0x00 0x00 OFFSET (2 bytes) |
+// @POINTERSIZE - We're assuming REGSIZE = POINTERSIZE = 64
 struct Instr {
     OpCode op;
+
+    // addrmode consists of two parts - source and destination
+    // The addrmode of an instruciton that has register as src and dst is (AM_SRCREG | AM_DSTREG)
     u8 addrmode;
+
     u8 dstreg;
     u8 srcreg;
     u16 _zero;
+
+    // For instructions that address memory via a register (address stored in resister)
+    // this offset is added to the value of the address.
+    // This is useful when targeting variables that live in the stack
+    // we use the BP register plus a fixed offset that describes which variable we want
     u32 mem_offset;
 };
 
+// Instructions that have a 64 bit value as their source AND an address as their value
+// Right now their size is sizeof(Instr) + 16
+struct Val2MemInstr : public Instr {
+    void* addr;
+    u64 val;
+};
+
+// Instructions that address memory are of type MemInstr
+// Right now their size is sizeof(Instr) + 8
 struct MemInstr : public Instr {
     void* addr;
 };
 
+// Instructions that have a 64 bit value as their source are of type ValInstr
+// Right now their size is sizeof(Instr) + 8
 struct ValInstr : public Instr {
-    u64 val;
-};
-
-struct Val2MemInstr : public Instr {
-    void* addr;
     u64 val;
 };
 

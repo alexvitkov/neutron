@@ -58,12 +58,23 @@ struct ASTPrimitiveType : ASTType {
         : ASTType(AST_PRIMITIVE_TYPE), kind(kind), size(size), name(name) {}
 };
 
+// @POINTERSIZE - We're assuming REGSIZE = POINTERSIZE = 64
 struct Loc {
     enum {
+        // The variable is currently in a register, 'reg' specifies which register
         REGISTER,
+
+        // The variable is in memory at a fixed address, 'addr' specifies the address
         MEMORY,
+
+        // The variable is the address of a ASTNode*, but ASTNode* hasn't been compiled yet
+        // so we don't know what that address is
         NODE,
+
+        // The variable is on the stack, 'offset' specifies an offset from the BP register
         STACK,
+
+        // The variable is a fixed u64 value
         VALUE,
     } type;
     union {
@@ -78,12 +89,14 @@ struct Loc {
 struct ASTVar : ASTNode {
     const char* name;
     ASTType* type;
-    ASTNode* value;
+    ASTNode* initial_value;
     Loc location;
+
+    // If the variable is a function argument, this is its index
     i32 argindex;
 
     inline ASTVar(const char* name, ASTType* type, ASTNode* initial_value, int argindex)
-        : ASTNode(AST_VAR), name(name), type(type), value(initial_value), argindex(argindex) {};
+        : ASTNode(AST_VAR), name(name), type(type), initial_value(initial_value), argindex(argindex) {};
 };
 
 struct ASTNumber : ASTNode {
@@ -121,7 +134,6 @@ struct ASTReturn : ASTNode {
     inline ASTReturn(ASTNode* value) : ASTNode(AST_RETURN), value(value) {};
 };
 
-// TODO too much indireciton here
 struct ASTFn : ASTNode {
     const char* name;
     TypeList args;
