@@ -14,45 +14,39 @@ bool Context::is_global() {
 }
 
 bool Context::declare(const char* name, ASTNode* value) {
-    std::string str(name);
-
-    auto it = defines.find(str);
-    if (it != defines.end()) {
-        // global->errors.push_back({ Error::PARSER, Error::ERROR, "redefinition" });
+    ASTNode* node = defines_table.find(name);
+    if (node) {
         error({
             .code = ERR_ALREADY_DEFINED,
         });
         return false;
     }
 
-    defines.insert(std::make_pair<>(name, value));
+    defines_arr.push({name, value});
+    defines_table.insert(name, value);
     return true;
 }
 
 ASTNode* Context::resolve(const char* name) {
-    std::string str(name);
-
-    // TODO this should not be using std::string
-    // nor std::unordered_map
-    // we're making a lot of copies
-    auto it = defines.find(str);
-    if (it == defines.end()) {
+    ASTNode* node = defines_table.find(name);
+    if (!node) {
         if (parent)
             return parent->resolve(name);
         return nullptr;
-
     }
-    return it->second;
+    return node;
 }
 
-ASTNode* Context::resolve(char* name, int length) {
-    char old = name[length];
-    name[length] = 0;
-    ASTNode* result = resolve(name);
-    name[length] = old; 
-    return result;
+ASTNode* Context::resolve(char* name, int len) {
+    ASTNode* node = defines_table.find(name, len);
+    if (!node) {
+        if (parent)
+            return parent->resolve(name, len);
+        return nullptr;
+    }
+    return node;
 }
 
 void Context::error(Error err) {
-    global->errors.push_back(err);
+    global->errors.push(err);
 }

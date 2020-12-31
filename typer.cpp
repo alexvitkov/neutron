@@ -139,7 +139,7 @@ bool typecheck(Context& ctx, ASTNode* node) {
 }
 
 bool typecheck_all(Context& global) {
-    for (auto& decl : global.defines)
-        MUST(typecheck(global, decl.second));
+    for (auto& decl : global.defines_arr)
+        MUST(typecheck(global, decl.node));
     return true;
 }

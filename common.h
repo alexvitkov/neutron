@@ -5,8 +5,6 @@
 #include <string.h>
 #include <assert.h>
 #include <string>
-#include <vector>
-#include <unordered_map>
 
 #define u8  uint8_t
 #define u16 uint16_t
@@ -20,7 +18,6 @@
 #define PREC(tt) (prec[tt] & PREC_MASK)
 
 #define MUST(v) if (!(v)) return 0;
-        
 
 enum TokenType : u8 {
 	TOK_NONE = 0,
@@ -73,41 +70,7 @@ enum TokenType : u8 {
 };
 
 struct ASTNode;
-struct GlobalContext;
 struct Error;
-
-struct Context {
-	std::unordered_map<std::string, ASTNode*> defines;
-    GlobalContext* global;
-    Context* parent;
-
-	bool ok();
-    bool is_global();
-
-    ASTNode* resolve(const char* name);
-    ASTNode* resolve(char* name, int length);
-    bool declare(const char* name, ASTNode* value);
-
-    inline Context(Context* parent)
-        : parent(parent), global(parent ? parent->global : (GlobalContext*)this) { }
-
-    Context(Context&) = delete;
-    Context(Context&&) = delete;
-
-    template <typename T, typename ... Ts>
-    T* alloc(Ts &&...args) {
-        T* buf = (T*)malloc(sizeof(T));
-        new (buf) T (args...);
-        return buf;
-    }
-
-    void error(Error err);
-};
-
-struct GlobalContext : Context {
-	std::vector<Error> errors;
-    inline GlobalContext() : Context(nullptr) {}
-};
 
 enum OpTraits : u8 {
     PREFIX     = 0x10,
@@ -130,6 +93,5 @@ struct Token {
     u32 pos_in_line;
 };
 
-bool parse_all_files(Context& global);
 
 #endif // guard

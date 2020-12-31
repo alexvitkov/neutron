@@ -1,6 +1,6 @@
 #include "sourcefile.h"
 
-std::vector<SourceFile> sources;
+arr<SourceFile> sources;
 
 int add_source(const char* filename) {
 	FILE* f;
@@ -24,8 +24,8 @@ int add_source(const char* filename) {
 	}
 	fclose(f);
 	
-	sf.id = sources.size();
+	sf.id = sources.size;
 
-	sources.push_back(sf);
+	sources.push(sf);
 	return sf.id;
 }

@@ -22,7 +22,7 @@ void print(std::ostream& o, TypeList& tl) {
         print(o, entry.type, false);
         o << ", ";
     }
-    if (!tl.entries.empty())
+    if (!tl.entries.size)
         o << "\b\b \b"; // clear the last comma
 }
 
@@ -34,17 +34,18 @@ void indent_line(std::ostream& o) {
 void print(std::ostream& o, ASTBlock* bl) {
     indent ++;
     o << "{ \n";
-    for (const auto& x : bl->ctx.defines) {
+
+    for (auto nnp : bl->ctx.defines_arr) {
         indent_line(o);
 
-        switch (x.second->nodetype) {
+        switch (nnp.node->nodetype) {
         case AST_FN:
         case AST_VAR:
-            print(o, x.second, true);
+            print(o, nnp.node, true);
             break;
         default:
-            o << "const " << x.first << " = ";
-            print(o, x.second, true);
+            o << "const " << nnp.name << " = ";
+            print(o, nnp.node, true);
             o << ";\n";
         }
     }

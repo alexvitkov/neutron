@@ -2,15 +2,16 @@
 #define SOURCEFILE_H
 
 #include "common.h"
+#include "ds.h"
 
 struct SourceFile {
 	size_t id;
 	long length;
 	char *buffer;
-	std::vector<Token> tokens;
+	arr<Token> tokens;
 };
 
-extern std::vector<SourceFile> sources;
+extern arr<SourceFile> sources;
 
 int add_source(const char* filename);
 

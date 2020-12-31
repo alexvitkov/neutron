@@ -2,6 +2,8 @@
 #define ERROR_H
 
 #include "common.h"
+#include "context.h"
+#include "ds.h"
 
 enum ErrorCode {
     ERR_UNKNOWN = 0,
@@ -28,8 +30,8 @@ enum ErrorSeverity {
 struct Error {
     ErrorCode code;
     ErrorSeverity severity;
-    std::vector<Token> tokens;
-    std::vector<ASTNode*> nodes;
+    arr<Token> tokens;
+    arr<ASTNode*> nodes;
 };
 
 void print(Context& global, Error& err);

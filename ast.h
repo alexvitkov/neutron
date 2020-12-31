@@ -2,6 +2,8 @@
 #define AST_H
 
 #include "common.h"
+#include "context.h"
+#include "ds.h"
 #include <iostream>
 
 struct Context;
@@ -35,7 +37,7 @@ struct ASTNode {
 
 struct ASTBlock : ASTNode {
     Context ctx;
-    std::vector<ASTNode*> statements;
+    arr<ASTNode*> statements;
     inline ASTBlock(Context& parent) : ASTNode(AST_BLOCK), ctx(&parent) {}
 };
 
@@ -48,7 +50,7 @@ struct TypeList {
         const char* name;
         ASTType* type;
     };
-    std::vector<Entry> entries;
+    arr<Entry> entries;
 };
 
 struct ASTPrimitiveType : ASTType {

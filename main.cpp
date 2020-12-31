@@ -30,7 +30,7 @@ int main(int argc, const char** argv) {
 			}
 		}
 	}
-	if (sources.size() == 0) {
+	if (sources.size == 0) {
 		printf("no input files\n");
         exit(1);
 	}
@@ -42,8 +42,8 @@ int main(int argc, const char** argv) {
     
     printf("----------\n\n");
 
-    for (const auto& decl : global.defines) {
-        print(std::cout, decl.second, true);
+    for (const auto& decl : global.defines_arr) {
+        print(std::cout, decl.node, true);
         std::cout << '\n';
     }
 

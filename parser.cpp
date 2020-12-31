@@ -172,7 +172,7 @@ bool tokenize(Context& global, SourceFile &s) {
 		Token tok;
 		u64 tokid;
 	};
-	std::vector<BracketToken> bracket_stack;
+	arr<BracketToken> bracket_stack;
 
     u32 line = 0;
     u64 line_start = 0;
@@ -198,7 +198,7 @@ bool tokenize(Context& global, SourceFile &s) {
 			if (!(ct & (CT_LETTER | CT_DIGIT))) {
 				tok* kw = Perfect_Hash::in_word_set(s.buffer + word_start, i - word_start);
 
-				s.tokens.push_back({
+				s.tokens.push({
 					.type = kw ? kw->type : (state == WORD ? TOK_ID : TOK_NUMBER),
 					.length = (u32)(i - word_start),
 					.start = word_start,
@@ -236,11 +236,11 @@ bool tokenize(Context& global, SourceFile &s) {
 
 			switch (c) {
 				case '(': case '[': case '{': {
-					bracket_stack.push_back({ tok, s.tokens.size()});
+					bracket_stack.push({ tok, s.tokens.size});
 					break;
                 }
 				case ')': case ']': case '}': {
-					if (bracket_stack.size() == 0) {
+					if (bracket_stack.size == 0) {
 						global.error({
                             .code = ERR_UNBALANCED_BRACKETS,
                             .tokens = { tok },
@@ -248,8 +248,7 @@ bool tokenize(Context& global, SourceFile &s) {
 						return false;
 					}
 
-					BracketToken bt = bracket_stack.back();
-					bracket_stack.pop_back();
+					BracketToken bt = bracket_stack.pop();
 					if ((c == ')' && bt.tok.type != '(') || (c == ']' && bt.tok.type != '[') || (c == '}' && bt.tok.type != '{')) {
 						global.error({
                             .code = ERR_UNBALANCED_BRACKETS,
@@ -258,11 +257,11 @@ bool tokenize(Context& global, SourceFile &s) {
 						return false;
 					}
                     match = bt.tokid;
-                    s.tokens[match].match = s.tokens.size();
+                    s.tokens[match].match = s.tokens.size;
 				}
 			}
 
-            s.tokens.push_back(tok);
+            s.tokens.push(tok);
             i += length - 1;
 		}
 
@@ -272,7 +271,7 @@ bool tokenize(Context& global, SourceFile &s) {
         }
 	}
 
-    if (bracket_stack.size() != 0) {
+    if (bracket_stack.size != 0) {
         global.error({
             .code = ERR_UNBALANCED_BRACKETS,
             .tokens = { bracket_stack[0].tok },
@@ -291,7 +290,7 @@ struct TokenReader {
 	Context& ctx;
 
 	Token peek() {
-		if (pos >= sf.tokens.size())
+		if (pos >= sf.tokens.size)
 			return  {};
 		return sf.tokens[pos]; 
 	}
@@ -319,8 +318,8 @@ struct TokenReader {
     }
 };
 
-void print_tokens(const SourceFile& sf) {
-	for (const Token& t : sf.tokens) {
+void print_tokens(SourceFile& sf) {
+	for (Token& t : sf.tokens) {
 		printf("%d\t%.*s\n", t.type, (int)t.length, sf.buffer + t.start);
 	}
 }
@@ -437,7 +436,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
         ASTType* type;
         MUST(type = parse_type(ctx, r));
 
-        tl->entries.push_back(TypeList::Entry { .name = malloc_token_name(r, name), .type = type });
+        tl->entries.push(TypeList::Entry { .name = malloc_token_name(r, name), .type = type });
 
         t = r.peek();
         if (t.type == delim) {
@@ -480,7 +479,7 @@ X:
                     ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r));
                     MUST(ret->value);
                 }
-                block.statements.push_back((ASTNode*)ret);
+                block.statements.push((ASTNode*)ret);
                 MUST(r.expect(TOK(';')).type);
                 break;
             }
@@ -489,7 +488,7 @@ X:
                 ifs->condition = parse_expr(block.ctx, r);
                 MUST(ifs->condition);
                 MUST(parse_block(ifs->block, r));
-                block.statements.push_back(ifs);
+                block.statements.push(ifs);
                 break;
             }
             case KW_WHILE: {
@@ -497,7 +496,7 @@ X:
                 whiles->condition = parse_expr(block.ctx, r);
                 MUST(whiles->condition);
                 MUST(parse_block(whiles->block, r));
-                block.statements.push_back(whiles);
+                block.statements.push(whiles);
                 break;
             }
             case TOK('}'): {
@@ -508,7 +507,7 @@ X:
                 ASTNode* expr = parse_expr(block.ctx, r);
                 MUST(expr);
                 MUST(r.expect(TOK(';')).type);
-                block.statements.push_back(expr);
+                block.statements.push(expr);
                 break;
             }
         }
@@ -556,22 +555,23 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 
 struct SYState {
     Context& ctx;
-    std::vector<ASTNode*> output;
-    std::vector<TokenType> stack;
+    arr<ASTNode*> output;
+    arr<TokenType> stack;
 };
 
 bool pop(SYState& s) {
-    if (s.output.size() < 2) {
+    if (s.output.size < 2) {
         s.ctx.error({
             .code = ERR_INVALID_EXPRESSION
         });
         return false;
     }
 
-    TokenType op = s.stack.back();
+    TokenType op = s.stack.pop();
+
     ASTBinaryOp* bin;
-    ASTNode* lhs = s.output[s.output.size() - 2];
-    ASTNode* rhs = s.output[s.output.size() - 1];
+    ASTNode* lhs = s.output[s.output.size - 2];
+    ASTNode* rhs = s.output[s.output.size - 1];
 
     if ((prec[op] & ASSIGNMENT) && op != TOK('=')) {
 
@@ -595,9 +595,8 @@ bool pop(SYState& s) {
     else {
         bin = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
     }
-    s.stack.pop_back();
-    s.output.pop_back();
-    s.output[s.output.size() - 1] = (ASTNode*)bin;
+    s.output.pop();
+    s.output[s.output.size - 1] = (ASTNode*)bin;
     return true;
 }
 
@@ -625,7 +624,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     });
                     return nullptr;
                 }
-                s.output.push_back(resolved);
+                s.output.push(resolved);
                 prev_was_value = true;
                 break;
             }
@@ -645,7 +644,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     }
                 }
                 acc /= 10;
-                s.output.push_back(ctx.alloc<ASTNumber>(acc));
+                s.output.push(ctx.alloc<ASTNumber>(acc));
                 break;
             }
             case TOK('('): {
@@ -653,15 +652,15 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     // TODO Function call
                     assert(!"not impl");
                 } else {
-                    s.stack.push_back(t.type);
+                    s.stack.push(t.type);
                     prev_was_value = false;
                 }
                 break;
             }
             case TOK(')'): {
-                while (s.stack.back() != TOK('('))
+                while (s.stack.last() != TOK('('))
                     MUST (pop(s));
-                s.stack.pop_back(); // disacrd the (
+                s.stack.pop(); // disacrd the (
                 prev_was_value = true;
                 break;
             }
@@ -669,7 +668,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
             case TOK(';'):
             case TOK('{'):
             case TOK(','): {
-                // s.ctx.global->errors.push_back({Error::PARSER, Error::ERROR, "invalid expression 1"});
+                // s.ctx.global->errors.push({Error::PARSER, Error::ERROR, "invalid expression 1"});
                 r.pos--;
                 goto Done;
             }
@@ -677,9 +676,9 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
             default: {
                 prev_was_value = false;
                 if (is_operator(t.type)) {
-                    while (!s.stack.empty() && s.stack.back() != TOK('(') && PREC(s.stack.back()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
+                    while (s.stack.size && s.stack.last() != TOK('(') && PREC(s.stack.last()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
                         MUST(pop(s));
-                    s.stack.push_back(t.type);
+                    s.stack.push(t.type);
                     prev_was_value = false;
                 }
             }
@@ -687,10 +686,10 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
     }
 
 Done:
-    while (!s.stack.empty()) 
+    while (s.stack.size) 
         MUST(pop(s));
 
-    if (s.output.size() != 1) {
+    if (s.output.size != 1) {
         s.ctx.error({
             .code = ERR_INVALID_EXPRESSION
         });
@@ -748,12 +747,12 @@ bool parse_top_level(Context& ctx, TokenReader r) {
 }
 
 bool parse_all_files(Context& global) {
-    for (int i = 0; i < sources.size(); i++) {
+    for (int i = 0; i < sources.size; i++) {
         MUST (tokenize(global, sources[i]));
         TokenReader r { .sf = sources[i], .ctx = global };
         MUST(skim(global, r));
     }
-    for (int i = 0; i < sources.size(); i++) {
+    for (int i = 0; i < sources.size; i++) {
         TokenReader r { .sf = sources[i], .ctx = global };
         MUST(parse_top_level(global, r));
     }
