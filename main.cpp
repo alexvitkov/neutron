@@ -56,6 +56,8 @@ int main(int argc, const char** argv) {
     };
     compile_all(c);
 
+    c.disassemble_all();
+
     // Find main address
     u32 mainfn_addr;
     if (c.fnaddr.try_find("main", &mainfn_addr)) {

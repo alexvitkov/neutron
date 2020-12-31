@@ -14,7 +14,6 @@ ASTPrimitiveType t_i64 (PRIMITIVE_SIGNED,   8, "i64");
 ASTPrimitiveType t_f32 (PRIMITIVE_FLOAT,    4, "f32");
 ASTPrimitiveType t_f64 (PRIMITIVE_FLOAT,    8, "f64");
 ASTPrimitiveType t_type (PRIMITIVE_TYPE,    0, "type");
-ASTPrimitiveType t_fn   (PRIMITIVE_TYPE,    0, "fntype"); // TODO remove this
 ASTPrimitiveType t_void (PRIMITIVE_TYPE,    0, "void");
 
 bool implicit_cast(Context& ctx, ASTNode** dst, ASTType* type) {
@@ -57,6 +56,19 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
             return ((ASTCast*)node)->newtype;
         case AST_NUMBER:
             return ((ASTNumber*)node)->type;
+        case AST_FN_CALL: {
+            ASTFnCall* fncall = (ASTFnCall*)node;
+            assert(fncall->fn->nodetype == AST_FN);
+            ASTFn* fn = (ASTFn*)fncall->fn;
+            ASTType* returntype = (ASTType*)fn->block.ctx.resolve("returntype");
+
+            // TODO type check the arguments
+
+            if (!returntype) {
+                return &t_void;
+            }
+            return returntype;
+        }
         case AST_BINARY_OP: {
             ASTBinaryOp* bin = (ASTBinaryOp*)node;
             if (bin->type)
@@ -125,6 +137,9 @@ bool typecheck(Context& ctx, ASTNode* node) {
             return true;
         }
         case AST_BINARY_OP: {
+            return gettype(ctx, node);
+        }
+        case AST_FN_CALL: {
             return gettype(ctx, node);
         }
         case AST_IF: {

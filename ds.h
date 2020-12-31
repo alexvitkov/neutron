@@ -200,10 +200,10 @@ struct arr {
         buffer = new_buffer;
     }
 
-    void push(T value) {
+    T& push(T value) {
         if (size >= capacity)
             realloc();
-        buffer[size++] = value;
+        return (buffer[size++] = value);
     }
 
     template <typename ... Ts>

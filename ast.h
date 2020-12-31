@@ -20,6 +20,7 @@ enum ASTNodeType : u8 {
     AST_IF,
     AST_WHILE,
     AST_BLOCK,
+    AST_FN_CALL,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -43,6 +44,13 @@ struct ASTBlock : ASTNode {
 
 struct ASTType : ASTNode {
     inline ASTType(ASTNodeType nodetype) : ASTNode(nodetype) {}
+};
+
+struct ASTFnCall : ASTNode {
+    ASTNode* fn;
+    arr<ASTNode*> args;
+
+    inline ASTFnCall(ASTNode* fn) : ASTNode(AST_FN_CALL), fn(fn), args(4) {}
 };
 
 struct TypeList {
@@ -136,5 +144,6 @@ void print(std::ostream& o, ASTNumber* node);
 void print(std::ostream& o, ASTIf* node);
 void print(std::ostream& o, ASTWhile* node);
 void print(std::ostream& o, ASTBlock* bl);
+void print(std::ostream& o, ASTFnCall* node);
 
 #endif // guard

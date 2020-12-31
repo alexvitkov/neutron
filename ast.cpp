@@ -74,6 +74,7 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
         case AST_NUMBER:         print(o, (ASTNumber*)node); break;
         case AST_IF:             print(o, (ASTIf*)node); break;
         case AST_WHILE:          print(o, (ASTWhile*)node); break;
+        case AST_FN_CALL:        print(o, (ASTFnCall*)node); break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
@@ -200,4 +201,16 @@ void print(std::ostream& o, ASTWhile* node) {
     print(o, node->condition, false);
     o << " ";
     print(o, &node->block);
+}
+
+void print(std::ostream& o, ASTFnCall* node) {
+    print(o, node->fn, false);
+    o << "(";
+    for (ASTNode*& a : node->args) {
+        print(o, a, false);
+        o << ", ";
+    }
+    if (node->args.size)
+        o << "\b\b \b"; // clear the last comma
+    o << ")";
 }

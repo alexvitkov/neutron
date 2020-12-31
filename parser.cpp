@@ -555,6 +555,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 
 struct SYState {
     Context& ctx;
+    u32 brackets = 0;
     arr<ASTNode*> output;
     arr<TokenType> stack;
 };
@@ -649,17 +650,36 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
             }
             case TOK('('): {
                 if (prev_was_value) {
-                    // TODO Function call
-                    assert(!"not impl");
+                    if (s.output.size == 0) {
+                        s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                        return nullptr;
+                    }
+                    ASTFnCall* fncall = ctx.alloc<ASTFnCall>(s.output.pop());
+
+                    while (r.peek().type != TOK(')')) {
+                        fncall->args.push(parse_expr(ctx, r));
+                        if (r.peek().type != TOK(')'))
+                            MUST(r.expect(TOK(',')).type);
+                    }
+                    r.pop(); // discard the bracket
+                    s.output.push(fncall);
                 } else {
                     s.stack.push(t.type);
                     prev_was_value = false;
+                    s.brackets++;
                 }
                 break;
             }
             case TOK(')'): {
+                if (s.brackets == 0) {
+                    // This should only happen when we're the last argument of a fn call
+                    // rewind the bracket so the parent parse_expr can consume it
+                    r.pos--;
+                    goto Done;
+                }
                 while (s.stack.last() != TOK('('))
                     MUST (pop(s));
+                s.brackets--;
                 s.stack.pop(); // disacrd the (
                 prev_was_value = true;
                 break;
@@ -668,7 +688,6 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
             case TOK(';'):
             case TOK('{'):
             case TOK(','): {
-                // s.ctx.global->errors.push({Error::PARSER, Error::ERROR, "invalid expression 1"});
                 r.pos--;
                 goto Done;
             }

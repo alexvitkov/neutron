@@ -17,13 +17,27 @@ enum OpCode : u8 {
     OPC_JMP,
     OPC_JZ,
     OPC_EQ,
+    OPC_CALL,
+    OPC_SUB,
 };
 
 
 enum LocPlace : u8 {
     LOC_NONE = 0,
+
+    // The location is a fixed offset from the stack base pointer
     LOC_STACK,
+
+    // Fixed offset relative to (base pointer + stack frame size)
+    // This is used to pass arguments to functions we call
+    // It's needed because our function is not yet compiled and we don't know
+    // how big our stack frame is
+    LOC_NEXTSTACK,
+
+    // The location is described by a label, see CompileContext.label
     LOC_LABEL,
+
+    // A 64 bit fixed value
     LOC_VALUE,
 };
 
@@ -34,7 +48,7 @@ struct Loc {
     LocPlace place;
     union {
         i64 stack_offset;
-        u32 label;
+        u64 label;
         u64 value;
     };
 
@@ -46,25 +60,31 @@ struct Loc {
     }
 };
 
-struct Instruction {
+struct Instr {
     OpCode opcode;
     Loc dst;
     Loc src;
 };
 
-void disassemble(Instruction* instr);
+void disassemble(Instr* instr);
 
 struct CompileContext {
     Context& ctx;
     u32 frame_depth;
-    arr<Instruction> instr;
+    arr<Instr> instr;
     strtable<u32> fnaddr;
 
-    // TODO arr is not a great data structure for this
     arr<u64> labels;
 
-    void emit(Instruction i) {
-        disassemble(&i);
+    // TODO arr is not a great data structure for this
+    struct FnData {
+        ASTNode* node;
+        u64 label;
+        u64 frame_depth;
+    };
+    arr<FnData> fn_data;
+
+    void emit(Instr i) {
         instr.push(i);
     }
 
@@ -77,14 +97,36 @@ struct CompileContext {
     void free_offset(Loc loc) {
     }
 
-    u32 label() {
+    u32 new_label() {
         labels.push(0);
         return labels.size - 1;
     }
 
+    // FnData contains a label that we need to call the function 
+    // and its frame depth, so we know how much to increment the stack when calling another fn
+    FnData& get_fn_data(ASTNode* node) {
+        u64 l;
+        for (FnData& e : fn_data) {
+            if (e.node == node)
+                return e;
+        }
+        return fn_data.push({ node, new_label() });
+    }
+
     void put_label(u32 label) {
         labels[label] = instr.size;
-        printf("Label%u:\n", label);
+        // printf("Label%u:\n", label);
+    }
+
+    // TODO this is bad and won't work for long
+    void disassemble_all() {
+        for (u32 i = 0; i < instr.size; i++) {
+            for (u32 j = 0; j < labels.size; j++) {
+                if (labels[j] == i)
+                    printf("Label%lu\n", j);
+            }
+            disassemble(&instr[i]);
+        }
     }
 };
 
