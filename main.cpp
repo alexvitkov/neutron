@@ -2,7 +2,6 @@
 #include "typer.h"
 #include "ast.h"
 #include "error.h"
-#include "backends/bytecode/bytecode.h"
 
 GlobalContext global;
 
@@ -58,16 +57,6 @@ int main(int argc, const char** argv) {
     void* code  = malloc(10 * 1024 * 1024);
     void* stack = malloc(10 * 1024);
     void* main;
-
-    void* end = bytecode_compile(global, code, &main);
-
-    bytecode_disassemble((u8*)main, (u8*)end);
-
-    if (main) {
-        printf("\n----------\n\n");
-        u64 reg[100];
-        interpret(reg, main, stack);
-    }
 
     return 0;
 }

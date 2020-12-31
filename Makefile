@@ -1,4 +1,4 @@
-ntr: *.cpp *.h backends/bytecode/* keywords.gperf.gen.h
+ntr: *.cpp *.h keywords.gperf.gen.h
 	g++ -g all.cpp -o ntr 
 
 keywords.gperf.gen.h: keywords.gperf common.h
