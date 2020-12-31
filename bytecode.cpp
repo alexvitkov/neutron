@@ -222,7 +222,7 @@ Next:
                 src = in.src.value;
                 break;
             case LOC_STACK:
-                src = stack[bp + in.src.stack_offset];
+                src = *(u64*)&stack[bp + in.src.stack_offset];
                 break;
             default:
                 assert(!"Not implemented/supported");
@@ -243,7 +243,6 @@ Next:
                 *dst += src;
                 break;
             case OPC_EQ:
-                printf("%lu %lu\n", *dst, src);
                 *dst = (*dst == src);
                 break;
             default:
