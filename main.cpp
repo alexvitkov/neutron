@@ -2,6 +2,7 @@
 #include "typer.h"
 #include "ast.h"
 #include "error.h"
+#include "bytecode.h"
 
 GlobalContext global;
 
@@ -40,23 +41,30 @@ int main(int argc, const char** argv) {
         exit_with_error();
     }
     
-    printf("----------\n\n");
-
     for (const auto& decl : global.defines_arr) {
         print(std::cout, decl.node, true);
         std::cout << '\n';
     }
-
-    printf("----------\n\n");
 
     if (!typecheck_all(global)) {
         printf("type checker failed\n");
         exit_with_error();
     }
 
-    void* code  = malloc(10 * 1024 * 1024);
-    void* stack = malloc(10 * 1024);
-    void* main;
+    CompileContext c {
+        .ctx = global,
+    };
+    compile_all(c);
+
+    // Find main address
+    u32 mainfn_addr;
+    if (c.fnaddr.try_find("main", &mainfn_addr)) {
+        u64 ret = interpret(c, mainfn_addr);
+        printf("main returned %lu\n", ret);
+    }
+    else {
+        printf("There is no main function.\n");
+    }
 
     return 0;
 }

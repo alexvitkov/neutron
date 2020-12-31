@@ -22,7 +22,7 @@ void print(std::ostream& o, TypeList& tl) {
         print(o, entry.type, false);
         o << ", ";
     }
-    if (!tl.entries.size)
+    if (tl.entries.size)
         o << "\b\b \b"; // clear the last comma
 }
 
@@ -111,7 +111,7 @@ void print(std::ostream& o, ASTBinaryOp* node, bool brackets = false) {
         o << '(';
 
     if (node->lhs->nodetype == AST_BINARY_OP)
-        print(o, (ASTBinaryOp*)node->lhs, PREC(((ASTBinaryOp*)(node->lhs))->op) <= PREC(node->op));
+        print(o, (ASTBinaryOp*)node->lhs, PREC(((ASTBinaryOp*)(node->lhs))->op) < PREC(node->op));
     else
         print(o, node->lhs, false);
     o << ' ';
@@ -143,7 +143,7 @@ void print(std::ostream& o, ASTBinaryOp* node, bool brackets = false) {
 
     o << ' ';
     if (node->rhs->nodetype == AST_BINARY_OP)
-        print(o, (ASTBinaryOp*)node->rhs, PREC(((ASTBinaryOp*)(node->rhs))->op) <= PREC(node->op));
+        print(o, (ASTBinaryOp*)node->rhs, PREC(((ASTBinaryOp*)(node->rhs))->op) < PREC(node->op));
     else
         print(o, node->rhs, false);
     if (ALWAYS_BRACKETS || brackets)

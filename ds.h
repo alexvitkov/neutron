@@ -113,6 +113,25 @@ struct strtable {
         return find(key, len);
     }
 
+    bool try_find(const char* key, V* out) {
+        u32 len = strlen(key);
+        u32 hash = MurmurHash2((u8*)key, len, 32);
+        u32 bin_index = hash % numbins;
+
+        while (bins[bin_index].key) {
+            if (bins[bin_index].hash == hash) {
+                if (strlen(bins[bin_index].key) == len && !strncmp(bins[bin_index].key, key, len)) {
+                    *out = bins[bin_index].value;
+                    return true;
+                }
+            }
+            bin_index++;
+            if (bin_index >= numbins)
+                bin_index = 0;
+        }
+        return false;
+    }
+
     V find(const char* key, u32 len) {
         u32 hash = MurmurHash2((u8*)key, len, 32);
         u32 bin_index = hash % numbins;
@@ -185,6 +204,13 @@ struct arr {
         if (size >= capacity)
             realloc();
         buffer[size++] = value;
+    }
+
+    template <typename ... Ts>
+    void emplace(Ts && ... args) {
+        if (size >= capacity)
+            realloc();
+        new (&buffer[size++]) T (args...);
     }
 
     T pop() {

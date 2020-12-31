@@ -5,3 +5,4 @@
 #include "sourcefile.cpp"
 #include "typer.cpp"
 #include "error.cpp"
+#include "bytecode.cpp"
