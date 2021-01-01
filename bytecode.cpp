@@ -28,10 +28,10 @@ void disassemble(Instr* instr) {
     }
     switch(instr->dst.place) {
         case LOC_STACK:
-            printf("S[%ld], ", instr->dst.stack_offset);
+            printf("s%ld, ", instr->dst.stack_offset);
             break;
         case LOC_NEXTSTACK:
-            printf("S[FS+%ld], ", instr->dst.stack_offset);
+            printf("s[FS+%ld], ", instr->dst.stack_offset);
             break;
         case LOC_LABEL:
             printf("Label%d, ", instr->dst.label);
@@ -41,7 +41,7 @@ void disassemble(Instr* instr) {
     }
     switch(instr->src.place) {
         case LOC_STACK:
-            printf("S[%ld]\n", instr->src.stack_offset);
+            printf("s%ld\n", instr->src.stack_offset);
             break;
         case LOC_VALUE:
             printf("%lu\n", instr->src.value);
@@ -52,9 +52,6 @@ void disassemble(Instr* instr) {
 }
 
 
-// Right now every variable takes 8 bytes on the stack
-// we use this to calculate where the fucntion arguments are
-// arg[0] is at stackframe[0], arg[N] is at stackframe[N * 8]
 void make_stack_frame(CompileContext& c, ASTBlock* block) {
     for (auto& def : block->ctx.declarations_arr) {
         if (def.node->nodetype == AST_VAR) {
@@ -213,7 +210,7 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
         case AST_RETURN: {
             ASTReturn* ret = (ASTReturn*)expr;
             if (ret->value)
-                compile_expr(c, ret->value, OPC_MOV, { .place = LOC_STACK, .stack_offset = -8 });
+                compile_expr(c, ret->value, OPC_MOV, { .place = LOC_STACK, .stack_offset = -1 });
             c.emit({ .opcode = OPC_RET });
             break;
         }
@@ -223,7 +220,7 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
 
             // Pass the arguments
             for (int i = 0; i < fncall->args.size; i++) {
-                compile_expr(c, fncall->args[i], OPC_MOV, { .place = LOC_NEXTSTACK, .stack_offset = i * 8 });
+                compile_expr(c, fncall->args[i], OPC_MOV, { .place = LOC_NEXTSTACK, .stack_offset = i });
             }
             c.emit({
                 .opcode = OPC_CALL,
@@ -233,7 +230,7 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
                 c.emit({
                     .opcode = opc,
                     .dst = dst,
-                    .src = { .place = LOC_NEXTSTACK, .stack_offset = -8 }
+                    .src = { .place = LOC_NEXTSTACK, .stack_offset = -1 }
                 });
             }
             break;
@@ -270,13 +267,13 @@ void compile_fn(CompileContext& c, ASTFn* fn) {
         Instr& in = c.instr[i];
         if (in.dst.place == LOC_NEXTSTACK) {
             in.dst.place = LOC_STACK; 
-            // We also reserve a 8 bytes buffer for the return value
-            // as it's wriiten at offset -8
-            in.dst.stack_offset += frame_size + 8;
+            // We also reserve a 1 bytes buffer for the return value
+            // as it's wriiten at offset -1
+            in.dst.stack_offset += frame_size + 1;
         }
         if (in.src.place == LOC_NEXTSTACK) {
             in.src.place = LOC_STACK; 
-            in.src.stack_offset += frame_size + 8;
+            in.src.stack_offset += frame_size + 1;
         }
         if (in.opcode == OPC_CALL) {
             in.src.place = LOC_STACK; // this line is only needed so the printing works
@@ -287,8 +284,8 @@ void compile_fn(CompileContext& c, ASTFn* fn) {
 }
 
 u64 interpret(CompileContext& c, u32 i) {
-    u8 stack[2048];
-    u32 bp = 8;
+    u64 stack[2048];
+    u32 bp = 1;
 
     *(u64*)stack = 0;
 
@@ -310,7 +307,7 @@ Next:
         switch(in.opcode) {
             case OPC_RET: {
                 if (msp == 0)
-                    return stack[bp - 8];
+                    return stack[bp - 1];
                 msp--;
 
                 bp = stack2[msp].return_bp;
@@ -324,7 +321,7 @@ Next:
                 stack2[msp].return_bp = bp;
                 stack2[msp].return_addr = i;
 
-                bp += in.src.stack_offset + 8;
+                bp += in.src.stack_offset + 1;
                 i = c.labels[in.dst.label];
                 msp++;
                 goto Next;

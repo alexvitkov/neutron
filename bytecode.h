@@ -91,7 +91,7 @@ struct CompileContext {
 
     Loc alloc_offset() {
         Loc offset = { .place = LOC_STACK, .stack_offset = frame_depth };
-        frame_depth += 8;
+        frame_depth += 1;
         return offset;
     }
 
