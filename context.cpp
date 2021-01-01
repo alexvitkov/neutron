@@ -14,6 +14,7 @@ bool Context::is_global() {
 }
 
 bool Context::declare(const char* name, ASTNode* value, Token nameToken) {
+    // Throw an error if another value with the same name has been declared
     ASTNode* prev_decl;
     if (declarations_table.find(name, &prev_decl)) {
         error({

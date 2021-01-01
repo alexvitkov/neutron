@@ -46,7 +46,7 @@ void print_line(Context& global, SourceFile& sf, int line, arr<Token>& red_token
         return;
 
     dim();
-    printf(" %*d | ", 5, line + 1);
+    printf(" %*d │ ", 5, line + 1);
     resetstyle();
 
     u64 line_start = sf.line_start[line];
@@ -133,6 +133,10 @@ void print(Context& global, Error& err) {
                     printf("Missing type specifier:\n");
                     virt.virt = VIRT_MISSING_TYPE_SPECIFIER;
                     t.push(virt);
+                    break;
+                default:
+                    printf("Unexpected token\n");
+                    t.push(real);
                     break;
             }
 

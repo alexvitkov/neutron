@@ -382,11 +382,12 @@ bool skim(Context& ctx, TokenReader& r) {
                 break;
             case KW_FN: {
                 if (depth == 0) {
-                    // TODO we're leaking
                     Token namet = r.peek();
                     if (namet.type == TOK_ID) {
+                        // We don't free the name here, the context "takes ownership" of it
+                        // TODO  names should be stored somewhere in contiguous memory
                         char* name = malloc_token_name(r, namet);
-                        MUST(ctx.declare(name, ctx.alloc<ASTFn>(ctx, name), namet));
+                        MUST (ctx.declare(name, ctx.alloc<ASTFn>(ctx, name), namet));
                     }
                     break;
                 }
@@ -396,8 +397,7 @@ bool skim(Context& ctx, TokenReader& r) {
                     Token namet = r.peek();
                     if (namet.type == TOK_ID) {
                         char* name = malloc_token_name(r, namet);
-                        MUST(ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, -1), namet));
-                        free(name);
+                        MUST (ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, -1), namet));
                     }
                 }
                 break;
@@ -446,11 +446,11 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
 
     while (true) {
         Token name = r.expect(TOK_ID);
-        MUST(name.type);
-        MUST(r.expect(TOK(':')).type);
+        MUST (name.type);
+        MUST (r.expect(TOK(':')).type);
 
         ASTType* type;
-        MUST(type = parse_type(ctx, r));
+        MUST (type = parse_type(ctx, r));
 
         tl->entries.push(TypeList::Entry { .name = malloc_token_name(r, name), .type = type });
 
@@ -459,7 +459,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
             r.pop();
             return true;
         } else {
-            MUST(r.expect(TOK(',')).type);
+            MUST (r.expect(TOK(',')).type);
         }
     }
     return true;
@@ -470,8 +470,8 @@ trool parse_decl_statement(Context& ctx, TokenReader& r);
 ASTNode* parse_expr(Context& ctx, TokenReader& r);
 
 bool parse_block(ASTBlock& block, TokenReader& r) {
-    MUST(r.expect(TOK('{')).type);
-    MUST(skim(block.ctx, r));
+    MUST (r.expect(TOK('{')).type);
+    MUST (skim(block.ctx, r));
 
     while (true) {
 X:
@@ -493,25 +493,25 @@ X:
                 }
                 else {
                     ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r));
-                    MUST(ret->value);
+                    MUST (ret->value);
                 }
                 block.statements.push((ASTNode*)ret);
-                MUST(r.expect(TOK(';')).type);
+                MUST (r.expect(TOK(';')).type);
                 break;
             }
             case KW_IF: {
                 ASTIf* ifs = block.ctx.alloc<ASTIf>(block.ctx);
                 ifs->condition = parse_expr(block.ctx, r);
-                MUST(ifs->condition);
-                MUST(parse_block(ifs->block, r));
+                MUST (ifs->condition);
+                MUST (parse_block(ifs->block, r));
                 block.statements.push(ifs);
                 break;
             }
             case KW_WHILE: {
                 ASTWhile* whiles = block.ctx.alloc<ASTWhile>(block.ctx);
                 whiles->condition = parse_expr(block.ctx, r);
-                MUST(whiles->condition);
-                MUST(parse_block(whiles->block, r));
+                MUST (whiles->condition);
+                MUST (parse_block(whiles->block, r));
                 block.statements.push(whiles);
                 break;
             }
@@ -521,8 +521,8 @@ X:
             }
             default: {
                 ASTNode* expr = parse_expr(block.ctx, r);
-                MUST(expr);
-                MUST(r.expect(TOK(';')).type);
+                MUST (expr);
+                MUST (r.expect(TOK(';')).type);
                 block.statements.push(expr);
                 break;
             }
@@ -532,7 +532,7 @@ X:
 
 ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     Token name;
-    MUST(r.expect(KW_FN).type);
+    MUST (r.expect(KW_FN).type);
 
     ASTFn* fn;
     if (decl) {
@@ -546,8 +546,8 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         ASTFn* decl = ctx.alloc<ASTFn>(ctx, nullptr);
     }
 
-    MUST(r.expect(TOK('(')).type);
-    MUST(parse_type_list(ctx, r, TOK(')'), &fn->args));
+    MUST (r.expect(TOK('(')).type);
+    MUST (parse_type_list(ctx, r, TOK(')'), &fn->args));
 
     ASTType* rettype = nullptr;
     Token rettype_token;
@@ -555,7 +555,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     if (r.peek().type == TOK(':')) {
         r.pop();
         rettype_token = r.peek();
-        MUST(rettype = parse_type(ctx, r));
+        MUST (rettype = parse_type(ctx, r));
     }
 
     if (rettype)
@@ -567,7 +567,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         fn->block.ctx.declare(entry.name, (ASTNode*)decl, {});
     }
 
-    MUST(parse_block(fn->block, r));
+    MUST (parse_block(fn->block, r));
     return fn;
 }
 
@@ -680,7 +680,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     while (r.peek().type != TOK(')')) {
                         fncall->args.push(parse_expr(ctx, r));
                         if (r.peek().type != TOK(')'))
-                            MUST(r.expect(TOK(',')).type);
+                            MUST (r.expect(TOK(',')).type);
                     }
                     r.pop(); // discard the bracket
                     s.output.push(fncall);
@@ -717,7 +717,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                 prev_was_value = false;
                 if (is_operator(t.type)) {
                     while (s.stack.size && s.stack.last() != TOK('(') && PREC(s.stack.last()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
-                        MUST(pop(s));
+                        MUST (pop(s));
                     s.stack.push(t.type);
                     prev_was_value = false;
                 }
@@ -727,7 +727,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
 
 Done:
     while (s.stack.size) 
-        MUST(pop(s));
+        MUST (pop(s));
 
     if (s.output.size != 1) {
         s.ctx.error({
@@ -739,23 +739,23 @@ Done:
 }
 
 bool parse_let(Context& ctx, TokenReader& r) {
-    MUST(r.expect(KW_LET).type);
+    MUST (r.expect(KW_LET).type);
 
-    Token name = r.expect(TOK_ID);
-    char* name_ = malloc_token_name(r, name);
-    ASTVar* var = (ASTVar*)ctx.resolve(name_);
-    free(name_);
+    Token nameToken = r.expect(TOK_ID);
+    char* name = malloc_token_name(r, nameToken);
+    ASTVar* var = (ASTVar*)ctx.resolve(name);
+    free(name);
+
+    assert(var);
 
     MUST (r.expect(TOK(':')).type);
-
-    var->type = parse_type(ctx, r);
-    MUST(var->type);
+    MUST (var->type = parse_type(ctx, r));
 
     if (r.peek().type == TOK('=')) {
         r.pop();
-        MUST(var->initial_value = parse_expr(ctx, r));
+        MUST (var->initial_value = parse_expr(ctx, r));
     };
-    MUST(r.expect(TOK(';')).type);
+    MUST (r.expect(TOK(';')).type);
     return true;
 }
 
@@ -790,11 +790,11 @@ bool parse_all_files(Context& global) {
     for (int i = 0; i < sources.size; i++) {
         MUST (tokenize(global, sources[i]));
         TokenReader r { .sf = sources[i], .ctx = global };
-        MUST(skim(global, r));
+        MUST (skim(global, r));
     }
     for (int i = 0; i < sources.size; i++) {
         TokenReader r { .sf = sources[i], .ctx = global };
-        MUST(parse_top_level(global, r));
+        MUST (parse_top_level(global, r));
     }
 
     return true;

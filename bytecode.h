@@ -19,6 +19,7 @@ enum OpCode : u8 {
     OPC_EQ,
     OPC_CALL,
     OPC_SUB,
+    OPC_LT,
 };
 
 

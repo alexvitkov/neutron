@@ -10,6 +10,7 @@ const char* opcode_names[] = {
     "EQ",
     "CALL",
     "SUB",
+    "LT",
 };
 
 
@@ -150,6 +151,14 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
                     c.free_offset(tmp);
                     break;
                 }
+                case '<': {
+                    Loc tmp = c.alloc_offset();
+                    compile_expr(c, bin->lhs, OPC_MOV, dst);
+                    compile_expr(c, bin->rhs, OPC_MOV, tmp);
+                    c.emit({ .opcode = OPC_LT, .dst = dst, .src = tmp });
+                    c.free_offset(tmp);
+                    break;
+                }
                 default:
                     assert(!"Not implemented");
             }
@@ -157,21 +166,48 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
         }
         case AST_IF: {
             ASTIf* ifs = (ASTIf*)expr;
+            Loc tmp = c.alloc_offset();
+            u32 skip_label = c.new_label();
 
-            Loc expr_loc = c.alloc_offset();
-            compile_expr(c, ifs->condition, OPC_MOV, expr_loc);
-
-            u32 after_expr_label = c.new_label();
+            compile_expr(c, ifs->condition, OPC_MOV, tmp);
 
             c.emit({
                 .opcode = OPC_JZ,
-                .dst = { .place = LOC_LABEL, .label = after_expr_label },
-                .src = expr_loc,
+                .dst = { .place = LOC_LABEL, .label = skip_label },
+                .src = tmp,
             });
             
+            c.free_offset(tmp);
             compile_expr(c, &ifs->block, {}, {});
 
-            c.put_label(after_expr_label);
+            c.put_label(skip_label);
+            break;
+        }
+        case AST_WHILE: {
+            ASTWhile* whiles = (ASTWhile*)expr;
+            u32 loop_start = c.new_label();
+            u32 loop_end = c.new_label();
+            Loc tmp = c.alloc_offset();
+
+            c.put_label(loop_start);
+            compile_expr(c, whiles->condition, OPC_MOV, tmp);
+
+            c.emit({
+                .opcode = OPC_JZ,
+                .dst = { .place = LOC_LABEL, .label = loop_end },
+                .src = tmp,
+            });
+            
+            c.free_offset(tmp);
+            compile_expr(c, &whiles->block, {}, {});
+
+            c.emit({
+                .opcode = OPC_JMP,
+                .dst = { .place = LOC_LABEL, .label = loop_start },
+                .src = tmp,
+            });
+
+            c.put_label(loop_end);
             break;
         }
         case AST_RETURN: {
@@ -344,6 +380,9 @@ Next:
                 break;
             case OPC_EQ:
                 *dst = (*dst == src);
+                break;
+            case OPC_LT:
+                *dst = (*dst < src);
                 break;
             default:
                 assert(!"Not implemented");

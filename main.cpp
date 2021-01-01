@@ -15,6 +15,7 @@ void exit_with_error() {
 
 
 int main(int argc, const char** argv) {
+
 	bool dd = false;
 	for (int i = 1; i < argc; i++) {
 		const char* a = argv[i];
