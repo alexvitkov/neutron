@@ -13,6 +13,7 @@ void exit_with_error() {
     exit(1);
 }
 
+
 int main(int argc, const char** argv) {
 	bool dd = false;
 	for (int i = 1; i < argc; i++) {
@@ -37,11 +38,10 @@ int main(int argc, const char** argv) {
 	}
 
 	if (!parse_all_files(global)) {
-        printf("parser failed\n");
         exit_with_error();
     }
     
-    for (const auto& decl : global.defines_arr) {
+    for (const auto& decl : global.declarations_arr) {
         print(std::cout, decl.node, true);
         std::cout << '\n';
     }
@@ -60,7 +60,7 @@ int main(int argc, const char** argv) {
 
     // Find main address
     u32 mainfn_addr;
-    if (c.fnaddr.try_find("main", &mainfn_addr)) {
+    if (c.fnaddr.find("main", &mainfn_addr)) {
         u64 ret = interpret(c, mainfn_addr);
         printf("main returned %lu\n", ret);
     }

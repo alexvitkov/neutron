@@ -72,7 +72,7 @@ struct CompileContext {
     Context& ctx;
     u32 frame_depth;
     arr<Instr> instr;
-    strtable<u32> fnaddr;
+    map<const char*, u32> fnaddr;
 
     arr<u64> labels;
 

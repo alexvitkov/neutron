@@ -11,8 +11,14 @@ struct Context {
         const char* name;
         ASTNode* node;
     };
-    arr<NameNodePair> defines_arr;
-    strtable<ASTNode*> defines_table;
+
+    struct DeclMeta {
+        Token location;
+    };
+
+    arr<NameNodePair> declarations_arr;
+    map<const char*, ASTNode*> declarations_table;
+    map<ASTNode*, DeclMeta> declarations_meta;
 
     GlobalContext* global;
     Context* parent;
@@ -22,7 +28,7 @@ struct Context {
 
     ASTNode* resolve(const char* name);
     ASTNode* resolve(char* name, int length);
-    bool declare(const char* name, ASTNode* value);
+    bool declare(const char* name, ASTNode* value, Token nameToken);
 
     inline Context(Context* parent)
         : parent(parent), global(parent ? parent->global : (GlobalContext*)this) { }

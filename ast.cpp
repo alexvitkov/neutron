@@ -35,7 +35,7 @@ void print(std::ostream& o, ASTBlock* bl) {
     indent ++;
     o << "{ \n";
 
-    for (auto nnp : bl->ctx.defines_arr) {
+    for (auto nnp : bl->ctx.declarations_arr) {
         indent_line(o);
 
         switch (nnp.node->nodetype) {

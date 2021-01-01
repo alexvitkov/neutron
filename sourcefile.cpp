@@ -25,6 +25,7 @@ int add_source(const char* filename) {
 	fclose(f);
 	
 	sf.id = sources.size;
+    sf.filename = filename;
 
 	sources.push(sf);
 	return sf.id;

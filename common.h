@@ -83,14 +83,31 @@ extern u8 prec[148];
 
 struct Token {
 	TokenType type;
-    u16 file;
 
-	u32 match; // inedex of matching bracket
+    // A virtual token doesn't exist in the source code
+    // It's an additional piece of metadata that the 'unexpected_token' function
+    // adds to the error, so when we print it we have information about what token
+    // was expected
+    u8 virt; 
+
+    i16 file;
+
+    // If the token is a bracket, 'match' is the index of the matching bracket token
+	u32 match;
+
 	u32 length;
 	u64 start;
 
     u32 line;
     u32 pos_in_line;
+
+    inline bool operator<(const Token& other) {
+        if (line < other.line)
+            return true;
+        if (line == other.line)
+             return this->virt;
+        return false;
+    }
 };
 
 

@@ -4,7 +4,12 @@
 #include "common.h"
 #include "context.h"
 #include "ds.h"
+#include "sourcefile.h"
 
+#include <iostream>
+
+// @VOLATILE
+// If you add/reorder entries here, update error_names in error.cpp accordingly
 enum ErrorCode {
     ERR_UNKNOWN = 0,
 

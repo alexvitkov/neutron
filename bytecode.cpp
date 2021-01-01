@@ -55,7 +55,7 @@ void disassemble(Instr* instr) {
 // we use this to calculate where the fucntion arguments are
 // arg[0] is at stackframe[0], arg[N] is at stackframe[N * 8]
 void make_stack_frame(CompileContext& c, ASTBlock* block) {
-    for (auto& def : block->ctx.defines_arr) {
+    for (auto& def : block->ctx.declarations_arr) {
         if (def.node->nodetype == AST_VAR) {
             ASTVar* var = (ASTVar*)def.node;
             // TODO this shouldnt be stored inside the node itself
@@ -94,7 +94,7 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
             ASTBlock* block = (ASTBlock*)expr;
 
             // Initialize the variables defined in the block
-            for (auto& def : block->ctx.defines_arr) {
+            for (auto& def : block->ctx.declarations_arr) {
                 if (def.node->nodetype == AST_VAR) {
                     ASTVar* var = (ASTVar*)def.node;
                     if (var->initial_value)
@@ -354,7 +354,7 @@ Next:
 }
 
 void compile_all(CompileContext& c) {
-    for (auto& def : c.ctx.defines_arr) {
+    for (auto& def : c.ctx.declarations_arr) {
         if (def.node->nodetype == AST_FN) {
             compile_fn(c, (ASTFn*)def.node);
         }

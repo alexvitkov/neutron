@@ -176,6 +176,7 @@ bool tokenize(Context& global, SourceFile &s) {
 
     u32 line = 0;
     u64 line_start = 0;
+    s.line_start.push(0);
 
 	for (u64 i = 0; i < s.length; i++) {
 		char c = s.buffer[i];
@@ -203,7 +204,7 @@ bool tokenize(Context& global, SourceFile &s) {
 					.length = (u32)(i - word_start),
 					.start = word_start,
                     .line = line,
-                    .pos_in_line = (u32)(i - line_start),
+                    .pos_in_line = (u32)(word_start - line_start),
 				});
 				state = NONE;
 			}
@@ -252,7 +253,7 @@ bool tokenize(Context& global, SourceFile &s) {
 					if ((c == ')' && bt.tok.type != '(') || (c == ']' && bt.tok.type != '[') || (c == '}' && bt.tok.type != '{')) {
 						global.error({
                             .code = ERR_UNBALANCED_BRACKETS,
-                            .tokens = { bt.tok, tok },
+                            .tokens = { bt.tok },
                         });
 						return false;
 					}
@@ -267,7 +268,8 @@ bool tokenize(Context& global, SourceFile &s) {
 
         if (c == '\n') {
             line++;
-            line_start = i;
+            s.line_start.push(i + 1);
+            line_start = i + 1;
         }
 	}
 
@@ -325,12 +327,25 @@ void print_tokens(SourceFile& sf) {
 }
 
 void unexpected_token(TokenReader& r, Token tok, TokenType expected) {
+    // The virtual token gives more info about what was expected in place of to
+    Token virt = tok;
+    virt.virt = true;
+    virt.type = expected;
+
+    // Find the token before 'tok', place the virtual token after it
+    for (int i = 1; i < r.sf.tokens.size; i++) {
+        if (r.sf.tokens[i].start == tok.start) {
+            Token prev = r.sf.tokens[i - 1];
+            virt.start = prev.start + prev.length;
+            virt.pos_in_line = prev.pos_in_line + prev.length;
+            break;
+        }
+    }
+
+    // ERR_UNEXPECTED_TOKEN expects exactly two tokens - the regular and the virtual
     r.ctx.error({
         .code = ERR_UNEXPECTED_TOKEN,
-        .tokens = {
-            tok,
-            { .type = expected },
-        }
+        .tokens = { tok, virt }
     });
 }
 
@@ -371,7 +386,7 @@ bool skim(Context& ctx, TokenReader& r) {
                     Token namet = r.peek();
                     if (namet.type == TOK_ID) {
                         char* name = malloc_token_name(r, namet);
-                        MUST(ctx.declare(name, ctx.alloc<ASTFn>(ctx, name)));
+                        MUST(ctx.declare(name, ctx.alloc<ASTFn>(ctx, name), namet));
                     }
                     break;
                 }
@@ -381,7 +396,8 @@ bool skim(Context& ctx, TokenReader& r) {
                     Token namet = r.peek();
                     if (namet.type == TOK_ID) {
                         char* name = malloc_token_name(r, namet);
-                        MUST(ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, -1)));
+                        MUST(ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, -1), namet));
+                        free(name);
                     }
                 }
                 break;
@@ -430,7 +446,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
 
     while (true) {
         Token name = r.expect(TOK_ID);
-        MUST(t.type);
+        MUST(name.type);
         MUST(r.expect(TOK(':')).type);
 
         ASTType* type;
@@ -534,19 +550,21 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     MUST(parse_type_list(ctx, r, TOK(')'), &fn->args));
 
     ASTType* rettype = nullptr;
+    Token rettype_token;
 
     if (r.peek().type == TOK(':')) {
         r.pop();
+        rettype_token = r.peek();
         MUST(rettype = parse_type(ctx, r));
     }
 
     if (rettype)
-        fn->block.ctx.declare("returntype", rettype);
+        fn->block.ctx.declare("returntype", rettype, rettype_token);
 
     int argid = 0;
     for (const auto& entry : fn->args.entries) {
         ASTVar* decl = ctx.alloc<ASTVar>(entry.name, entry.type, nullptr, argid++);
-        fn->block.ctx.declare(entry.name, (ASTNode*)decl);
+        fn->block.ctx.declare(entry.name, (ASTNode*)decl, {});
     }
 
     MUST(parse_block(fn->block, r));
@@ -617,14 +635,17 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     return nullptr;
                 }
 
-                ASTNode* resolved = ctx.resolve(r.sf.buffer + t.start, t.length);
+                char* id_name = strndup(r.sf.buffer + t.start, t.length);
+                ASTNode* resolved = ctx.resolve(id_name);
                 if (!resolved) {
                     s.ctx.error({
                         .code = ERR_NOT_DEFINED,
                         .tokens = { t },
                     });
+                    free(id_name);
                     return nullptr;
                 }
+                free(id_name);
                 s.output.push(resolved);
                 prev_was_value = true;
                 break;

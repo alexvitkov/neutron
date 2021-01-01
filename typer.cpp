@@ -154,7 +154,7 @@ bool typecheck(Context& ctx, ASTNode* node) {
 }
 
 bool typecheck_all(Context& global) {
-    for (auto& decl : global.defines_arr)
+    for (auto& decl : global.declarations_arr)
         MUST(typecheck(global, decl.node));
     return true;
 }

@@ -4,67 +4,47 @@
 #include "common.h"
 #include <initializer_list>
 
-// https://github.com/explosion/murmurhash/blob/master/murmurhash/MurmurHash2.cpp
-u32 MurmurHash2 (const u8* data, int len, u32 seed) {
-  const u32 m = 0x5bd1e995;
-  const int r = 24;
+extern bool map_equals(const char* lhs, const char* rhs);
+extern u32 map_hash(const char* key);
 
-  u32 h = seed ^ len;
+extern bool map_equals(void* lhs, void* rhs);
+extern u32 map_hash(void* key);
 
-  while(len >= 4) {
-    u32 k = *(u32*)data;
+template <typename K, typename V>
+struct map {
 
-    k *= m;
-    k ^= k >> r;
-    k *= m;
-
-    h *= m;
-    h ^= k;
-
-    data += 4;
-    len -= 4;
-  }
-
-  switch(len) {
-  case 3: h ^= data[2] << 16;
-  case 2: h ^= data[1] << 8;
-  case 1: h ^= data[0];
-      h *= m;
-  };
-
-  h ^= h >> 13;
-  h *= m;
-  h ^= h >> 15;
-  return h;
-} 
-
-template <typename V>
-struct strtable {
-
-    struct bin {
-        u32 hash;
-        const char* key;
+    struct kvp {
+        K key;
         V value;
+    };
+
+    struct bin : kvp {
+        u32 hash;
+        bool haskey;
     };
 
     bin* bins;
     u32 numbins; 
     u32 numfreebins;
 
-    strtable(u32 numbins = 8) { alloc_bins(numbins); }
-    ~strtable()               { free(bins); }
+    map(u32 numbins = 8) { 
+        alloc_bins(numbins); 
+    }
+    ~map() { 
+        free(bins); 
+    }
 
-    strtable(strtable& other)  = delete;
-    strtable(strtable&& other) = delete;
-    strtable& operator= (const strtable& other)  = delete;
-    strtable& operator= (const strtable&& other) = delete;
+    map(map& other)  = delete;
+    map(map&& other) = delete;
+    map& operator= (const map& other)  = delete;
+    map& operator= (const map&& other) = delete;
 
     void alloc_bins(u32 numbins) {
         bins = (bin*)malloc(sizeof(bin) * numbins);
         this->numbins = numbins;
         this->numfreebins = (u32)(numbins * 0.65f);
         for (u32 i = 0; i < numbins; i++)
-            bins[i].key = nullptr;
+            bins[i].haskey = false;
     }
 
     void realloc() {
@@ -73,7 +53,7 @@ struct strtable {
         alloc_bins(numbins * 2);
 
         for (u32 i = 0; i < old_numbins; i++) {
-            if (old_bins[i].key) {
+            if (old_bins[i].haskey) {
                 // TODO we can avoid recalculating the hash here as its already stored inside the old bin
                 // but for now I'd like to reuse the insert function here so fuck it
                 insert(old_bins[i].key, old_bins[i].value);
@@ -82,46 +62,40 @@ struct strtable {
         free(old_bins);
     }
 
-    bool insert(const char* key, V value) {
-        u32 len = strlen(key);
-        return insert(key, len, value);
-    }
-
-    bool insert(const char* key, u32 len, V value) {
+    bool insert(K key, V value) {
         if (numfreebins-- == 0)
             realloc();
 
-        u32 hash = MurmurHash2((u8*)key, strlen(key), 32);
+        u32 hash = map_hash(key);
         u32 bin_index = hash % numbins;
 
-        while (bins[bin_index].key) {
+        while (bins[bin_index].haskey) {
             if (bins[bin_index].hash == hash)
-                if (strlen(bins[bin_index].key) == len && !strncmp(bins[bin_index].key, key, len))
+                if (map_equals(bins[bin_index].key, key))
                     return false;
 
             bin_index++;
             if (bin_index >= numbins)
                 bin_index = 0;
         }
-
-        bins[bin_index] = { .hash = hash, .key = key, .value = value };
+        bins[bin_index].hash = hash;
+        bins[bin_index].key = key;
+        bins[bin_index].haskey = true;
+        new (&bins[bin_index].value) V(std::move(value));
         return true;
     }
     
-    V find(const char* key) {
-        u32 len = strlen(key);
-        return find(key, len);
-    }
-
-    bool try_find(const char* key, V* out) {
-        u32 len = strlen(key);
-        u32 hash = MurmurHash2((u8*)key, len, 32);
+    // If the key is in the map true is returned and out's value is set accordingly
+    // If the key is not in the map, out's value is unchanged
+    bool find(K key, V* out) {
+        u32 hash = map_hash(key);
         u32 bin_index = hash % numbins;
 
-        while (bins[bin_index].key) {
+        while (bins[bin_index].haskey) {
             if (bins[bin_index].hash == hash) {
-                if (strlen(bins[bin_index].key) == len && !strncmp(bins[bin_index].key, key, len)) {
-                    *out = bins[bin_index].value;
+                if (map_equals(bins[bin_index].key, key)) {
+                    if (out)
+                        *out = bins[bin_index].value;
                     return true;
                 }
             }
@@ -132,21 +106,51 @@ struct strtable {
         return false;
     }
 
-    V find(const char* key, u32 len) {
-        u32 hash = MurmurHash2((u8*)key, len, 32);
+    V* find2(K key) {
+        u32 hash = map_hash(key);
         u32 bin_index = hash % numbins;
 
-        while (bins[bin_index].key) {
-            if (bins[bin_index].hash == hash)
-                if (strlen(bins[bin_index].key) == len && !strncmp(bins[bin_index].key, key, len))
-                    return bins[bin_index].value;
+        while (bins[bin_index].haskey) {
+            if (bins[bin_index].hash == hash) {
+                if (map_equals(bins[bin_index].key, key)) {
+                    return &bins[bin_index].value;
+                }
+            }
             bin_index++;
             if (bin_index >= numbins)
                 bin_index = 0;
         }
-        return {};
+        return nullptr;
     }
 
+    // Only use this when you're sure the key is inside the map
+    V& operator[](K& key) {
+        return *find2(key);
+    }
+
+    struct iterator {
+        map* a;
+        u32 i;
+        
+        iterator& operator++() {
+            do {
+                i++;
+            } while (i < a->numbins && !a->bins[i].haskey);
+            return *this;
+        }
+        kvp& operator*() const { return a->bins[i]; }
+        bool operator==(const iterator& other) { return a == other.a && i == other.i; };
+        bool operator!=(const iterator& other) { return a != other.a || i != other.i; };
+    };
+
+    iterator begin() { 
+        u32 i;
+        for (i = 0; i < numbins; i++)
+            if (bins[i].haskey)
+                break;
+        return { .a = this, .i = i };
+    }
+    iterator end()   { return { this, numbins }; }
 };
 
 
@@ -156,7 +160,8 @@ struct arr {
     u32 size;
     u32 capacity;
 
-    arr(u32 capacity = 8) : capacity(capacity), size(0), buffer((T*)malloc(sizeof(T) * capacity)) { }
+    arr(u32 capacity = 8) 
+        : capacity(capacity), size(0), buffer((T*)malloc(sizeof(T) * capacity)) { }
 
     arr(std::initializer_list<T> init) : arr(init.size()) {
         u32 i = 0;
@@ -166,21 +171,30 @@ struct arr {
         }
         size = i;
     }
-    
+
+    arr(const arr& other) { 
+        copy(other); 
+    }
+
+    arr(arr&& other) {
+        buffer = other.buffer;
+        size = other.size;
+        capacity = other.capacity;
+        other.buffer = nullptr;
+    }
+
     ~arr() { 
-        free(buffer); 
+        if (buffer) 
+            free(buffer); 
     }
 
     arr& operator= (const arr& other) {
-        if (buffer)
-            free(buffer);
+        if (buffer) free(buffer);
         copy(other);
         return *this;
     }
 
-    arr(const arr& other) {
-        copy(other);
-    }
+    arr& operator= (arr&& other) = delete;
 
     void copy(const arr& other) {
         size = other.size;
@@ -188,9 +202,6 @@ struct arr {
         buffer = (T*)malloc(sizeof(T) * capacity);
         memcpy(buffer, other.buffer, sizeof(T) * size);
     }
-
-    arr(arr&& other) = delete;
-    arr& operator= (const arr&& other) = delete;
 
     void realloc() {
         capacity *= 2;
@@ -206,13 +217,6 @@ struct arr {
         return (buffer[size++] = value);
     }
 
-    template <typename ... Ts>
-    void emplace(Ts && ... args) {
-        if (size >= capacity)
-            realloc();
-        new (&buffer[size++]) T (args...);
-    }
-
     T pop() {
         return buffer[--size];
     }
@@ -223,21 +227,8 @@ struct arr {
     T last() const  { return buffer[size - 1]; }
     T& last()       { return buffer[size - 1]; }
 
-    struct iterator {
-        arr* a;
-        u32 i;
-        
-        iterator& operator++() {
-            i++;
-            return *this;
-        }
-        T& operator*() const { return a->buffer[i]; }
-        bool operator==(const iterator& other) { return a == other.a && i == other.i; };
-        bool operator!=(const iterator& other) { return a != other.a || i != other.i; };
-    };
-
-    iterator begin() { return { this, 0 }; }
-    iterator end()   { return { this, size }; }
+    T* begin() { return buffer; }
+    T* end()   { return buffer + size; }
 
 };
 
