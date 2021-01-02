@@ -70,7 +70,7 @@ CharTraits ctt[128] {
 /* 43  - +   */ CT_OPERATOR,
 /* 44  - ,   */ CT_HELPERTOKEN,
 /* 45  - -   */ CT_OPERATOR,
-/* 46  - .   */ CT_HELPERTOKEN,
+/* 46  - .   */ CT_OPERATOR,
 /* 47  - /   */ CT_ERROR,
 /* 48  - 0   */ CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT,
 /* 58  - :   */ CT_HELPERTOKEN,
@@ -127,7 +127,7 @@ u8 prec[148] = {
 /* + */  10  | PREFIX,
 0, // ,
 /* - */  10  | PREFIX,
-/* . */        POSTFIX,
+/* . */  12,
 /* / */  11,
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 /* < */  5,
@@ -320,6 +320,28 @@ struct TokenReader {
     }
 };
 
+char* malloc_token_name(TokenReader& r, Token tok) {
+    char* buf = (char*)malloc(tok.length + 1);
+    memcpy(buf, r.sf.buffer + tok.start, tok.length);
+    buf[tok.length] = 0;
+    return buf;
+}
+
+ASTNode* resolve_or_error(Context& ctx, TokenReader& r, Token id) {
+    char* id_name = malloc_token_name(r, id);
+    ASTNode* resolved = ctx.resolve(id_name);
+    if (!resolved) {
+        ctx.error({
+                .code = ERR_NOT_DEFINED,
+                .tokens = { id },
+                });
+        free(id_name);
+        return nullptr;
+    }
+    free(id_name);
+    return resolved;
+}
+
 void print_tokens(SourceFile& sf) {
 	for (Token& t : sf.tokens) {
 		printf("%d\t%.*s\n", t.type, (int)t.length, sf.buffer + t.start);
@@ -356,12 +378,6 @@ void print_token(TokenReader& r, Token t) {
 		printf("[%d-%.*s]", t.type, (int)t.length, r.sf.buffer + t.start);
 }
 
-char* malloc_token_name(TokenReader& r, Token tok) {
-    char* buf = (char*)malloc(tok.length + 1);
-    memcpy(buf, r.sf.buffer + tok.start, tok.length);
-    buf[tok.length] = 0;
-    return buf;
-}
 
 bool skim(Context& ctx, TokenReader& r) {
     // TODO a solution to the start_pos meme may be to pass TokenReader by value
@@ -380,27 +396,30 @@ bool skim(Context& ctx, TokenReader& r) {
                     return true;
                 }
                 break;
-            case KW_FN: {
+            case KW_FN:
+            case KW_LET:
+            case KW_STRUCT: 
+            {
                 if (depth == 0) {
                     Token namet = r.peek();
                     if (namet.type == TOK_ID) {
                         // We don't free the name here, the context "takes ownership" of it
                         // TODO  names should be stored somewhere in contiguous memory
                         char* name = malloc_token_name(r, namet);
-                        MUST (ctx.declare(name, ctx.alloc<ASTFn>(ctx, name), namet));
+                        switch (t.type) {
+                            case KW_FN:
+                                MUST (ctx.declare(name, ctx.alloc<ASTFn>(ctx, name), namet));
+                                break;
+                            case KW_LET:
+                                MUST (ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, -1), namet));
+                                break;
+                            case KW_STRUCT:
+                                MUST (ctx.declare(name, ctx.alloc<ASTStruct>(name), namet));
+                                break;
+                        }
                     }
                     break;
                 }
-            }
-            case KW_LET: {
-                if (depth == 0) {
-                    Token namet = r.peek();
-                    if (namet.type == TOK_ID) {
-                        char* name = malloc_token_name(r, namet);
-                        MUST (ctx.declare(name, ctx.alloc<ASTVar>(name, nullptr, nullptr, -1), namet));
-                    }
-                }
-                break;
             }
             case TOK_NONE: {
                 r.pos = start_pos;
@@ -418,19 +437,28 @@ ASTType* parse_type(Context& ctx, TokenReader& r) {
     Token t = r.pop();
 
     switch (t.type) {
-        case KW_U8:  return &t_u8;
-        case KW_U16: return &t_u16;
-        case KW_U32: return &t_u32;
-        case KW_U64: return &t_u64;
-        case KW_I8:  return &t_i8;
-        case KW_I16: return &t_i16;
-        case KW_I32: return &t_i32;
-        case KW_I64: return &t_i64;
-        case KW_F32: return &t_f32;
-        case KW_F64: return &t_f64;
+        case KW_U8:   return &t_u8;
+        case KW_U16:  return &t_u16;
+        case KW_U32:  return &t_u32;
+        case KW_U64:  return &t_u64;
+        case KW_I8:   return &t_i8;
+        case KW_I16:  return &t_i16;
+        case KW_I32:  return &t_i32;
+        case KW_I64:  return &t_i64;
+        case KW_F32:  return &t_f32;
+        case KW_F64:  return &t_f64;
         case KW_BOOL: return &t_bool;
+        case TOK_ID: {
+            ASTNode* node; 
+            MUST (node = resolve_or_error(ctx, r, t));
+            if (node->nodetype != AST_STRUCT) {
+                unexpected_token(r, t, TOK(':'));
+                return nullptr;
+            }
+            return (ASTStruct*)node;
+        }
         default:
-            unexpected_token(r, t, TOK_NONE);
+            unexpected_token(r, t, TOK(':'));
             return nullptr;
     }
 }
@@ -531,19 +559,20 @@ X:
 }
 
 ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
-    Token name;
-    MUST (r.expect(KW_FN).type);
+    assert (r.expect(KW_FN).type);
 
     ASTFn* fn;
     if (decl) {
-        // we've already skimmed the scope, we know there's an identifier here
-        name = r.expect(TOK_ID);
-        char* name_ = malloc_token_name(r, name);
-        fn = (ASTFn*)ctx.resolve(name_);
-        free(name_);
+        Token nameToken = r.expect(TOK_ID);
+        // we've already skimmed the scope, so we know there's an identifier here
+        assert(nameToken.type); 
+
+        char* name = malloc_token_name(r, nameToken);
+        fn = (ASTFn*)ctx.resolve(name);
+        free(name);
     }
     else {
-        ASTFn* decl = ctx.alloc<ASTFn>(ctx, nullptr);
+        fn = ctx.alloc<ASTFn>(ctx, nullptr);
     }
 
     MUST (r.expect(TOK('(')).type);
@@ -592,24 +621,30 @@ bool pop(SYState& s) {
     ASTNode* lhs = s.output[s.output.size - 2];
     ASTNode* rhs = s.output[s.output.size - 1];
 
-    if ((prec[op] & ASSIGNMENT) && op != TOK('=')) {
-
-        switch (op) {
-            case OP_ADDASSIGN: op = TOK('+'); break;
-            case OP_SUBASSIGN: op = TOK('-'); break;
-            case OP_MULASSIGN: op = TOK('*'); break;
-            case OP_DIVASSIGN: op = TOK('/'); break;
-            case OP_MODASSIGN: op = TOK('%'); break;
-            case OP_SHIFTLEFTASSIGN: op = OP_SHIFTLEFT; break;
-            case OP_SHIFTRIGHTASSIGN: op = OP_SHIFTRIGHT; break;
-            case OP_BITANDASSIGN: op = TOK('&'); break;
-            case OP_BITXORASSIGN: op = TOK('|'); break;
-            case OP_BITORASSIGN: op = TOK('^'); break;
-            default:
-                assert(0);
+    if (prec[op] & ASSIGNMENT) {
+        if (op == '=') {
+            bin = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
+            bin->nodetype = AST_ASSIGNMENT;
         }
-        rhs = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
-        bin = s.ctx.alloc<ASTBinaryOp>(TOK('='), lhs, rhs);
+        else {
+            switch (op) {
+                case OP_ADDASSIGN:        op = TOK('+');      break;
+                case OP_SUBASSIGN:        op = TOK('-');      break;
+                case OP_MULASSIGN:        op = TOK('*');      break;
+                case OP_DIVASSIGN:        op = TOK('/');      break;
+                case OP_MODASSIGN:        op = TOK('%');      break;
+                case OP_SHIFTLEFTASSIGN:  op = OP_SHIFTLEFT;  break;
+                case OP_SHIFTRIGHTASSIGN: op = OP_SHIFTRIGHT; break;
+                case OP_BITANDASSIGN:     op = TOK('&');      break;
+                case OP_BITXORASSIGN:     op = TOK('|');      break;
+                case OP_BITORASSIGN:      op = TOK('^');      break;
+                default:
+                                          assert(0);
+            }
+            rhs = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
+            bin = s.ctx.alloc<ASTBinaryOp>(TOK('='), lhs, rhs);
+            bin->nodetype = AST_ASSIGNMENT;
+        }
     }
     else {
         bin = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
@@ -656,6 +691,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     unexpected_token(r, t, TOK_NONE);
                     return nullptr;
                 }
+                prev_was_value = true;
 
                 u64 acc = 0;
                 for (int i = 0; i < t.length; i++) {
@@ -694,7 +730,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
             case TOK(')'): {
                 if (s.brackets == 0) {
                     // This should only happen when we're the last argument of a fn call
-                    // rewind the bracket so the parent parse_expr can consume it
+                    // We rewind the bracket so the parent parse_expr can consume it
                     r.pos--;
                     goto Done;
                 }
@@ -705,21 +741,36 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                 prev_was_value = true;
                 break;
             }
-            // TODO this is not a sane exit condition
-            case TOK(';'):
-            case TOK('{'):
-            case TOK(','): {
-                r.pos--;
-                goto Done;
+            case TOK('.'): {
+                Token nameToken = r.expect(TOK_ID);
+                MUST (nameToken.type);
+                char* name = malloc_token_name(r, nameToken);
+                if (!s.output.size) {
+                    s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                    return nullptr;
+                }
+                ASTNode* lhs = s.output.last();
+                ASTMemberAccess* ma = ctx.alloc<ASTMemberAccess>(lhs, name);
+                s.output.last() = ma;
+                break;
             }
-
             default: {
-                prev_was_value = false;
                 if (is_operator(t.type)) {
                     while (s.stack.size && s.stack.last() != TOK('(') && PREC(s.stack.last()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
                         MUST (pop(s));
                     s.stack.push(t.type);
                     prev_was_value = false;
+                }
+                else {
+                    if (prev_was_value) {
+                        // Our expression is over, this token is part fo whatever comes next - don't consume it
+                        r.pos --;
+                        goto Done;
+                    }
+                    else {
+                        s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                        return nullptr;
+                    }
                 }
             }
         }
@@ -739,7 +790,7 @@ Done:
 }
 
 bool parse_let(Context& ctx, TokenReader& r) {
-    MUST (r.expect(KW_LET).type);
+    assert (r.expect(KW_LET).type);
 
     Token nameToken = r.expect(TOK_ID);
     char* name = malloc_token_name(r, nameToken);
@@ -759,17 +810,44 @@ bool parse_let(Context& ctx, TokenReader& r) {
     return true;
 }
 
+ASTStruct* parse_struct(Context& ctx, TokenReader& r, bool decl) {
+    assert (r.expect(KW_STRUCT).type);
+
+    ASTStruct* st;
+    if (decl) {
+        Token nameToken = r.expect(TOK_ID);
+        // we've already skimmed the scope, so we know there's an identifier here
+        assert(nameToken.type); 
+
+        char* name = malloc_token_name(r, nameToken);
+        st = (ASTStruct*)ctx.resolve(name);
+        free(name);
+    }
+    else {
+        st = ctx.alloc<ASTStruct>(nullptr);
+    }
+
+    MUST (r.expect(TOK('{')).type);
+    MUST (parse_type_list(ctx, r, TOK('}'), &st->members));
+
+    return st;
+}
+
 
 trool parse_decl_statement(Context& ctx, TokenReader& r) {
     switch (r.peek().type) {
         case KW_FN: {
-            ASTFn* fn = parse_fn(ctx, r, true);
-            if (!fn)
+            if (!parse_fn(ctx, r, true))
                 return FAIL;
             break;
         }
         case KW_LET: {
             if (!parse_let(ctx, r))
+                return FAIL;
+            break;
+        }
+        case KW_STRUCT: {
+            if (!parse_struct(ctx, r, true))
                 return FAIL;
             break;
         }

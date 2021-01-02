@@ -5,5 +5,5 @@
 #include "sourcefile.cpp"
 #include "typer.cpp"
 #include "error.cpp"
-#include "bytecode.cpp"
+#include "backend/bytecode/bytecode.cpp"
 #include "ds.cpp"

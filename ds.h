@@ -123,8 +123,16 @@ struct map {
         return nullptr;
     }
 
-    // Only use this when you're sure the key is inside the map
-    V& operator[](K& key) {
+    V operator[](K key) const {
+        return *find2(key);
+    }
+
+    // TODO this  functionality should be baked in into insert
+    V& operator[](K key) {
+        V* v = find2(key);
+        if (v)
+            return *v;
+        insert(key, {});
         return *find2(key);
     }
 

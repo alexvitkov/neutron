@@ -54,7 +54,7 @@ void print(std::ostream& o, ASTBlock* bl) {
         indent_line(o);
         print(o, d, false);
 
-        if (d->nodetype != AST_IF)
+        if (d->nodetype != AST_IF && d->nodetype != AST_WHILE)
             o << ";\n";
     }
 
@@ -68,6 +68,7 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
         case AST_FN:             print(o, (ASTFn*)node, decl); break;
         case AST_PRIMITIVE_TYPE: print(o, (ASTPrimitiveType*)node); break;
         case AST_BINARY_OP:      print(o, (ASTBinaryOp*)node, false); break;
+        case AST_ASSIGNMENT:     print(o, (ASTBinaryOp*)node, false); break;
         case AST_VAR:            print(o, (ASTVar*)node, decl); break;
         case AST_RETURN:         print(o, (ASTReturn*)node); break;
         case AST_CAST:           print(o, (ASTCast*)node); break;
@@ -75,6 +76,8 @@ void print(std::ostream& o, ASTNode* node, bool decl) {
         case AST_IF:             print(o, (ASTIf*)node); break;
         case AST_WHILE:          print(o, (ASTWhile*)node); break;
         case AST_FN_CALL:        print(o, (ASTFnCall*)node); break;
+        case AST_STRUCT:         print(o, (ASTStruct*)node, decl); break;
+        case AST_MEMBER_ACCESS:  print(o, (ASTMemberAccess*)node); break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
@@ -213,4 +216,26 @@ void print(std::ostream& o, ASTFnCall* node) {
     if (node->args.size)
         o << "\b\b \b"; // clear the last comma
     o << ")";
+}
+
+void print(std::ostream& o, ASTStruct* node, bool decl) {
+    if (decl) {
+        ASTStruct* fn = (ASTStruct*)node;
+        o << "struct ";
+        if (fn->name)
+            o << fn->name;
+        o << '{';
+        print(o, fn->members);
+        o << '}';
+    }
+    else {
+        o << node->name;
+    }
+}
+
+void print(std::ostream& o, ASTMemberAccess* node) {
+    if (ALWAYS_BRACKETS) o << '(';
+    print(o, node->lhs, false);
+    o << '.' << node->member_name;
+    if (ALWAYS_BRACKETS) o << ')';
 }

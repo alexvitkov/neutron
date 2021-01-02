@@ -14,6 +14,7 @@ enum ASTNodeType : u8 {
     AST_FN,
     AST_VAR,
     AST_BINARY_OP,
+    AST_ASSIGNMENT,
     AST_RETURN,
     AST_CAST,
     AST_NUMBER,
@@ -21,6 +22,9 @@ enum ASTNodeType : u8 {
     AST_WHILE,
     AST_BLOCK,
     AST_FN_CALL,
+    AST_STRUCT,
+    AST_MEMBER_ACCESS,
+    AST_STRUCT_VALUE,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -74,7 +78,6 @@ struct ASTVar : ASTNode {
     const char* name;
     ASTType* type;
     ASTNode* initial_value;
-    u64 location[2];
 
     // If the variable is a function argument, this is its index
     i32 argindex;
@@ -133,6 +136,27 @@ struct ASTFn : ASTNode {
     inline ASTFn(Context& parent_ctx, const char* name) : block(parent_ctx), ASTNode(AST_FN), name(name) {}
 };
 
+struct ASTStruct : ASTType {
+    const char* name;
+    TypeList members;
+    inline ASTStruct(const char* name) : ASTType(AST_STRUCT), name(name) {}
+};
+
+struct ASTMemberAccess : ASTNode {
+    ASTNode* lhs;
+    ASTType* type;
+    const char* member_name;
+    inline ASTMemberAccess(ASTNode* lhs, const char* member_name) 
+        : ASTNode(AST_MEMBER_ACCESS), type(nullptr), lhs(lhs), member_name(member_name) {}
+};
+
+struct ASTStructValue : ASTNode {
+    ASTStruct* type;
+
+    // This fucker should store the locations of the individual struct elements
+    inline ASTStructValue(ASTStruct* type) : ASTNode(AST_STRUCT_VALUE), type(type) {}
+};
+
 void print(std::ostream& o, ASTNode* node, bool decl);
 void print(std::ostream& o, ASTPrimitiveType* node);
 void print(std::ostream& o, ASTFn* node, bool decl);
@@ -145,5 +169,7 @@ void print(std::ostream& o, ASTIf* node);
 void print(std::ostream& o, ASTWhile* node);
 void print(std::ostream& o, ASTBlock* bl);
 void print(std::ostream& o, ASTFnCall* node);
+void print(std::ostream& o, ASTStruct* node, bool decl);
+void print(std::ostream& o, ASTMemberAccess* node);
 
 #endif // guard

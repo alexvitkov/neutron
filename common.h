@@ -101,6 +101,7 @@ struct Token {
     u32 line;
     u32 pos_in_line;
 
+    // We need this so we can std::sort tokens
     inline bool operator<(const Token& other) {
         if (line < other.line)
             return true;

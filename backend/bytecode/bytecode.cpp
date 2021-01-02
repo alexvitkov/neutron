@@ -1,24 +1,101 @@
 #include "bytecode.h"
 
 const char* opcode_names[] = {
-    "NONE",
-    "MOV",
-    "RET",
-    "ADD",
-    "JMP",
-    "JZ",
-    "EQ",
-    "CALL",
-    "SUB",
-    "LT",
+    "NONE", "MOV", "RET", "ADD",
+    "JMP", "JZ", "EQ", "CALL",
+    "SUB", "LT",
 };
 
+enum LocPlace : u8 {
+    LOC_NONE = 0,
 
-Loc& location(ASTVar* var) {
-    return *(Loc*)(&var->location);
+    // The location is a fixed offset from the stack base pointer
+    LOC_STACK,
+
+    // Fixed offset relative to (base pointer + stack frame size)
+    // This is used to pass arguments to functions we call
+    // It's needed because our function is not yet compiled and we don't know
+    // how big our stack frame is
+    LOC_NEXTSTACK,
+
+    // The location is described by a label, see CompileContext.label
+    LOC_LABEL,
+
+    // A 64 bit fixed value
+    LOC_VALUE,
+};
+
+struct BCLoc {
+    LocPlace place;
+
+    union {
+        i32 stack_offset;
+        u32 label;
+        u64 value;
+    };
+
+    bool operator ==(const BCLoc& other) const {
+        return place == other.place == value == other.value;
+    }
+    bool operator !=(const BCLoc& other) const {
+        return !(*this == other);
+    }
+};
+
+struct BCInstr {
+    BC_OpCode opcode;
+    BCLoc dst;
+    BCLoc src;
+};
+
+void disassemble(BCInstr* instr);
+
+
+void BytecodeContext::emit(BCInstr i) {
+    instr.push(i);
 }
 
-void disassemble(Instr* instr) {
+BCLoc BytecodeContext::alloc_offset() {
+    BCLoc offset = { .place = LOC_STACK, .stack_offset = frame_depth };
+    frame_depth += 1;
+    return offset;
+}
+
+void BytecodeContext::free_offset(BCLoc loc) {}
+
+u32 BytecodeContext::new_label() {
+    labels.push(0);
+    return labels.size - 1;
+}
+
+// FnData contains a label that we need to call the function 
+// and its frame depth, so we know how much to increment the stack when calling another fn
+BytecodeContext::FnData& BytecodeContext::get_fn_data(ASTNode* node) {
+    u64 l;
+    for (FnData& e : fn_data) {
+        if (e.node == node)
+            return e;
+    }
+    return fn_data.push({ node, new_label() });
+}
+
+void BytecodeContext::put_label(u32 label) {
+    labels[label] = instr.size;
+    // printf("Label%u:\n", label);
+}
+
+void bytecode_disassemble_all(BytecodeContext& ctx) {
+    // TODO this is bad and won't work for long
+    for (u32 i = 0; i < ctx.instr.size; i++) {
+        for (u32 j = 0; j < ctx.labels.size; j++) {
+            if (ctx.labels[j] == i)
+                printf("Label%lu\n", j);
+        }
+        disassemble(&ctx.instr[i]);
+    }
+}
+
+void disassemble(BCInstr* instr) {
     printf("    %-5s", opcode_names[instr->opcode]);
 
     switch (instr->opcode) {
@@ -28,20 +105,20 @@ void disassemble(Instr* instr) {
     }
     switch(instr->dst.place) {
         case LOC_STACK:
-            printf("s%ld, ", instr->dst.stack_offset);
+            printf("s%d, ", instr->dst.stack_offset);
             break;
         case LOC_NEXTSTACK:
-            printf("s[FS+%ld], ", instr->dst.stack_offset);
+            printf("s[FS+%d], ", instr->dst.stack_offset);
             break;
         case LOC_LABEL:
-            printf("Label%d, ", instr->dst.label);
+            printf("Label%u, ", instr->dst.label);
             break;
         default:
             assert(!"Not supported");
     }
     switch(instr->src.place) {
         case LOC_STACK:
-            printf("s%ld\n", instr->src.stack_offset);
+            printf("s%d\n", instr->src.stack_offset);
             break;
         case LOC_VALUE:
             printf("%lu\n", instr->src.value);
@@ -52,12 +129,11 @@ void disassemble(Instr* instr) {
 }
 
 
-void make_stack_frame(CompileContext& c, ASTBlock* block) {
+void make_stack_frame(BytecodeContext& c, ASTBlock* block) {
     for (auto& def : block->ctx.declarations_arr) {
         if (def.node->nodetype == AST_VAR) {
             ASTVar* var = (ASTVar*)def.node;
-            // TODO this shouldnt be stored inside the node itself
-            location(var) = c.alloc_offset();
+            c.locations[var] = c.alloc_offset();
         }
     }
     for (ASTNode*& stmt : block->statements) {
@@ -75,10 +151,10 @@ void make_stack_frame(CompileContext& c, ASTBlock* block) {
     }
 }
 
-Loc lvalue(CompileContext& c, ASTNode* expr) {
+BCLoc lvalue(BytecodeContext& c, ASTNode* expr) {
     switch (expr->nodetype) {
         case AST_VAR:
-            return location((ASTVar*)expr);
+            return c.locations[expr];
         case AST_FN:
             return { .place = LOC_LABEL, .label = c.get_fn_data(expr).label };
         default:
@@ -86,7 +162,7 @@ Loc lvalue(CompileContext& c, ASTNode* expr) {
     }
 }
 
-Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
+BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) {
     switch (expr->nodetype) {
         case AST_BLOCK: {
             ASTBlock* block = (ASTBlock*)expr;
@@ -96,7 +172,7 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
                 if (def.node->nodetype == AST_VAR) {
                     ASTVar* var = (ASTVar*)def.node;
                     if (var->initial_value)
-                        compile_expr(c, var->initial_value, OPC_MOV, location(var));
+                        compile_expr(c, var->initial_value, OPC_MOV, c.locations[(ASTNode*)var]);
                 }
             }
 
@@ -107,14 +183,14 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
         }
         case AST_NUMBER: {
             ASTNumber* num = (ASTNumber*)expr;
-            Loc loc = { .place = LOC_VALUE, .value = num->floorabs };
+            BCLoc loc = { .place = LOC_VALUE, .value = num->floorabs };
             if (opc)
                 c.emit({ .opcode = opc, .dst = dst, .src = loc, });
             return loc;
         }
         case AST_VAR: {
             ASTVar* var = (ASTVar*)expr;
-            Loc loc =  location(var);
+            BCLoc loc =  c.locations[var];
             if (opc)
                 c.emit({ .opcode = opc, .dst = dst, .src = loc, });
             return loc;
@@ -133,47 +209,50 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
                     break;
                 }
                 case OP_DOUBLEEQUALS: {
-                    Loc tmp = c.alloc_offset();
+                    BCLoc tmp = c.alloc_offset();
                     compile_expr(c, bin->lhs, OPC_MOV, dst);
                     compile_expr(c, bin->rhs, OPC_MOV, tmp);
                     c.emit({ .opcode = OPC_EQ, .dst = dst, .src = tmp });
                     c.free_offset(tmp);
                     break;
                 }
-                case '=': {
-                    Loc tmp = c.alloc_offset();
-                    Loc lhs_pos = lvalue(c, bin->lhs);
-                    compile_expr(c, bin->rhs, OPC_MOV, tmp);
-                    c.emit({ .opcode = OPC_MOV, .dst = lhs_pos, .src = tmp });
-                    c.free_offset(tmp);
-                    break;
-                }
                 case '<': {
-                    Loc tmp = c.alloc_offset();
+                    BCLoc tmp = c.alloc_offset();
                     compile_expr(c, bin->lhs, OPC_MOV, dst);
                     compile_expr(c, bin->rhs, OPC_MOV, tmp);
                     c.emit({ .opcode = OPC_LT, .dst = dst, .src = tmp });
                     c.free_offset(tmp);
                     break;
                 }
-                default:
-                    assert(!"Not implemented");
+                default: {
+                    printf("Operator %d not implemented\n", bin->op);
+                    assert(0);
+                }
             }
+            break;
+        }
+        case AST_ASSIGNMENT: {
+            ASTBinaryOp* assign = (ASTBinaryOp*)expr;
+            BCLoc tmp = c.alloc_offset();
+            BCLoc lhs_pos = lvalue(c, assign->lhs);
+            compile_expr(c, assign->rhs, OPC_MOV, tmp);
+            c.emit({ .opcode = OPC_MOV, .dst = lhs_pos, .src = tmp });
+            c.free_offset(tmp);
             break;
         }
         case AST_IF: {
             ASTIf* ifs = (ASTIf*)expr;
-            Loc tmp = c.alloc_offset();
+            BCLoc tmp = c.alloc_offset();
             u32 skip_label = c.new_label();
 
             compile_expr(c, ifs->condition, OPC_MOV, tmp);
 
             c.emit({
-                .opcode = OPC_JZ,
-                .dst = { .place = LOC_LABEL, .label = skip_label },
-                .src = tmp,
-            });
-            
+                    .opcode = OPC_JZ,
+                    .dst = { .place = LOC_LABEL, .label = skip_label },
+                    .src = tmp,
+                    });
+
             c.free_offset(tmp);
             compile_expr(c, &ifs->block, {}, {});
 
@@ -184,7 +263,7 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
             ASTWhile* whiles = (ASTWhile*)expr;
             u32 loop_start = c.new_label();
             u32 loop_end = c.new_label();
-            Loc tmp = c.alloc_offset();
+            BCLoc tmp = c.alloc_offset();
 
             c.put_label(loop_start);
             compile_expr(c, whiles->condition, OPC_MOV, tmp);
@@ -194,7 +273,7 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
                 .dst = { .place = LOC_LABEL, .label = loop_end },
                 .src = tmp,
             });
-            
+
             c.free_offset(tmp);
             compile_expr(c, &whiles->block, {}, {});
 
@@ -216,22 +295,22 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
         }
         case AST_FN_CALL: {
             ASTFnCall* fncall = (ASTFnCall*)expr;
-            Loc fnloc = lvalue(c, fncall->fn);
+            BCLoc fnloc = lvalue(c, fncall->fn);
 
             // Pass the arguments
             for (int i = 0; i < fncall->args.size; i++) {
                 compile_expr(c, fncall->args[i], OPC_MOV, { .place = LOC_NEXTSTACK, .stack_offset = i });
             }
             c.emit({
-                .opcode = OPC_CALL,
-                .dst = fnloc
-            });
+                    .opcode = OPC_CALL,
+                    .dst = fnloc
+                    });
             if (dst.place) {
                 c.emit({
-                    .opcode = opc,
-                    .dst = dst,
-                    .src = { .place = LOC_NEXTSTACK, .stack_offset = -1 }
-                });
+                        .opcode = opc,
+                        .dst = dst,
+                        .src = { .place = LOC_NEXTSTACK, .stack_offset = -1 }
+                        });
             }
             break;
         }
@@ -241,15 +320,15 @@ Loc compile_expr(CompileContext& c, ASTNode* expr, OpCode opc, Loc dst) {
     return {};
 }
 
-void compile_fn(CompileContext& c, ASTFn* fn) {
+void compile_fn(BytecodeContext& c, ASTFn* fn) {
     // Put down a unique label bound to that function
     // so callees know where it is
     c.frame_depth = 0;
 
-    CompileContext::FnData& data = c.get_fn_data(fn);
+    BytecodeContext::FnData& data = c.get_fn_data(fn);
 
     c.put_label(data.label);
-    
+
     u32 start = c.instr.size;
 
     make_stack_frame(c, &fn->block);
@@ -264,7 +343,7 @@ void compile_fn(CompileContext& c, ASTFn* fn) {
     // patch all the instrucitons inside the function that depend on it
     // TODO we should keep a list of them instead of iterating over the entire fn
     for (int i = start; i < c.instr.size; i++) {
-        Instr& in = c.instr[i];
+        BCInstr& in = c.instr[i];
         if (in.dst.place == LOC_NEXTSTACK) {
             in.dst.place = LOC_STACK; 
             // We also reserve a 1 bytes buffer for the return value
@@ -283,7 +362,7 @@ void compile_fn(CompileContext& c, ASTFn* fn) {
 
 }
 
-u64 interpret(CompileContext& c, u32 i) {
+u64 bytecode_interpret(BytecodeContext& c, u32 i) {
     u64 stack[2048];
     u32 bp = 1;
 
@@ -301,7 +380,7 @@ u64 interpret(CompileContext& c, u32 i) {
 
 Next:
     while (i < c.instr.size) {
-        Instr& in = c.instr[i];
+        BCInstr& in = c.instr[i];
         // disassemble(&in);
 
         switch(in.opcode) {
@@ -389,7 +468,7 @@ Next:
     assert(!"Went outside of instruction range");
 }
 
-void compile_all(CompileContext& c) {
+void bytecode_commpile_all(BytecodeContext& c) {
     for (auto& def : c.ctx.declarations_arr) {
         if (def.node->nodetype == AST_FN) {
             compile_fn(c, (ASTFn*)def.node);

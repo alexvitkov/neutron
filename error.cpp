@@ -37,9 +37,9 @@ const char* error_names[] = {
 
     "Incompatible types",
     "Invalid return",
+    "Not an lvalue",
+    "No such member",
 };
-
-
 
 void print_line(Context& global, SourceFile& sf, int line, arr<Token>& red_tokens) {
     if (line < 0 || line > sf.line_start.size)

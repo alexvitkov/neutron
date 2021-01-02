@@ -44,6 +44,17 @@ bool implicit_cast(Context& ctx, ASTNode** dst, ASTType* type) {
     return false;
 }
 
+bool is_valid_lvalue(ASTNode* expr) {
+    switch (expr->nodetype) {
+        case AST_VAR:
+            return true;
+        case AST_MEMBER_ACCESS:
+            return true;
+        default:
+            return false;
+    }
+}
+
 ASTType* gettype(Context& ctx, ASTNode* node) {
     switch (node->nodetype) {
         case AST_PRIMITIVE_TYPE:
@@ -69,6 +80,24 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
             }
             return returntype;
         }
+        case AST_ASSIGNMENT: {
+            ASTBinaryOp* bin = (ASTBinaryOp*)node;
+            if (bin->type)
+                return bin->type;
+
+            ASTType* lhst = gettype(ctx, bin->lhs);
+            ASTType* rhst = gettype(ctx, bin->rhs);
+            MUST (lhst && rhst);
+
+            if (!is_valid_lvalue(bin->lhs)) {
+                ctx.error({ .code = ERR_NOT_AN_LVALUE, .nodes = { lhst, } });
+                return nullptr;
+            }
+
+            if (implicit_cast(ctx, &bin->rhs, lhst))
+                return (bin->type = rhst);
+            break;
+        }
         case AST_BINARY_OP: {
             ASTBinaryOp* bin = (ASTBinaryOp*)node;
             if (bin->type)
@@ -78,18 +107,37 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
             ASTType* rhst = gettype(ctx, bin->rhs);
             MUST (lhst && rhst);
 
+
             if (implicit_cast(ctx, &bin->rhs, lhst))
                 return (bin->type = lhst);
-            if (!(prec[bin->op] & ASSIGNMENT) && implicit_cast(ctx, &bin->lhs, rhst))
+
+            if (implicit_cast(ctx, &bin->lhs, rhst))
                 return (bin->type = rhst);
 
             ctx.error({
                 .code = ERR_INCOMPATIBLE_TYPES,
-                .nodes = {
-                    lhst,
-                    rhst
-                }
+                .nodes = { lhst, rhst }
             });
+            return nullptr;
+        }
+        case AST_MEMBER_ACCESS: {
+            ASTMemberAccess* ma = (ASTMemberAccess*)node;
+            if (ma->type)
+                return ma->type;
+
+            ASTStruct* s = (ASTStruct*)gettype(ctx, ma->lhs);
+            MUST (s);
+            if (s->nodetype != AST_STRUCT) {
+                ctx.error({ .code = ERR_NO_SUCH_MEMBER, });
+                return nullptr;
+            }
+
+            for (auto& member : s->members.entries) {
+                if (!strcmp(member.name, ma->member_name)) {
+                    return member.type;
+                }
+            }
+            ctx.error({ .code = ERR_NO_SUCH_MEMBER, });
             return nullptr;
         }
         default:
@@ -97,6 +145,7 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
             assert(0);
     }
 }
+
 
 bool typecheck(Context& ctx, ASTNode* node) {
     switch (node->nodetype) {
@@ -136,10 +185,11 @@ bool typecheck(Context& ctx, ASTNode* node) {
             }
             return true;
         }
-        case AST_BINARY_OP: {
-            return gettype(ctx, node);
-        }
-        case AST_FN_CALL: {
+        case AST_BINARY_OP:
+        case AST_ASSIGNMENT:
+        case AST_FN_CALL:
+        case AST_MEMBER_ACCESS:
+        {
             return gettype(ctx, node);
         }
         case AST_IF: {
@@ -148,8 +198,15 @@ bool typecheck(Context& ctx, ASTNode* node) {
             MUST (typecheck(ctx, ifs->condition));
             return true;
         }
-        default:
+        case AST_STRUCT: {
+            //ASTStruct* s = (ASTStruct*)node;
+            //for (auto& member : s->members.entries) {
+                // MUST(typecheck(ctx, member.type));
+            //}
             return true;
+        }
+        default:
+            assert(!"Not implemented");
     }
 }
 

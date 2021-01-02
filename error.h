@@ -26,6 +26,8 @@ enum ErrorCode {
     // Typer errors
     ERR_INCOMPATIBLE_TYPES,
     ERR_INVALID_RETURN,
+    ERR_NOT_AN_LVALUE,
+    ERR_NO_SUCH_MEMBER,
 };
 
 enum ErrorSeverity {
