@@ -56,17 +56,15 @@ int main(int argc, const char** argv) {
     bytecode_commpile_all(c);
     bytecode_disassemble_all(c);
 
-    // c.disassemble_all();
-
     // Find main address
-//   u32 mainfn_addr;
-//   if (c.fnaddr.find("main", &mainfn_addr)) {
-//       u64 ret = interpret(c, mainfn_addr);
-//       printf("main returned %lu\n", ret);
-//   }
-//   else {
-//       printf("There is no main function.\n");
-//   }
+    u32 mainfn_addr;
+    if (c.fnaddr.find("main", &mainfn_addr)) {
+        u64 ret = bytecode_interpret(c, mainfn_addr);
+        printf("main returned %lu\n", ret);
+    }
+    else {
+        printf("There is no main function.\n");
+    }
 
     return 0;
 }

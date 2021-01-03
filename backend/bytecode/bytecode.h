@@ -36,7 +36,7 @@ struct BytecodeContext {
 
     void emit(BCInstr i);
 
-    BCLoc alloc_offset();
+    BCLoc alloc_offset(int n);
 
     void free_offset(BCLoc loc);
 

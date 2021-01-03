@@ -62,18 +62,24 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
         case AST_FN:
             assert(!"Function types aren't implemented");
         case AST_VAR:
-            return ((ASTVar*)node)->type;
         case AST_CAST:
-            return ((ASTCast*)node)->newtype;
         case AST_NUMBER:
-            return ((ASTNumber*)node)->type;
+            return ((ASTValue*)node)->type;
         case AST_FN_CALL: {
             ASTFnCall* fncall = (ASTFnCall*)node;
             assert(fncall->fn->nodetype == AST_FN);
             ASTFn* fn = (ASTFn*)fncall->fn;
             ASTType* returntype = (ASTType*)fn->block.ctx.resolve("returntype");
 
-            // TODO type check the arguments
+            if (fncall->args.size != fn->args.entries.size) {
+                ctx.error({ .code = ERR_BAD_FN_CALL });
+                return nullptr;
+            }
+
+            for (int i = 0; i < fn->args.entries.size; i++) {
+                if (!implicit_cast(ctx, &fncall->args[i], fn->args.entries[i].type))
+                    return nullptr;
+            }
 
             if (!returntype) {
                 return &t_void;
@@ -96,7 +102,7 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
 
             if (implicit_cast(ctx, &bin->rhs, lhst))
                 return (bin->type = rhst);
-            break;
+            return nullptr;
         }
         case AST_BINARY_OP: {
             ASTBinaryOp* bin = (ASTBinaryOp*)node;
@@ -106,7 +112,6 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
             ASTType* lhst = gettype(ctx, bin->lhs);
             ASTType* rhst = gettype(ctx, bin->rhs);
             MUST (lhst && rhst);
-
 
             if (implicit_cast(ctx, &bin->rhs, lhst))
                 return (bin->type = lhst);
@@ -132,8 +137,11 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
                 return nullptr;
             }
 
-            for (auto& member : s->members.entries) {
+            for (int i = 0; i < s->members.entries.size; i++) {
+                auto& member = s->members.entries[i];
                 if (!strcmp(member.name, ma->member_name)) {
+                    ma->index = i;
+                    ma->type = member.type;
                     return member.type;
                 }
             }

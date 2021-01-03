@@ -25,6 +25,7 @@ enum ASTNodeType : u8 {
     AST_STRUCT,
     AST_MEMBER_ACCESS,
     AST_STRUCT_VALUE,
+    AST_TEMP_REF,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -48,6 +49,11 @@ struct ASTBlock : ASTNode {
 
 struct ASTType : ASTNode {
     inline ASTType(ASTNodeType nodetype) : ASTNode(nodetype) {}
+};
+
+struct ASTValue : ASTNode {
+    ASTType* type;
+    inline ASTValue(ASTNodeType nodetype, ASTType* type) : ASTNode(nodetype), type(type) {}
 };
 
 struct ASTFnCall : ASTNode {
@@ -74,21 +80,19 @@ struct ASTPrimitiveType : ASTType {
         : ASTType(AST_PRIMITIVE_TYPE), kind(kind), size(size), name(name) {}
 };
 
-struct ASTVar : ASTNode {
+struct ASTVar : ASTValue {
     const char* name;
-    ASTType* type;
     ASTNode* initial_value;
 
     // If the variable is a function argument, this is its index
     i32 argindex;
 
     inline ASTVar(const char* name, ASTType* type, ASTNode* initial_value, int argindex)
-        : ASTNode(AST_VAR), name(name), type(type), initial_value(initial_value), argindex(argindex) {};
+        : ASTValue(AST_VAR, type), name(name), initial_value(initial_value), argindex(argindex) {};
 };
 
-struct ASTNumber : ASTNode {
+struct ASTNumber : ASTValue {
     u64 floorabs;
-    ASTType* type;
 
     ASTNumber(u64 floorabs);
 };
@@ -107,21 +111,19 @@ struct ASTWhile : ASTNode {
     inline ASTWhile(Context& parent_ctx) : ASTNode(AST_WHILE), block(parent_ctx) {}
 };
 
-struct ASTCast : ASTNode {
-    ASTType* newtype;
+struct ASTCast : ASTValue {
     ASTNode* inner;
 
     inline ASTCast(ASTType* newtype, ASTNode* inner)
-        : ASTNode(AST_CAST), newtype(newtype), inner(inner) {};
+        : ASTValue(AST_CAST, newtype), inner(inner) {};
 };
 
-struct ASTBinaryOp : ASTNode {
+struct ASTBinaryOp : ASTValue {
     TokenType op;
-    ASTType* type;
     ASTNode *lhs, *rhs;
 
     inline ASTBinaryOp(TokenType op, ASTNode* lhs, ASTNode* rhs)
-        : ASTNode(AST_BINARY_OP), lhs(lhs), rhs(rhs), op(op), type(nullptr) {}
+        : ASTValue(AST_BINARY_OP, nullptr), lhs(lhs), rhs(rhs), op(op) {}
 };
 
 struct ASTReturn : ASTNode {
@@ -142,12 +144,12 @@ struct ASTStruct : ASTType {
     inline ASTStruct(const char* name) : ASTType(AST_STRUCT), name(name) {}
 };
 
-struct ASTMemberAccess : ASTNode {
+struct ASTMemberAccess : ASTValue {
     ASTNode* lhs;
-    ASTType* type;
+    int index;
     const char* member_name;
     inline ASTMemberAccess(ASTNode* lhs, const char* member_name) 
-        : ASTNode(AST_MEMBER_ACCESS), type(nullptr), lhs(lhs), member_name(member_name) {}
+        : ASTValue(AST_MEMBER_ACCESS, nullptr), index(-1), lhs(lhs), member_name(member_name) {}
 };
 
 struct ASTStructValue : ASTNode {

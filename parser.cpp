@@ -418,8 +418,8 @@ bool skim(Context& ctx, TokenReader& r) {
                                 break;
                         }
                     }
-                    break;
                 }
+                break;
             }
             case TOK_NONE: {
                 r.pos = start_pos;
@@ -714,7 +714,9 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     ASTFnCall* fncall = ctx.alloc<ASTFnCall>(s.output.pop());
 
                     while (r.peek().type != TOK(')')) {
-                        fncall->args.push(parse_expr(ctx, r));
+                        ASTNode* arg = parse_expr(ctx, r);
+                        MUST (arg);
+                        fncall->args.push(arg);
                         if (r.peek().type != TOK(')'))
                             MUST (r.expect(TOK(',')).type);
                     }

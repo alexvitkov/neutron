@@ -42,6 +42,11 @@ struct BCLoc {
     }
 };
 
+struct ASTBCTempRef : ASTValue {
+    BCLoc loc;
+    inline ASTBCTempRef(ASTType* type, BCLoc loc) : ASTValue(AST_TEMP_REF, type), loc(loc) {}
+};
+
 struct BCInstr {
     BC_OpCode opcode;
     BCLoc dst;
@@ -55,9 +60,9 @@ void BytecodeContext::emit(BCInstr i) {
     instr.push(i);
 }
 
-BCLoc BytecodeContext::alloc_offset() {
+BCLoc BytecodeContext::alloc_offset(int n) {
     BCLoc offset = { .place = LOC_STACK, .stack_offset = frame_depth };
-    frame_depth += 1;
+    frame_depth += n;
     return offset;
 }
 
@@ -113,8 +118,10 @@ void disassemble(BCInstr* instr) {
         case LOC_LABEL:
             printf("Label%u, ", instr->dst.label);
             break;
+        case LOC_VALUE:
+            assert(!"LOC_VALUE is not valid as a target");
         default:
-            assert(!"Not supported");
+            assert(!"Invalid value");
     }
     switch(instr->src.place) {
         case LOC_STACK:
@@ -128,12 +135,29 @@ void disassemble(BCInstr* instr) {
     }
 }
 
+int type_size(ASTType* t) {
+    switch (t->nodetype) {
+        case AST_PRIMITIVE_TYPE:
+            return 1;
+        case AST_STRUCT: {
+            ASTStruct* s = (ASTStruct*)t;
+            int size = 0;
+            for(auto& m : s->members.entries) {
+                size += type_size(m.type);
+            }
+            return size;
+        }
+        default:
+            assert(!"Not implemented");
+    }
+}
 
 void make_stack_frame(BytecodeContext& c, ASTBlock* block) {
     for (auto& def : block->ctx.declarations_arr) {
         if (def.node->nodetype == AST_VAR) {
             ASTVar* var = (ASTVar*)def.node;
-            c.locations[var] = c.alloc_offset();
+            ASTType* vt = var->type;
+            c.locations[var] = c.alloc_offset(type_size(var->type));
         }
     }
     for (ASTNode*& stmt : block->statements) {
@@ -147,6 +171,8 @@ void make_stack_frame(BytecodeContext& c, ASTBlock* block) {
             case AST_BLOCK:
                 make_stack_frame(c, (ASTBlock*)stmt);
                 break;
+            default:
+                continue;
         }
     }
 }
@@ -157,10 +183,28 @@ BCLoc lvalue(BytecodeContext& c, ASTNode* expr) {
             return c.locations[expr];
         case AST_FN:
             return { .place = LOC_LABEL, .label = c.get_fn_data(expr).label };
+        case AST_TEMP_REF:
+            return ((ASTBCTempRef*)expr)->loc;
+        case AST_MEMBER_ACCESS: {
+            ASTMemberAccess* ma = (ASTMemberAccess*)expr;
+
+            // loc is the location of the beginning of the struct, aka the first member
+            BCLoc loc = lvalue(c, ma->lhs);
+
+            assert(loc.place == LOC_STACK);
+
+            // We add to loc the index of the member variable
+            // This works for now since all primitives take up 8 bytes on the stack
+            // it will ahve to be changed later when we want to make guarentees
+            // about the way structures are packed
+            loc.stack_offset += ma->index;
+            return loc;
+        }
         default:
-            return {};
+            assert(!"Not supported");
     }
 }
+
 
 BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) {
     switch (expr->nodetype) {
@@ -188,11 +232,36 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
                 c.emit({ .opcode = opc, .dst = dst, .src = loc, });
             return loc;
         }
-        case AST_VAR: {
-            ASTVar* var = (ASTVar*)expr;
-            BCLoc loc =  c.locations[var];
-            if (opc)
-                c.emit({ .opcode = opc, .dst = dst, .src = loc, });
+        case AST_VAR:
+        case AST_MEMBER_ACCESS:
+        case AST_TEMP_REF:
+        {
+            assert(opc);
+            BCLoc loc =  lvalue(c, expr);
+
+            ASTValue* val = (ASTValue*)expr;
+            
+            switch (val->type->nodetype) {
+                case AST_PRIMITIVE_TYPE:
+                    c.emit({ .opcode = opc, .dst = dst, .src = loc, });
+                    break;
+                case AST_STRUCT: {
+                    ASTStruct* s = (ASTStruct*)val->type;
+
+                    for (int i = 0; i < s->members.entries.size; i++) {
+                        auto& entry = s->members.entries[i];
+                        ASTType* mt = entry.type;
+
+                        ASTBCTempRef ref(mt, loc);
+
+                        compile_expr(c, &ref, OPC_MOV, dst);
+                        dst.stack_offset += type_size(mt);
+                        loc.stack_offset += type_size(mt);
+                    }
+                    break;
+                }
+            }
+
             return loc;
         }
         case AST_BINARY_OP: {
@@ -209,7 +278,7 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
                     break;
                 }
                 case OP_DOUBLEEQUALS: {
-                    BCLoc tmp = c.alloc_offset();
+                    BCLoc tmp = c.alloc_offset(1);
                     compile_expr(c, bin->lhs, OPC_MOV, dst);
                     compile_expr(c, bin->rhs, OPC_MOV, tmp);
                     c.emit({ .opcode = OPC_EQ, .dst = dst, .src = tmp });
@@ -217,7 +286,7 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
                     break;
                 }
                 case '<': {
-                    BCLoc tmp = c.alloc_offset();
+                    BCLoc tmp = c.alloc_offset(1);
                     compile_expr(c, bin->lhs, OPC_MOV, dst);
                     compile_expr(c, bin->rhs, OPC_MOV, tmp);
                     c.emit({ .opcode = OPC_LT, .dst = dst, .src = tmp });
@@ -233,7 +302,7 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
         }
         case AST_ASSIGNMENT: {
             ASTBinaryOp* assign = (ASTBinaryOp*)expr;
-            BCLoc tmp = c.alloc_offset();
+            BCLoc tmp = c.alloc_offset(1);
             BCLoc lhs_pos = lvalue(c, assign->lhs);
             compile_expr(c, assign->rhs, OPC_MOV, tmp);
             c.emit({ .opcode = OPC_MOV, .dst = lhs_pos, .src = tmp });
@@ -242,16 +311,16 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
         }
         case AST_IF: {
             ASTIf* ifs = (ASTIf*)expr;
-            BCLoc tmp = c.alloc_offset();
+            BCLoc tmp = c.alloc_offset(1);
             u32 skip_label = c.new_label();
 
             compile_expr(c, ifs->condition, OPC_MOV, tmp);
 
             c.emit({
-                    .opcode = OPC_JZ,
-                    .dst = { .place = LOC_LABEL, .label = skip_label },
-                    .src = tmp,
-                    });
+                .opcode = OPC_JZ,
+                .dst = { .place = LOC_LABEL, .label = skip_label },
+                .src = tmp,
+            });
 
             c.free_offset(tmp);
             compile_expr(c, &ifs->block, {}, {});
@@ -263,7 +332,7 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
             ASTWhile* whiles = (ASTWhile*)expr;
             u32 loop_start = c.new_label();
             u32 loop_end = c.new_label();
-            BCLoc tmp = c.alloc_offset();
+            BCLoc tmp = c.alloc_offset(1);
 
             c.put_label(loop_start);
             compile_expr(c, whiles->condition, OPC_MOV, tmp);
@@ -299,18 +368,19 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
 
             // Pass the arguments
             for (int i = 0; i < fncall->args.size; i++) {
-                compile_expr(c, fncall->args[i], OPC_MOV, { .place = LOC_NEXTSTACK, .stack_offset = i });
+                BCLoc argloc = { .place = LOC_NEXTSTACK, .stack_offset = i };
+                compile_expr(c, fncall->args[i], OPC_MOV, argloc);
             }
             c.emit({
-                    .opcode = OPC_CALL,
-                    .dst = fnloc
-                    });
+                .opcode = OPC_CALL,
+                .dst = fnloc
+            });
             if (dst.place) {
                 c.emit({
-                        .opcode = opc,
-                        .dst = dst,
-                        .src = { .place = LOC_NEXTSTACK, .stack_offset = -1 }
-                        });
+                    .opcode = opc,
+                    .dst = dst,
+                    .src = { .place = LOC_NEXTSTACK, .stack_offset = -1 }
+                });
             }
             break;
         }

@@ -5,7 +5,7 @@
 
 int indent = 0;
 
-ASTNumber::ASTNumber(u64 floorabs) : ASTNode(AST_NUMBER), floorabs(floorabs) {
+ASTNumber::ASTNumber(u64 floorabs) : ASTValue(AST_NUMBER, nullptr), floorabs(floorabs) {
     if (floorabs < 0xFF)
         type = &t_u8;
     else if (floorabs < 0xFFFF)
@@ -182,7 +182,7 @@ void print(std::ostream& o, ASTReturn* node) {
 }
 
 void print(std::ostream& o, ASTCast* node) {
-    print(o, node->newtype, false);
+    print(o, node->type, false);
     o << '(';
     print(o, node->inner, false);
     o << ')';

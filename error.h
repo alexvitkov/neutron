@@ -28,6 +28,7 @@ enum ErrorCode {
     ERR_INVALID_RETURN,
     ERR_NOT_AN_LVALUE,
     ERR_NO_SUCH_MEMBER,
+    ERR_BAD_FN_CALL,
 };
 
 enum ErrorSeverity {
