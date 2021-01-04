@@ -1,4 +1,5 @@
 #include "common.h"
+#include "ast.h"
 #include "error.h"
 
 bool Context::ok() {
@@ -38,6 +39,17 @@ ASTNode* Context::resolve(const char* name) {
         return nullptr;
     }
     return node;
+}
+
+ASTNode* Context::try_resolve(const char* name) {
+    ASTNode* node = resolve(name);
+    if (node)
+        return node;
+    else {
+        ASTUnresolvedId* id = alloc_temp<ASTUnresolvedId>(name, *this);
+        global->unresolved.push(id);
+        return id;
+    }
 }
 
 void Context::error(Error err) {

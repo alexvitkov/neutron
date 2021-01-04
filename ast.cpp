@@ -16,13 +16,13 @@ ASTNumber::ASTNumber(u64 floorabs) : ASTValue(AST_NUMBER, nullptr), floorabs(flo
         type = &t_u64;
 }
 
-void print(std::ostream& o, TypeList& tl) {
-    for (const auto& entry : tl.entries) {
+void print(std::ostream& o, arr<NamedType>& tl) {
+    for (const auto& entry : tl) {
         print(o, entry.type, false);
         o << " " << entry.name;
         o << ", ";
     }
-    if (tl.entries.size)
+    if (tl.size)
         o << "\b\b \b"; // clear the last comma
 }
 

@@ -7,6 +7,7 @@
 GlobalContext global;
 
 void exit_with_error() {
+    printf("Error\n");
 	for (auto& err : global.errors) {
         print(global, err);
 	}
@@ -37,19 +38,20 @@ int main(int argc, const char** argv) {
         exit(1);
 	}
 
-	if (!parse_all_files(global)) {
+	if (!parse_all(global)) {
         exit_with_error();
     }
     
+    if (!typecheck_all(global)) {
+        printf("type checker failed\n");
+        exit_with_error();
+    }
+
     for (const auto& decl : global.declarations_arr) {
         print(std::cout, decl.node, true);
         std::cout << '\n';
     }
 
-    if (!typecheck_all(global)) {
-        printf("type checker failed\n");
-        exit_with_error();
-    }
 
     BytecodeContext c(global);
 

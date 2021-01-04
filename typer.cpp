@@ -55,6 +55,113 @@ bool is_valid_lvalue(ASTNode* expr) {
     }
 }
 
+bool resolve_unresolved_references(ASTNode** nodeptr);
+
+bool resolve_unresolved_references(ASTBlock* block) {
+    for (auto& stmt : block->statements)
+        MUST (resolve_unresolved_references(&stmt));
+    return true;
+}
+
+bool resolve_unresolved_references(ASTNode** nodeptr) {
+    ASTNode* node = *nodeptr;
+    if (!node)
+        return true;
+
+    switch (node->nodetype) {
+        case AST_UNRESOLVED_ID: {
+            ASTUnresolvedId* id = (ASTUnresolvedId*)node;
+            ASTNode* resolved = id->ctx.resolve(id->name);
+            if (!resolved) {
+                id->ctx.error({
+                    .code = ERR_NOT_DEFINED,
+                    .nodes = { id }
+                });
+            }
+            *nodeptr = resolved;
+            return true;
+
+        }
+        case AST_VAR: {
+            ASTVar* var = (ASTVar*)node;
+            MUST (resolve_unresolved_references(&var->initial_value));
+            MUST (resolve_unresolved_references((ASTNode**)&var->type));
+            break;
+        }
+        case AST_CAST: {
+            ASTCast* cast = (ASTCast*)node;
+            MUST (resolve_unresolved_references(&cast->inner));
+            MUST (resolve_unresolved_references((ASTNode**)&cast->type));
+            break;
+        }
+        case AST_FN_CALL: {
+            ASTFnCall* fncall = (ASTFnCall*)node;
+            MUST (resolve_unresolved_references(&fncall->fn));
+            for (auto& arg : fncall->args)
+                MUST (resolve_unresolved_references(&arg));
+            break;
+        }
+        case AST_FN: {
+            ASTFn* fn = (ASTFn*)node;
+            for (auto& arg : fn->args)
+                MUST (resolve_unresolved_references((ASTNode**)&arg.type));
+            MUST (resolve_unresolved_references(&fn->block));
+            break;
+        }
+        case AST_ASSIGNMENT:
+        case AST_BINARY_OP: 
+        {
+            ASTBinaryOp* op = (ASTBinaryOp*)node;
+            MUST (resolve_unresolved_references(&op->lhs));
+            MUST (resolve_unresolved_references(&op->rhs));
+            break;
+        }
+        case AST_RETURN: {
+            ASTReturn* ret = (ASTReturn*)node;
+            MUST (resolve_unresolved_references(&ret->value));
+            break;
+        }
+        case AST_IF: {
+            ASTIf* ifs = (ASTIf*)node;
+            MUST (resolve_unresolved_references(&ifs->block));
+            MUST (resolve_unresolved_references(&ifs->condition));
+            break;
+        }
+        case AST_WHILE: {
+            ASTWhile* whiles = (ASTWhile*)node;
+            MUST (resolve_unresolved_references(&whiles->block));
+            MUST (resolve_unresolved_references(&whiles->condition));
+            break;
+        }
+        case AST_BLOCK: {
+            MUST (resolve_unresolved_references((ASTBlock*)node));
+            break;
+        }
+        case AST_STRUCT: {
+            ASTStruct* str = (ASTStruct*)node;
+            for (auto& mem : str->members)
+                MUST (resolve_unresolved_references((ASTNode**)&mem.type));
+            break;
+        }
+        case AST_MEMBER_ACCESS: {
+            ASTMemberAccess* access = (ASTMemberAccess*)node;
+            MUST (resolve_unresolved_references(&access->lhs));
+            break;
+        }
+        case AST_NONE:
+        case AST_TEMP_REF:
+            assert(!"Not supported");
+
+        case AST_NUMBER:
+        case AST_PRIMITIVE_TYPE:
+            break;
+
+        default:
+            assert(!"Not implemented");
+    }
+    return true;
+}
+
 ASTType* gettype(Context& ctx, ASTNode* node) {
     switch (node->nodetype) {
         case AST_PRIMITIVE_TYPE:
@@ -67,17 +174,19 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
             return ((ASTValue*)node)->type;
         case AST_FN_CALL: {
             ASTFnCall* fncall = (ASTFnCall*)node;
-            assert(fncall->fn->nodetype == AST_FN);
+
             ASTFn* fn = (ASTFn*)fncall->fn;
+            assert(fn->nodetype == AST_FN);
+
             ASTType* returntype = (ASTType*)fn->block.ctx.resolve("returntype");
 
-            if (fncall->args.size != fn->args.entries.size) {
+            if (fncall->args.size != fn->args.size) {
                 ctx.error({ .code = ERR_BAD_FN_CALL });
                 return nullptr;
             }
 
-            for (int i = 0; i < fn->args.entries.size; i++) {
-                if (!implicit_cast(ctx, &fncall->args[i], fn->args.entries[i].type))
+            for (int i = 0; i < fn->args.size; i++) {
+                if (!implicit_cast(ctx, &fncall->args[i], fn->args[i].type))
                     return nullptr;
             }
 
@@ -137,8 +246,8 @@ ASTType* gettype(Context& ctx, ASTNode* node) {
                 return nullptr;
             }
 
-            for (int i = 0; i < s->members.entries.size; i++) {
-                auto& member = s->members.entries[i];
+            for (int i = 0; i < s->members.size; i++) {
+                auto& member = s->members[i];
                 if (!strcmp(member.name, ma->member_name)) {
                     ma->index = i;
                     ma->type = member.type;
@@ -219,6 +328,8 @@ bool typecheck(Context& ctx, ASTNode* node) {
 }
 
 bool typecheck_all(Context& global) {
+    for (auto& decl : global.declarations_arr)
+        MUST (resolve_unresolved_references(&decl.node));
     for (auto& decl : global.declarations_arr)
         MUST (typecheck(global, decl.node));
     return true;

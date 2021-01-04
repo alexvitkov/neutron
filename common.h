@@ -22,6 +22,13 @@
 enum TokenType : u8 {
 	TOK_NONE = 0,
 
+    TOK_OPENCURLY = '{',
+    TOK_CLOSECURLY = '}',
+    TOK_OPENBRACKET = '(',
+    TOK_CLOSEBRACKET = ')',
+    TOK_DOT = '.',
+
+
     // VOLATILE - if you reorder the operators, you have to change 
     // the precedence table in parser.cpp
     OP_PLUSPLUS = 128,
@@ -100,6 +107,10 @@ struct Token {
 
     u32 line;
     u32 pos_in_line;
+
+    union {
+        const char* name;
+    };
 
     // We need this so we can std::sort tokens
     inline bool operator<(const Token& other) {

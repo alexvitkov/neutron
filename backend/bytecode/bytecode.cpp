@@ -142,7 +142,7 @@ int type_size(ASTType* t) {
         case AST_STRUCT: {
             ASTStruct* s = (ASTStruct*)t;
             int size = 0;
-            for(auto& m : s->members.entries) {
+            for(auto& m : s->members) {
                 size += type_size(m.type);
             }
             return size;
@@ -248,8 +248,8 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
                 case AST_STRUCT: {
                     ASTStruct* s = (ASTStruct*)val->type;
 
-                    for (int i = 0; i < s->members.entries.size; i++) {
-                        auto& entry = s->members.entries[i];
+                    for (int i = 0; i < s->members.size; i++) {
+                        auto& entry = s->members[i];
                         ASTType* mt = entry.type;
 
                         ASTBCTempRef ref(mt, loc);
