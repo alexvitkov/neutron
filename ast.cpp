@@ -18,8 +18,8 @@ ASTNumber::ASTNumber(u64 floorabs) : ASTValue(AST_NUMBER, nullptr), floorabs(flo
 
 void print(std::ostream& o, TypeList& tl) {
     for (const auto& entry : tl.entries) {
-        o << entry.name << ": ";
         print(o, entry.type, false);
+        o << " " << entry.name;
         o << ", ";
     }
     if (tl.entries.size)

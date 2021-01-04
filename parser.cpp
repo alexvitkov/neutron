@@ -473,12 +473,11 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, TypeList* tl
     }
 
     while (true) {
-        Token name = r.expect(TOK_ID);
-        MUST (name.type);
-        MUST (r.expect(TOK(':')).type);
-
         ASTType* type;
         MUST (type = parse_type(ctx, r));
+
+        Token name = r.expect(TOK_ID);
+        MUST (name.type);
 
         tl->entries.push(TypeList::Entry { .name = malloc_token_name(r, name), .type = type });
 

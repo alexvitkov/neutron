@@ -254,9 +254,10 @@ BCLoc compile_expr(BytecodeContext& c, ASTNode* expr, BC_OpCode opc, BCLoc dst) 
 
                         ASTBCTempRef ref(mt, loc);
 
+                        int mt_size = type_size(mt);
                         compile_expr(c, &ref, OPC_MOV, dst);
-                        dst.stack_offset += type_size(mt);
-                        loc.stack_offset += type_size(mt);
+                        dst.stack_offset += mt_size;
+                        loc.stack_offset += mt_size;
                     }
                     break;
                 }
