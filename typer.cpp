@@ -77,6 +77,7 @@ bool resolve_unresolved_references(ASTNode** nodeptr) {
                     .code = ERR_NOT_DEFINED,
                     .nodes = { id }
                 });
+                return false;
             }
             *nodeptr = resolved;
             return true;

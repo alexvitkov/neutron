@@ -5,3 +5,6 @@ run.sh
 test.n
 compile_commands.json
 .cache
+backend/llvm
+Makefile
+build
