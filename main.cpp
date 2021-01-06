@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "error.h"
 #include "backend/bytecode/bytecode.h"
+#include "backend/llvm/llvm.h"
 
 GlobalContext global;
 
@@ -16,6 +17,9 @@ void exit_with_error() {
 
 
 int main(int argc, const char** argv) {
+    llvm_main();
+    return 0;
+
 	bool dd = false;
 	for (int i = 1; i < argc; i++) {
 		const char* a = argv[i];

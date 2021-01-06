@@ -49,8 +49,7 @@ struct ASTBCTempRef : ASTValue {
 
 struct BCInstr {
     BC_OpCode opcode;
-    BCLoc dst;
-    BCLoc src;
+    BCLoc dst, src;
 };
 
 void disassemble(BCInstr* instr);
@@ -507,6 +506,7 @@ Next:
         }
         switch (in.dst.place) {
             case LOC_STACK:
+            case LOC_TEMP:
                 dst = (u64*)&stack[bp + in.dst.stack_offset];
                 break;
             default:

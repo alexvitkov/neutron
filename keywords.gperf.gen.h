@@ -31,7 +31,7 @@
 
 #line 1 "/home/alex/src/neutron/keywords.gperf"
 
-#include "common.h" 
+#include "common.h"
 #line 7 "/home/alex/src/neutron/keywords.gperf"
 struct tok { const char* name; TokenType type; };
 

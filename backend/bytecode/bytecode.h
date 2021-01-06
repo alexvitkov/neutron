@@ -36,9 +36,9 @@ struct BytecodeContext {
 
     void emit(BCInstr i);
 
-    BCLoc alloc_offset(int n);
+    BCLoc alloc_temp(int n);
 
-    void free_offset(BCLoc loc);
+    void free_temp(BCLoc loc);
 
     u32 new_label();
 
