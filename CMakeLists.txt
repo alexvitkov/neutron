@@ -14,7 +14,7 @@ else()
 endif()
 
 find_package(LLVM
-    PATHS deps/llvm-11.0.0-src/build
+    #PATHS deps/llvm-11.0.0-src/build
     CONFIG)
 
 # If we don't find LLVM under our deps tree, try to use the system-provided LLVM
@@ -25,13 +25,14 @@ if (NOT LLVM_FOUND)
     message(WARNING "Using system LLVM at ${LLVM_DIR}")
 endif()
 
-include_directories(${LLVM_INCLUDE_DIRS})
-add_definitions(${LLVM_DEFINITIONS})
-
 add_executable(neutron 
     all.cpp 
     ${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h)
 
-llvm_map_components_to_libnames(llvm_libs support core irreader)
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
 
-target_link_libraries(neutron ${llvm_libs})
+llvm_map_components_to_libnames(hoho support core bitreader 
+    x86asmparser x86codegen x86desc x86disassembler x86info)
+
+target_link_libraries(neutron ${hoho})

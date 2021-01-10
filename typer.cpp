@@ -269,6 +269,15 @@ bool typecheck(Context& ctx, ASTNode* node) {
     switch (node->nodetype) {
         case AST_BLOCK: {
             ASTBlock* block = (ASTBlock*)node;
+
+            // TODO this is a band aid
+            // The real solution is to split AST_VAR
+            // into AST_VAR_DECL and AST_VAR_REF
+            for (const auto& decl : block->ctx.declarations_arr) {
+                if (decl.node->nodetype == AST_VAR)
+                    MUST (typecheck(block->ctx, decl.node));
+            }
+
             for (const auto& stmt : block->statements)
                 MUST (typecheck(block->ctx, stmt));
             return true;
@@ -276,6 +285,17 @@ bool typecheck(Context& ctx, ASTNode* node) {
         case AST_FN: {
             ASTFn* fn = (ASTFn*)node;
             return typecheck(fn->block.ctx, &fn->block);
+        }
+        // TODO I should probably get rid of initial_value
+        // and treat it like an assignment statment
+        case AST_VAR:{
+            ASTVar* var = (ASTVar*)node;
+            if (var->initial_value) {
+                ASTType* rhst = gettype(ctx, var->initial_value);
+                MUST (rhst);
+                MUST (implicit_cast(ctx, &var->initial_value, var->type));
+                return true;
+            }
         }
         case AST_RETURN: {
             // TODO child void functions right now inherit the returntype of the 
@@ -331,7 +351,9 @@ bool typecheck(Context& ctx, ASTNode* node) {
 bool typecheck_all(Context& global) {
     for (auto& decl : global.declarations_arr)
         MUST (resolve_unresolved_references(&decl.node));
+
     for (auto& decl : global.declarations_arr)
         MUST (typecheck(global, decl.node));
+
     return true;
 }

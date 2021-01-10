@@ -240,4 +240,45 @@ struct arr {
 
 };
 
+#define BUCKET_SIZE 16
+
+template<typename T>
+struct bucketed_arr {
+    arr<T*> buckets;
+    u32 last_bucket_size = 0;
+
+    bucketed_arr() {
+        new_bucket();
+    }
+
+    void new_bucket() {
+        T* bucket = (T*)malloc(sizeof(T) * BUCKET_SIZE);
+        buckets.push(bucket);
+        last_bucket_size = 0;
+    }
+
+    T operator[](u32 i) const {
+        u32 bucket = i % BUCKET_SIZE;
+        u32 index = i / BUCKET_SIZE;
+
+        return buckets[bucket][index];
+    }
+
+    T& operator[](u32 i) {
+        u32 bucket = i % BUCKET_SIZE;
+        u32 index = i / BUCKET_SIZE;
+
+        return buckets[bucket][index];
+    }
+
+    T& push(T value) {
+        if (last_bucket_size >= BUCKET_SIZE)
+            new_bucket();
+
+        T& ref = buckets.last()[last_bucket_size++];
+        ref = value;
+        return ref;
+    }
+};
+
 #endif // guard
