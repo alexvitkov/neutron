@@ -2,7 +2,6 @@
 #define ERROR_H
 
 #include "common.h"
-#include "context.h"
 #include "ds.h"
 #include "sourcefile.h"
 
@@ -42,6 +41,7 @@ struct Error {
     arr<ASTNode*> nodes;
 };
 
-void print(Context& global, Error& err);
+struct Context;
+void print_err(Context& global, Error& err);
 
 #endif // guard

@@ -209,8 +209,13 @@ bool tokenize(Context& global, SourceFile &s) {
                     .pos_in_line = (u32)(word_start - line_start),
 				};
 
-                if (tt == TOK_ID)
-                    t.name = strndup(s.buffer + word_start, i - word_start);
+                if (tt == TOK_ID) {
+                    // TODO a more sane allocation is needed here
+                    u64 length = i - word_start;
+                    char* word = (char*)malloc(length);
+                    memcpy(word, s.buffer + word_start, length);
+                    t.name = word;
+                }
 
                 s.tokens.push(t);
 				state = NONE;

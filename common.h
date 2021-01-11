@@ -1,10 +1,12 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
 #include <string>
+
 
 #define u8  uint8_t
 #define u16 uint16_t

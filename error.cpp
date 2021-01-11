@@ -98,7 +98,7 @@ void print_code_segment(Context& global, arr<Token>& tokens) {
     }
 }
 
-void print(Context& global, Error& err) {
+void print_err(Context& global, Error& err) {
     red();
     printf("Fatal: ");
     resetstyle();

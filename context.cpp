@@ -2,6 +2,10 @@
 #include "ast.h"
 #include "error.h"
 
+Context::Context(Context* parent)
+    : parent(parent), global(parent ? parent->global : (GlobalContext*)this) { }
+
+
 bool Context::ok() {
     for (const auto& err : global->errors) {
         if (err.severity == SEVERITY_FATAL)

@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "ds.h"
+#include "error.h"
 
 struct GlobalContext;
 struct ASTUnresolvedId;
@@ -35,9 +36,8 @@ struct Context {
 
     bool declare(const char* name, ASTNode* value, Token nameToken);
 
-    inline Context(Context* parent)
-        : parent(parent), global(parent ? parent->global : (GlobalContext*)this) { }
-
+    Context(Context* parent);
+    
     Context(Context&) = delete;
     Context(Context&&) = delete;
 

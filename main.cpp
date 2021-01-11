@@ -10,7 +10,7 @@ GlobalContext global;
 void exit_with_error() {
     printf("Error\n");
 	for (auto& err : global.errors) {
-        print(global, err);
+        print_err(global, err);
 	}
     exit(1);
 }
