@@ -2,17 +2,6 @@
 
 #include <algorithm>
 
-void dim() {
-    printf("\e[2m");
-}
-
-void red() {
-    printf("\e[31;1m");
-}
-
-void resetstyle() {
-    printf("\e[0m");
-}
 
 enum VirtualTokens {
     VIRT_MISSING_TYPE_SPECIFIER = 2,
@@ -45,9 +34,9 @@ void print_line(Context& global, SourceFile& sf, int line, arr<Token>& red_token
     if (line < 0 || line > sf.line_start.size)
         return;
 
-    dim();
+    std::cout << dim;
     printf(" %*d │ ", 5, line + 1);
-    resetstyle();
+    std::cout << resetstyle;
 
     u64 line_start = sf.line_start[line];
 
@@ -55,21 +44,18 @@ void print_line(Context& global, SourceFile& sf, int line, arr<Token>& red_token
         for (Token& t : red_tokens) {
             if (t.file == sf.id && t.line == line && t.pos_in_line == i - line_start) {
                 if (t.virt) {
-                    red();
-                    printf("%s", virt_tokens_text[t.virt]);
-                    resetstyle();
+                    std::cout << red << virt_tokens_text[t.virt] << resetstyle;
                 }
                 else {
-                    red();
+                    std::cout << red;
                 }
             }
             if (t.file == sf.id && t.line == line && (t.pos_in_line == i  - t.length - line_start) && !t.virt)
-                resetstyle();
+                std::cout << resetstyle;
         }
         putc(sf.buffer[i], stdout);
     }
-    resetstyle();
-    putc('\n', stdout);
+    std::cout << resetstyle << '\n';
 }
 
 
@@ -99,14 +85,12 @@ void print_code_segment(Context& global, arr<Token>& tokens) {
 }
 
 void print_err(Context& global, Error& err) {
-    red();
-    printf("Fatal: ");
-    resetstyle();
+    std::cout << red << "Fatal: " << resetstyle;
 
     switch (err.code) {
 
         case ERR_ALREADY_DEFINED: {
-            printf("%s is defined multiple times:\n", "asdf");
+            std::cout << err.tokens[0].name << " is defined multiple times:\n";
             print_code_segment(global, err.tokens);
             break;
         }

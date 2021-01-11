@@ -20,7 +20,7 @@ Precompiled LLVM binaries are provided for Windows 10 x64.
 
 The only target this LLVM build supports is X86 and .pdb files are removed to reduce size.
 
-https://drive.google.com/file/d/1HgwBhW5KGRtVyhaSF5612nx_YbPguEtc/view?usp=sharing (1.4G)
+https://drive.google.com/file/d/13MR7SfBGOgTd3C6sdp9iWaL_lQ6T_S7D/view?usp=sharing (1.4G)
 
 
 ## Compiling LLVM from source on Windows

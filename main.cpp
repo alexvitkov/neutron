@@ -2,6 +2,7 @@
 #include "typer.h"
 #include "ast.h"
 #include "error.h"
+#include "util.h"
 #include "backend/tir/tir.h"
 #include "backend/llvm/llvm.h"
 
@@ -13,14 +14,6 @@ void exit_with_error() {
         print_err(global, err);
 	}
     exit(1);
-}
-
-void redd() {
-    printf("\e[31;1m");
-}
-
-void resetstylee() {
-    printf("\e[0m");
 }
 
 const char* output_file;
@@ -80,7 +73,8 @@ bool parse_args(int argc, const char** argv) {
     return true;
 }
 
-int main(int argc, const char** argv) { 
+int main(int argc, const char** argv) {
+    init_utils();
 
     if (!parse_args(argc, argv)) {
         return 1;
@@ -101,9 +95,7 @@ int main(int argc, const char** argv) {
     }
 
     // Print the source code
-    redd();
-    printf("----------AST----------\n");
-    resetstylee();
+    std::cout << red << "--------- AST ---------\n" << resetstyle;
 
     for (const auto& decl : global.declarations_arr) {
         print(std::cout, decl.node, true);
@@ -114,9 +106,7 @@ int main(int argc, const char** argv) {
     t_c.compile_all();
 
     // Print the TIR
-    redd();
-    printf("\n----------TIR----------\n");
-    resetstylee();
+    std::cout << red << "--------- TIR ---------\n" << resetstyle;
 
     for (auto& kvp : t_c.fns) {
         printf("%s:\n", kvp.key->name);
@@ -126,9 +116,7 @@ int main(int argc, const char** argv) {
     }
 
     // Generate the 
-    redd();
-    printf("\n----------LLVM IR----------\n");
-    resetstylee();
+    std::cout << red << "------- LLVM IR -------\n" << resetstyle;
     fflush(stdout);
 
     LLVM_Context lllvmcon(t_c);

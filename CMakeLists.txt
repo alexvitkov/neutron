@@ -13,19 +13,21 @@ else()
     message(WARNING "gperf not found, keywords.gperf.gen.h won't be generated if you modify the keywords.gperf file")
 endif()
 
-add_executable(neutron 
+add_executable(neutron
 	main.cpp
-	ast.cpp
-	context.cpp
-	ds.cpp
-	error.cpp
+	ast.h ast.cpp
+	context.h context.cpp
+	ds.h ds.cpp
+	error.h error.cpp
 	parser.cpp
-	sourcefile.cpp
-	typer.cpp
-    backend/tir/tir.cpp
-	backend/llvm/llvm.cpp
+	sourcefile.h sourcefile.cpp
+	typer.h typer.cpp
+    backend/tir/tir.h backend/tir/tir.cpp
+	backend/llvm/llvm.h backend/llvm/llvm.cpp
+	util.h util.cpp
 	${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h
 )
+
 set_property(
 	TARGET neutron 
 	PROPERTY CXX_STANDARD 20

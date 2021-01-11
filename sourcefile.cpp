@@ -6,7 +6,7 @@ int add_source(const char* filename) {
 	FILE* f;
 	SourceFile sf;
 
-	if (!(f = fopen(filename, "r"))) {
+	if (!(f = fopen(filename, "rb"))) {
 		return -1;
 	}
 
@@ -27,6 +27,6 @@ int add_source(const char* filename) {
 	sf.id = sources.size;
     sf.filename = filename;
 
-	sources.push(sf);
+	sources.push(std::move(sf));
 	return sf.id;
 }

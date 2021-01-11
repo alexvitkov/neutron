@@ -202,7 +202,13 @@ struct arr {
         return *this;
     }
 
-    arr& operator= (arr&& other) = delete;
+    arr& operator= (arr&& other) {
+        buffer = other.buffer;
+        size = other.size;
+        capacity = other.capacity;
+        other.buffer = nullptr;
+        return *this;
+    }
 
     void copy(const arr& other) {
         size = other.size;
@@ -222,7 +228,8 @@ struct arr {
     T& push(T value) {
         if (size >= capacity)
             realloc();
-        return (buffer[size++] = value);
+        buffer[size++] = std::move(value);
+        return buffer[size - 1];
     }
 
     T pop() {
