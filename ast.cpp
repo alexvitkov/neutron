@@ -98,7 +98,12 @@ void print(std::ostream& o, AST_Fn* node, bool decl) {
             print(o, rettype, false);
         }
         o << ' ';
-        print(o, &node->block);
+
+        if (fn->is_extern) {
+            o << ";\n";
+        } else {
+            print(o, &node->block);
+        }
     }
     else {
         o << node->name;

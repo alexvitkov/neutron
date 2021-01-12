@@ -4,23 +4,54 @@
 using namespace llvm;
 
 LLVM_Context::LLVM_Context(TIR_Context& tirc) : t_c(tirc), mod("ntrmod", lc), builder(lc) {
-    types.insert(&t_bool, IntegerType::get(lc, 1));
-    types.insert(&t_u8,   IntegerType::get(lc, 8));
-    types.insert(&t_u16,  IntegerType::get(lc, 16));
-    types.insert(&t_u32,  IntegerType::get(lc, 32));
-    types.insert(&t_u64,  IntegerType::get(lc, 64));
-    types.insert(&t_i8,   IntegerType::get(lc, 8));
-    types.insert(&t_i16,  IntegerType::get(lc, 16));
-    types.insert(&t_i32,  IntegerType::get(lc, 32));
-    types.insert(&t_i64,  IntegerType::get(lc, 64));
-    types.insert(&t_f32,  Type::getFloatTy(lc));
-    types.insert(&t_f64,  Type::getFloatTy(lc));
+    translated_types.insert(&t_bool, IntegerType::get(lc, 1));
+    translated_types.insert(&t_u8,   IntegerType::get(lc, 8));
+    translated_types.insert(&t_u16,  IntegerType::get(lc, 16));
+    translated_types.insert(&t_u32,  IntegerType::get(lc, 32));
+    translated_types.insert(&t_u64,  IntegerType::get(lc, 64));
+    translated_types.insert(&t_i8,   IntegerType::get(lc, 8));
+    translated_types.insert(&t_i16,  IntegerType::get(lc, 16));
+    translated_types.insert(&t_i32,  IntegerType::get(lc, 32));
+    translated_types.insert(&t_i64,  IntegerType::get(lc, 64));
+    translated_types.insert(&t_f32,  Type::getFloatTy(lc));
+    translated_types.insert(&t_f64,  Type::getFloatTy(lc));
+}
+
+llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
+    llvm::Type* t;
+    if (translated_types.find(type, &t))
+        return t;
+
+    switch (type->nodetype) {
+        case AST_FN_TYPE: {
+            AST_FnType* fntype = (AST_FnType*)type;
+
+            arr<llvm::Type*> l_param_types;
+
+            for (auto& param : fntype->param_types)
+                l_param_types.push(translate_type(param));
+
+            llvm::Type* returntype = translate_type(fntype->returntype);
+
+            FunctionType* l_fn_type = FunctionType::get(
+                    returntype, 
+                    ArrayRef<llvm::Type*>(l_param_types.buffer, l_param_types.size),
+                    false
+            );
+
+            translated_types[type] = l_fn_type;
+            return l_fn_type;
+        }
+        default:
+            assert(!"Not implemented");
+    }
+    
 }
 
 void tir_to_llvm_val(LLVM_Context& c, TIR_Value* val, llvm::Value** out) {
     switch (val->valuespace) {
         case TVS_VALUE: {
-            llvm::Type* l_type = c.types[val->type];
+            llvm::Type* l_type = c.translated_types[val->type];
             assert(l_type);
             *out = ConstantInt::get(l_type, val->offset, false);
             break;
@@ -44,8 +75,6 @@ void tir_to_llvm_val(LLVM_Context& c, TIR_Value* val, llvm::Value** out) {
 
 Function* LLVM_Context::compile_fn(TIR_Function* fn) {
 
-    FunctionType* l_fn_type = FunctionType::get(types[&t_i32], false);
-
     /*
     Function::arg_iterator args = mul_add->arg_begin();
     Value* x = args++;
@@ -56,7 +85,15 @@ Function* LLVM_Context::compile_fn(TIR_Function* fn) {
     z->setName("z");
     */
 
-    Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::WeakAnyLinkage, "main", mod);
+    const char* fn_name = fn->ast_fn->name;
+
+    llvm::FunctionType* l_fn_type = (llvm::FunctionType*)translate_type(fn->ast_fn->type);
+
+    if (fn->ast_fn->is_extern) {
+        return Function::Create(l_fn_type, llvm::GlobalValue::ExternalLinkage, fn_name, mod);
+    }
+
+    Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::WeakAnyLinkage, fn_name, mod);
 
     BasicBlock* l_bb = BasicBlock::Create(lc, "entry", l_fn);
 
@@ -140,7 +177,7 @@ void insert_entry_boilerplate(LLVM_Context& c, Function* l_main) {
     Type* l_void_type = Type::getVoidTy(c.lc);
 
     // NOTE we're assuming libc int == i32
-    Type* l_exit_params[] = { c.types[&t_i32] };
+    Type* l_exit_params[] = { c.translated_types[&t_i32] };
 
     FunctionType* l_exit_type     = FunctionType::get(l_void_type, ArrayRef<Type*>(l_exit_params, 1), false);
     FunctionType* l_entry_fn_Type = FunctionType::get(l_void_type, false);
@@ -162,7 +199,9 @@ void LLVM_Context::compile_all() {
 
     for (auto& kvp : t_c.fns) {
         TIR_Function* t_fn = kvp.value;
-        l_main = compile_fn(t_fn);
+        auto l_fn = compile_fn(t_fn);
+        if (!strcmp(t_fn->ast_fn->name, "main"))
+            l_main = l_fn;
     }
 
     insert_entry_boilerplate(*this, l_main);

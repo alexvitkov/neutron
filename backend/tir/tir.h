@@ -56,13 +56,15 @@ struct TIR_Context {
 
 struct TIR_Function {
     TIR_Context& c;
+    AST_Fn* ast_fn;
+
     TIR_Value retval = { .valuespace = TVS_RET_VALUE };
     TIR_Block* writepoint;
     TIR_Block* entry;
     u64 temp_offset = 0;
     map<AST_Node*, TIR_Value*> valmap;
 
-    TIR_Function(TIR_Context& c) : c(c) {};
+    TIR_Function(TIR_Context& c, AST_Fn* fn) : ast_fn(fn), c(c) {};
 
     TIR_Value* alloc_temp(AST_Type* type);
     TIR_Value* alloc_val(TIR_Value val);

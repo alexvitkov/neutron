@@ -57,15 +57,19 @@ int main(int argc, const char** argv) {
     t_c.compile_all();
 
     // Print the TIR
-    
     if (debug_output) {
         std::cout << red << "\n--------- TIR ---------\n" << resetstyle;
 
         for (auto& kvp : t_c.fns) {
             printf("%s:\n", kvp.key->name);
-            TIR_Block* block = kvp.value->entry;
-            for (auto& instr : block->instructions)
-                std::cout << instr;
+
+            if (kvp.value->ast_fn->is_extern)  {
+                printf("    extern\n");
+            } else {
+                TIR_Block* block = kvp.value->entry;
+                for (auto& instr : block->instructions)
+                    std::cout << instr;
+            }
         }
     }
 

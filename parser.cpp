@@ -515,6 +515,15 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         fn->block.ctx.declare(entry.name, (AST_Node*)decl, {});
     }
 
+    // If it's a declaration without body, it's an extern fn
+    if (decl) {
+        if (r.peek().type == ';') {
+            r.pop();
+            fn->is_extern = true;
+            return fn;
+        }
+    }
+
     MUST (parse_block(fn->block, r));
     return fn;
 }

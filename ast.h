@@ -158,6 +158,7 @@ struct AST_Fn : AST_Value {
     const char* name;
     arr<NamedType> args;
     AST_Block block;
+    bool is_extern = false;
 
     inline AST_Fn(Context& parent_ctx, const char* name) 
         : AST_Value(AST_FN, nullptr), block(parent_ctx), name(name) {}

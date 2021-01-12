@@ -191,17 +191,19 @@ void TIR_Context::compile_all() {
             case AST_FN: {
                 AST_Fn* fn = (AST_Fn*)decl.node;
                 
-                TIR_Function* tirfn = new TIR_Function(*this);
+                TIR_Function* tirfn = new TIR_Function(*this, fn);
 
                 AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
                 if (rettype) 
                     tirfn->retval.type = rettype;
 
-                TIR_Block* tirbl = (TIR_Block*)compile_node(*tirfn, &fn->block, nullptr);
-
-                tirfn->entry = tirbl;
+                if (!fn->is_extern) {
+                    TIR_Block* tirbl = (TIR_Block*)compile_node(*tirfn, &fn->block, nullptr);
+                    tirfn->entry = tirbl;
+                }
 
                 fns.insert(fn, tirfn);
+
                 break;
             }
             default:
