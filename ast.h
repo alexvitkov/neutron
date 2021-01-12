@@ -27,6 +27,7 @@ enum AST_NodeType : u8 {
     AST_MEMBER_ACCESS = 0x0C,
     AST_TEMP_REF      = 0x0D,
     AST_UNRESOLVED_ID = 0x0E,
+    AST_DEREFERENCE   = 0x0F,
 
     // Be careful, if there are too many nodes
     // they can overflow into the AST_TYPES section
@@ -35,6 +36,7 @@ enum AST_NodeType : u8 {
     AST_STRUCT         = 0x01 | AST_TYPE_BIT,
 	AST_PRIMITIVE_TYPE = 0x02 | AST_TYPE_BIT,
     AST_FN_TYPE        = 0x03 | AST_TYPE_BIT,
+    AST_POINTER_TYPE   = 0x04 | AST_TYPE_BIT,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -96,6 +98,12 @@ struct AST_FnType : AST_Type {
     arr<AST_Type*> param_types;
 
     inline AST_FnType() : AST_Type(AST_FN_TYPE) {}
+};
+
+struct AST_PointerType : AST_Type {
+    AST_Type* pointed_type;
+    inline AST_PointerType(AST_Type* pointed_type) 
+        : AST_Type(AST_POINTER_TYPE), pointed_type(pointed_type) {}
 };
 
 struct AST_Var : AST_Value {
@@ -178,6 +186,13 @@ struct AST_MemberAccess : AST_Value {
         : AST_Value(AST_MEMBER_ACCESS, nullptr), index(-1), lhs(lhs), member_name(member_name) {}
 };
 
+struct AST_Dereference : AST_Value {
+    AST_Value* ptr;
+
+    inline AST_Dereference(AST_Value* ptr) 
+        : AST_Value(AST_DEREFERENCE, nullptr), ptr(ptr) {}
+};
+
 void print(std::ostream& o, AST_Node* node, bool decl);
 void print(std::ostream& o, AST_PrimitiveType* node);
 void print(std::ostream& o, AST_Fn* node, bool decl);
@@ -192,5 +207,6 @@ void print(std::ostream& o, AST_Block* bl);
 void print(std::ostream& o, AST_FnCall* node);
 void print(std::ostream& o, AST_Struct* node, bool decl);
 void print(std::ostream& o, AST_MemberAccess* node);
+void print(std::ostream& o, AST_PointerType* node);
 
 #endif // guard

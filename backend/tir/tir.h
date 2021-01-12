@@ -18,6 +18,8 @@ enum TIR_OpCode : u8 {
     TOPC_RET,
     TOPC_MOV,
     TOPC_CALL,
+    TOPC_LOAD,
+    TOPC_STORE,
 };
 
 struct TIR_Value {
@@ -40,6 +42,7 @@ struct TIR_Instruction {
         } un;
 
         struct {
+            TIR_Value* dst;
             AST_Fn* fn;
             arr_ref<TIR_Value*> args;
         } call;

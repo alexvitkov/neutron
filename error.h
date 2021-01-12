@@ -30,6 +30,7 @@ enum ErrorCode {
     ERR_NO_SUCH_MEMBER,
     ERR_BAD_FN_CALL,
     ERR_INVALID_TYPE,
+    ERR_INVALID_DEREFERENCE,
 };
 
 enum ErrorSeverity {

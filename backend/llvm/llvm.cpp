@@ -39,8 +39,16 @@ llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
                     false
             );
 
-            translated_types[type] = l_fn_type;
+            translated_types.insert(type, l_fn_type);
             return l_fn_type;
+        }
+        case AST_POINTER_TYPE: {
+            AST_PointerType* pt = (AST_PointerType*)type;
+            llvm::Type* l_pointed_type = translate_type(pt->pointed_type);
+            llvm::Type* l_pt = PointerType::get(l_pointed_type, 0);
+
+            translated_types.insert(type, l_pt);
+            return l_pt;
         }
         default:
             assert(!"Not implemented");
@@ -69,7 +77,6 @@ void translate_value(LLVM_Context& c, TIR_Value* val, llvm::Value** out) {
     /*
     TVS_DISCARD = 0x00,
     TVS_ARGUMENT,
-    TVS_NEXTARGUMENT,
     */
 }
 
@@ -130,7 +137,7 @@ Function* LLVM_Context::compile_fn(TIR_Function* fn) {
                 llvm::Function* l_callee = (llvm::Function*)definitions[callee];
                 assert(l_callee); // TODO
 
-                u32 argc =  instr.call.args.size;
+                u32 argc = instr.call.args.size;
 
                 llvm::Value** args = (llvm::Value**)malloc(sizeof(llvm::Value*) * argc);
 
@@ -140,8 +147,34 @@ Function* LLVM_Context::compile_fn(TIR_Function* fn) {
                     args[i] = l_arg;
                 }
 
-                builder.CreateCall(l_callee, ArrayRef<llvm::Value*>(args, argc));
+                llvm::Value* l_result = builder.CreateCall(l_callee, ArrayRef<llvm::Value*>(args, argc));
 
+                if (instr.call.dst) {
+                    values[instr.un.dst] = l_result;
+                }
+
+                break;
+            }
+            case TOPC_STORE: {
+                // TODO ERROR this will fail if the pointer is uninitialized
+                // This is undefined behaviour anyway as we're deref'ing an
+                // uninitialized pointer, the typer should probably catch this
+                llvm::Value *l_dst_ptr = nullptr, *l_src = nullptr;
+
+                translate_value(*this, instr.un.dst, &l_dst_ptr);
+                translate_value(*this, instr.un.src, &l_src);
+
+                builder.CreateStore(l_src, l_dst_ptr, false);
+                break;
+            }
+            case TOPC_LOAD: {
+                llvm::Value *dst = nullptr, *src = nullptr;
+
+                translate_value(*this, instr.un.src, &src);
+
+                llvm::Value* l_val = builder.CreateLoad(src);
+
+                values[instr.un.dst] = l_val;
                 break;
             }
             default:

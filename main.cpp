@@ -71,6 +71,7 @@ int main(int argc, const char** argv) {
                     std::cout << instr;
             }
         }
+        std::cout.flush();
     }
 
     if (debug_output) {

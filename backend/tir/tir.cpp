@@ -20,8 +20,9 @@ TIR_Value* TIR_Function::alloc_val(TIR_Value val) {
 }
 
 std::ostream& operator<< (std::ostream& o, TIR_Value& val) {
+    o << dim;
     print(o, val.type, false);
-    o << ' ';
+    o << resetstyle << ' ';
 
     switch (val.valuespace) {
         case TVS_DISCARD:
@@ -49,6 +50,13 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
         case TOPC_MOV:
             o << *instr.un.dst << " <- " << *instr.un.src << std::endl;
             break;
+        case TOPC_LOAD:
+            o << *instr.un.dst << " <- load " << *instr.un.src << std::endl;
+            break;
+        case TOPC_STORE:
+            o << *instr.un.dst << " <- store " << *instr.un.src << std::endl;
+            // o << "store " << *instr.un.src << " -> " << *instr.un.dst << std::endl;
+            break;
         case TOPC_ADD:
             o << *instr.bin.dst << " <- " << *instr.bin.lhs << " + " << *instr.bin.rhs << std::endl;
             break;
@@ -59,6 +67,9 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
             o << "ret" << std::endl;
             break;
         case TOPC_CALL:
+            if (instr.call.dst)
+                o << *instr.call.dst << " <- ";
+            
             o << instr.call.fn->name << "(";
 
             for (TIR_Value* val : instr.call.args)
@@ -74,6 +85,27 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
     }
     return o;
 }
+
+TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst);
+
+void store(TIR_Function& fn, AST_Node* dst, AST_Node* src) {
+    switch (dst->nodetype) {
+        case AST_VAR: {
+            TIR_Value* dstval = fn.valmap[dst];
+            fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dstval, .src = dstval } });
+            break;
+        }
+        case AST_DEREFERENCE: {
+            AST_Dereference* deref = (AST_Dereference*)dst;
+            TIR_Value* ptrloc = compile_node(fn, deref->ptr, nullptr);
+            TIR_Value* srcloc = compile_node(fn, src, nullptr);
+
+            fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
+            break;
+        }
+    }
+}
+
 
 TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
     switch (node->nodetype) {
@@ -150,7 +182,7 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
 
             fn.emit({ 
                 .opcode = TOPC_CALL, 
-                .call = { .fn = (AST_Fn*)fncall->fn, .args = args.release(), }
+                .call = { .dst = dst, .fn = (AST_Fn*)fncall->fn, .args = args.release(), }
             });
             break;
         }
@@ -204,9 +236,24 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
 
         case AST_ASSIGNMENT: {
             AST_BinaryOp* assign = (AST_BinaryOp*)node;
-            TIR_Value* lhs = compile_node(fn, assign->lhs, nullptr);
-            compile_node(fn, assign->rhs, lhs);
+            store(fn, assign->lhs, assign->rhs);
             break;
+        }
+
+        case AST_DEREFERENCE: {
+            AST_Dereference* deref = (AST_Dereference*)node;
+
+            TIR_Value* ptrloc = fn.alloc_temp(deref->ptr->type);
+            compile_node(fn, deref->ptr, ptrloc);
+
+            if (!dst)
+                dst = fn.alloc_temp(deref->type);
+            
+            fn.emit({
+                .opcode = TOPC_LOAD,
+                .un = { .dst = dst, .src = ptrloc }
+            });
+            return dst;
         }
 
         default:

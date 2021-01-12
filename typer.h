@@ -20,5 +20,6 @@ extern AST_PrimitiveType t_void;
 
 bool typecheck_all(Context& global);
 AST_Type* gettype(Context& ctx, AST_Node* node);
+AST_PointerType* get_pointer_type(AST_Type* pointed_type);
 
 #endif // guard

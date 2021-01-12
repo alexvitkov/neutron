@@ -17,14 +17,14 @@ AST_PrimitiveType t_type (PRIMITIVE_TYPE,    0, "type");
 AST_PrimitiveType t_void (PRIMITIVE_TYPE,    0, "void");
 
 
-
-
-// TODO DS This should be a hashset if someone ever makes one
+// TODO This should be a hashset if someone ever makes one
 // The reason this exists is to make sure function types are unique
 // Type pointers MUST be comparable by checking their pointers with ==
 // so we need additional logic to make sure we don't create the same
 // composite type twice.
 map<AST_FnType*, AST_FnType*> fn_types_hash;
+
+map<AST_Type*, AST_PointerType*> pointer_types;
 
 u32 hash(AST_Type* returntype, arr<AST_Type*>& param_types) {
     u32 hash = map_hash(returntype);
@@ -38,6 +38,16 @@ u32 hash(AST_Type* returntype, arr<AST_Type*>& param_types) {
 u32 map_hash(AST_FnType* fn_type) {
     return hash(fn_type->returntype, fn_type->param_types);
 };
+
+// TODO we should check if it's a AST_UnresolvedId
+AST_PointerType* get_pointer_type(AST_Type* pointed_type) {
+    AST_PointerType* pt;
+    if (!pointer_types.find(pointed_type, &pt)) {
+        pt = new AST_PointerType(pointed_type);
+        pointer_types.insert(pointed_type, pt);
+    }
+    return pt;
+}
 
 bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     MUST (lhs->returntype == rhs->returntype);
@@ -101,6 +111,8 @@ bool is_valid_lvalue(AST_Node* expr) {
         case AST_VAR:
             return true;
         case AST_MEMBER_ACCESS:
+            return true;
+        case AST_DEREFERENCE:
             return true;
         default:
             return false;
@@ -177,6 +189,11 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
             MUST (resolve_unresolved_references(&op->rhs));
             break;
         }
+        case AST_DEREFERENCE: {
+            AST_Dereference* deref = (AST_Dereference*)node;
+            MUST (resolve_unresolved_references((AST_Node**)&deref->ptr));
+            return true;
+        }
         case AST_RETURN: {
             AST_Return* ret = (AST_Return*)node;
             MUST (resolve_unresolved_references(&ret->value));
@@ -209,6 +226,18 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
             MUST (resolve_unresolved_references(&access->lhs));
             break;
         }
+        case AST_POINTER_TYPE: {
+            AST_PointerType* pt = (AST_PointerType*)node;
+            if (pt->pointed_type->nodetype == AST_UNRESOLVED_ID) {
+                MUST (resolve_unresolved_references((AST_Node**)&pt->pointed_type));
+
+                *nodeptr = get_pointer_type(pt->pointed_type);
+                // TODO ALLOCATION free the temp pointer type here
+            }
+            break;
+        }
+
+
         case AST_NONE:
         case AST_TEMP_REF:
             assert(!"Not supported");
@@ -216,6 +245,7 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
         case AST_NUMBER:
         case AST_PRIMITIVE_TYPE:
             break;
+
 
         default:
             assert(!"Not implemented");
@@ -225,7 +255,10 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
 
 AST_Type* gettype(Context& ctx, AST_Node* node) {
     switch (node->nodetype) {
-        case AST_PRIMITIVE_TYPE: {
+        case AST_PRIMITIVE_TYPE: 
+        case AST_FN_TYPE:
+        case AST_POINTER_TYPE:
+        {
             return &t_type;
         }
 
@@ -281,6 +314,7 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
             }
             return returntype;
         }
+
         case AST_ASSIGNMENT: {
             AST_BinaryOp* bin = (AST_BinaryOp*)node;
             if (bin->type)
@@ -299,6 +333,7 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
                 return (bin->type = rhst);
             return nullptr;
         }
+
         case AST_BINARY_OP: {
             AST_BinaryOp* bin = (AST_BinaryOp*)node;
             if (bin->type)
@@ -320,6 +355,7 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
             });
             return nullptr;
         }
+
         case AST_MEMBER_ACCESS: {
             AST_MemberAccess* ma = (AST_MemberAccess*)node;
             if (ma->type)
@@ -343,6 +379,24 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
             ctx.error({ .code = ERR_NO_SUCH_MEMBER, });
             return nullptr;
         }
+
+        case AST_DEREFERENCE: {
+            AST_Dereference* deref = (AST_Dereference*)node;
+            if (deref->type)
+                return deref->type;
+
+            AST_Type* inner_type = gettype(ctx, deref->ptr);
+            if (inner_type->nodetype != AST_POINTER_TYPE) {
+                ctx.error({
+                    .code = ERR_INVALID_DEREFERENCE,
+                    .nodes = { deref },
+                });
+            }
+
+            deref->type = ((AST_PointerType*)inner_type)->pointed_type;
+            return deref->type;
+        }
+
         default:
             printf("gettype is not supported/implemented for nodetype %d\n", node->nodetype);
             assert(0);
@@ -421,6 +475,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
         case AST_ASSIGNMENT:
         case AST_FN_CALL:
         case AST_MEMBER_ACCESS:
+        case AST_DEREFERENCE:
         {
             return gettype(ctx, node);
         }

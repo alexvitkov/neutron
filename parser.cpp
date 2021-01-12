@@ -3,6 +3,7 @@
 #include "error.h"
 #include "typer.h"
 #include "cmdargs.h"
+#include "typer.h"
 
 #include "keywords.gperf.gen.h"
 
@@ -374,6 +375,13 @@ AST_Type* parse_type(Context& ctx, TokenReader& r) {
     Token t = r.pop();
 
     switch (t.type) {
+
+        case '*': {
+            AST_Type* pointed_type = parse_type(ctx, r);
+            return get_pointer_type(pointed_type);
+            break;
+        }
+
         case KW_U8:   return &t_u8;
         case KW_U16:  return &t_u16;
         case KW_U32:  return &t_u32;
@@ -386,6 +394,7 @@ AST_Type* parse_type(Context& ctx, TokenReader& r) {
         case KW_F64:  return &t_f64;
         case KW_BOOL: return &t_bool;
         case TOK_ID:
+            // TODO this is wrong, we should not be attempting a resolution
             return (AST_Type*)ctx.try_resolve(t.name);
         default:
             unexpected_token(r, t, TOK(':'));
@@ -676,8 +685,31 @@ AST_Node* parse_expr(Context& ctx, TokenReader& r) {
             }
             default: {
                 if (is_operator(t.type)) {
-                    while (s.stack.size && s.stack.last() != TOK('(') && PREC(s.stack.last()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
+
+                    // * can be either postfix, in which case it means dereference
+                    // or be infix, in which case it means multiplication
+                    if (t.type == '*') {
+                        TokenType next = r.peek().type;
+
+                        // If the next token type is id/number/open bracket, the * is infix
+                        // in all other cases it is postfix
+                        if (next != TOK_OPENBRACKET && next != TOK_ID && next != TOK_NUMBER) {
+                            if (s.output.size == 0) {
+                                s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                                return nullptr;
+                            }
+                            // TODO Probably all elements parse_expr works with should be AST_Values
+                            s.output.last() = ctx.alloc<AST_Dereference>((AST_Value*)s.output.last());
+                            break;
+                        }
+                    }
+
+                    while (s.stack.size && s.stack.last() != TOK('(') 
+                            && PREC(s.stack.last()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
+                    {
                         MUST (pop(s));
+                    }
+
                     s.stack.push(t.type);
                     prev_was_value = false;
                 }
@@ -714,7 +746,7 @@ bool parse_let(Context& ctx, TokenReader& r) {
 
     Token nameToken = r.expect(TOK_ID);
     AST_Type* type;
-    AST_Value* initial_value;
+    AST_Value* initial_value = nullptr;
 
     MUST (r.expect(TOK(':')).type);
     MUST (type = parse_type(ctx, r));
