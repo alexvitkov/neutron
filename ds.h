@@ -10,6 +10,7 @@ extern u32 map_hash(const char* key);
 extern bool map_equals(void* lhs, void* rhs);
 extern u32 map_hash(void* key);
 
+
 template <typename K, typename V>
 struct map {
 
@@ -163,6 +164,19 @@ struct map {
 
 
 template <typename T>
+struct arr_ref {
+    T* buffer;
+    u32 size;
+
+    T  operator[](u32 i) const { return buffer[i]; }
+    T& operator[](u32 i)       { return buffer[i]; }
+
+    T* begin() { return buffer; }
+    T* end()   { return buffer + size; }
+};
+
+
+template <typename T>
 struct arr {
     T* buffer;
     u32 size;
@@ -225,6 +239,12 @@ struct arr {
         buffer = new_buffer;
     }
 
+    arr_ref<T> release() {
+        arr_ref<T> r { .buffer = buffer, .size = size };
+        this->buffer = nullptr;
+        return r;
+    }
+
     T& push(T value) {
         if (size >= capacity)
             realloc();
@@ -246,6 +266,7 @@ struct arr {
     T* end()   { return buffer + size; }
 
 };
+
 
 #define BUCKET_SIZE 16
 

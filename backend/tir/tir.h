@@ -7,7 +7,6 @@
 enum TIR_ValueSpace : u8 {
     TVS_DISCARD = 0x00,
     TVS_ARGUMENT,
-    TVS_NEXTARGUMENT,
     TVS_RET_VALUE,
     TVS_TEMP,
     TVS_VALUE,
@@ -18,6 +17,7 @@ enum TIR_OpCode : u8 {
     TOPC_SUB,
     TOPC_RET,
     TOPC_MOV,
+    TOPC_CALL,
 };
 
 struct TIR_Value {
@@ -29,6 +29,8 @@ struct TIR_Value {
 struct TIR_Instruction {
     TIR_OpCode opcode;
     union {
+        struct { char _; } none;
+
         struct {
             TIR_Value *dst, *lhs, *rhs;
         } bin;
@@ -36,6 +38,11 @@ struct TIR_Instruction {
         struct {
             TIR_Value *dst, *src;
         } un;
+
+        struct {
+            AST_Fn* fn;
+            arr_ref<TIR_Value*> args;
+        } call;
     };
 };
 

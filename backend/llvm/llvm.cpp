@@ -48,7 +48,7 @@ llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
     
 }
 
-void tir_to_llvm_val(LLVM_Context& c, TIR_Value* val, llvm::Value** out) {
+void translate_value(LLVM_Context& c, TIR_Value* val, llvm::Value** out) {
     switch (val->valuespace) {
         case TVS_VALUE: {
             llvm::Type* l_type = c.translated_types[val->type];
@@ -90,35 +90,59 @@ Function* LLVM_Context::compile_fn(TIR_Function* fn) {
     llvm::FunctionType* l_fn_type = (llvm::FunctionType*)translate_type(fn->ast_fn->type);
 
     if (fn->ast_fn->is_extern) {
-        return Function::Create(l_fn_type, llvm::GlobalValue::ExternalLinkage, fn_name, mod);
+        llvm::Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::ExternalLinkage, fn_name, mod);
+        definitions.insert(fn->ast_fn, l_fn);
+        return l_fn;
     }
 
     Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::WeakAnyLinkage, fn_name, mod);
+    definitions.insert(fn->ast_fn, l_fn);
+
 
     BasicBlock* l_bb = BasicBlock::Create(lc, "entry", l_fn);
-
     builder.SetInsertPoint(l_bb);
 
     for (auto& instr : fn->entry->instructions) {
         switch (instr.opcode) {
             case TOPC_MOV: {
                 llvm::Value* l_src;
-                tir_to_llvm_val(*this, instr.un.src, &l_src);
+                translate_value(*this, instr.un.src, &l_src);
 
                 values[instr.un.dst] = l_src;
                 break;
             }
             case TOPC_ADD: {
                 llvm::Value *lhs, *rhs;
-                tir_to_llvm_val(*this, instr.bin.lhs, &lhs);
-                tir_to_llvm_val(*this, instr.bin.rhs, &rhs);
+                translate_value(*this, instr.bin.lhs, &lhs);
+                translate_value(*this, instr.bin.rhs, &rhs);
                 values[instr.bin.dst] = builder.CreateAdd(lhs, rhs);
                 break;
             }
             case TOPC_RET: {
                 llvm::Value *retval;
-                tir_to_llvm_val(*this, &fn->retval, &retval);
-                builder.CreateRet(retval); break;
+                translate_value(*this, &fn->retval, &retval);
+                builder.CreateRet(retval);
+                break;
+            }
+            case TOPC_CALL: {
+                AST_Fn* callee = (AST_Fn*)instr.call.fn;
+
+                llvm::Function* l_callee = (llvm::Function*)definitions[callee];
+                assert(l_callee); // TODO
+
+                u32 argc =  instr.call.args.size;
+
+                llvm::Value** args = (llvm::Value**)malloc(sizeof(llvm::Value*) * argc);
+
+                for (int i = 0; i < instr.call.args.size; i++) {
+                    llvm::Value* l_arg = values[instr.call.args[i]];
+                    assert(l_arg);
+                    args[i] = l_arg;
+                }
+
+                builder.CreateCall(l_callee, ArrayRef<llvm::Value*>(args, argc));
+
+                break;
             }
             default:
                 assert(!"Not implemented");

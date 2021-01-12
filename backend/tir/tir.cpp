@@ -30,9 +30,6 @@ std::ostream& operator<< (std::ostream& o, TIR_Value& val) {
         case TVS_ARGUMENT:
             o << "arg" << val.offset;
             break;
-        case TVS_NEXTARGUMENT:
-            o << "callarg" << val.offset;
-            break;
         case TVS_VALUE:
             o << val.offset;
             break;
@@ -60,6 +57,17 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
             break;
         case TOPC_RET:
             o << "ret" << std::endl;
+            break;
+        case TOPC_CALL:
+            o << instr.call.fn->name << "(";
+
+            for (TIR_Value* val : instr.call.args)
+                o << *val << ", ";
+
+            if (instr.call.args.size > 0)
+                o << "\b\b";
+
+            o << ")\n";
             break;
         default:
             assert(!"Not implemented");
@@ -124,11 +132,34 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             return dst;
         }
 
+        case AST_FN_CALL: {
+            AST_FnCall* fncall = (AST_FnCall*)node;
+            
+            assert(fncall->fn->nodetype == AST_FN);
+            AST_Fn* callee = (AST_Fn*)fncall->fn;
+
+            arr<TIR_Value*> args;
+
+            for (int i = 0; i < fncall->args.size; i++) {
+                AST_Type* param_type = callee->args[i].type;
+                TIR_Value*  arg_dst = fn.alloc_temp(param_type);
+
+                TIR_Value* arg = compile_node(fn, fncall->args[i], arg_dst);
+                args.push(arg);
+            }
+
+            fn.emit({ 
+                .opcode = TOPC_CALL, 
+                .call = { .fn = (AST_Fn*)fncall->fn, .args = args.release(), }
+            });
+            break;
+        }
+
         case AST_RETURN: {
             AST_Return* ret = (AST_Return*)node;
             TIR_Value* retval = compile_node(fn, ret->value, &fn.retval);
 
-            fn.emit({ TOPC_RET });
+            fn.emit({ .opcode = TOPC_RET, .none = {} });
             break;
         }
 
