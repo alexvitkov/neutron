@@ -1,6 +1,6 @@
-#include "sourcefile.h"
 #include "typer.h"
 #include "ast.h"
+#include "cmdargs.h"
 #include "error.h"
 #include "util.h"
 #include "backend/tir/tir.h"
@@ -16,62 +16,7 @@ void exit_with_error() {
     exit(1);
 }
 
-const char* output_file;
-
-bool parse_args(int argc, const char** argv) {
-
-    bool done_with_args = false; 
-
-    for (int i = 1; i < argc; i++) {
-        const char* a = argv[i];
-
-        if (!done_with_args && a[0] == '-') {
-            if (a[1] == '-') {
-                // User has passed -- ; everything after it is read as input file
-                if (!a[2]) {
-                    done_with_args = true;
-                    continue;
-                }
-
-                // User has passed --foo, check what foo is
-                const char* argname = a + 2;
-                if (!strcmp(argname, "output")) {
-                    if (i >= argc - 1) {
-                        fprintf(stderr, "missing --output argument\n");
-                        return false;
-                    }
-                    else {
-                        output_file = argv[++i];
-                        continue;
-                    }
-                }
-            }
-            else if (strlen(a) == 2) {
-                switch (a[1]) {
-                    case 'o': {
-                        if (i >= argc - 1) {
-                            fprintf(stderr, "missing -o argument\n");
-                            return false;
-                        }
-                        else {
-                            output_file = argv[++i];
-                            continue;
-                        }
-                        break;
-                    }
-                }
-            }
-        } 
-
-        // If the arg hasn't been parsed as a command line flag, it's a input file
-        if (add_source(a) < 0) {
-            fprintf(stderr, "failed to read source '%s'\n", a);
-            return false;
-        }
-    }
-
-    return true;
-}
+void link(const char* object_filename);
 
 int main(int argc, const char** argv) {
     init_utils();
@@ -95,35 +40,46 @@ int main(int argc, const char** argv) {
     }
 
     // Print the source code
-    std::cout << red << "--------- AST ---------\n" << resetstyle;
 
-    for (const auto& decl : global.declarations_arr) {
-        print(std::cout, decl.node, true);
-        std::cout << '\n';
+    if (debug_output) {
+        std::cout << red << "--------- AST ---------\n" << resetstyle;
+
+        for (const auto& decl : global.declarations_arr) {
+            print(std::cout, decl.node, true);
+            std::cout << '\n';
+        }
     }
 
     TIR_Context t_c { .global = global };
     t_c.compile_all();
 
     // Print the TIR
-    std::cout << red << "--------- TIR ---------\n" << resetstyle;
+    
+    if (debug_output) {
+        std::cout << red << "\n--------- TIR ---------\n" << resetstyle;
 
-    for (auto& kvp : t_c.fns) {
-        printf("%s:\n", kvp.key->name);
-        TIR_Block* block = kvp.value->entry;
-        for (auto& instr : block->instructions)
-            std::cout << instr;
+        for (auto& kvp : t_c.fns) {
+            printf("%s:\n", kvp.key->name);
+            TIR_Block* block = kvp.value->entry;
+            for (auto& instr : block->instructions)
+                std::cout << instr;
+        }
     }
 
-    // Generate the 
-    std::cout << red << "------- LLVM IR -------\n" << resetstyle;
+    if (debug_output) {
+        std::cout << red << "\n------- LLVM IR -------\n" << resetstyle;
+        // The LLVM IR is pritned by the compile_all function
+    }
     fflush(stdout);
 
     LLVM_Context lllvmcon(t_c);
     lllvmcon.compile_all();
 
-    lllvmcon.output_object();
+    const char* object_filename = lllvmcon.output_object();
 
+    if (output_type == OUTPUT_LINKED_EXECUTABLE) {
+        link(object_filename);
+    }
 
     return 0;
 }

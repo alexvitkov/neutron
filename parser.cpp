@@ -2,7 +2,7 @@
 #include "ast.h"
 #include "error.h"
 #include "typer.h"
-#include "sourcefile.h"
+#include "cmdargs.h"
 
 #include "keywords.gperf.gen.h"
 

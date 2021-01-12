@@ -91,8 +91,7 @@ Function* LLVM_Context::compile_fn(TIR_Function* fn) {
     return l_fn;
 }
 
-void LLVM_Context::output_object() {
-
+const char* LLVM_Context::output_object() {
     LLVMInitializeNativeTarget();
     LLVMInitializeNativeAsmPrinter();
     LLVMInitializeNativeAsmParser();
@@ -119,11 +118,19 @@ void LLVM_Context::output_object() {
     assert(!EC);
 
     char* error;
+
+
+    const char* object_filename = ".ntrobject.o";
+    if (output_type == OUTPUT_OBJECT_FILE)
+        object_filename = output_file;
+
     LLVMTargetMachineEmitToFile((LLVMTargetMachineRef)target_machine, 
             (LLVMModuleRef)&mod, 
-            (char*)"ntrobject.o", 
+            (char*)object_filename,
             LLVMObjectFile, 
             &error);
+
+    return object_filename;
 }
 
 // This creates a function called _entry
@@ -162,12 +169,13 @@ void LLVM_Context::compile_all() {
 
     ModuleAnalysisManager mam;
 
-    auto p = PrintModulePass();
-    p.run(mod, mam);
+    if (debug_output) {
+        auto p = PrintModulePass();
+        p.run(mod, mam);
+    }
 
     mam.registerPass([]() { return VerifierAnalysis(); });
     mam.registerPass([]() { return PassInstrumentationAnalysis(); });
     auto v = VerifierPass();
     v.run(mod, mam);
-
 }

@@ -4,6 +4,7 @@
 #include "../../common.h"
 #include "../../ast.h"
 #include "../../typer.h"
+#include "../../cmdargs.h"
 #include "../tir/tir.h"
 
 #include <llvm/IR/IRBuilder.h>
@@ -39,7 +40,7 @@ struct LLVM_Context {
 
     llvm::Function* compile_fn(TIR_Function* fn);
     void compile_all();
-    void output_object();
+    const char* output_object();
 };
 
 #endif // guard

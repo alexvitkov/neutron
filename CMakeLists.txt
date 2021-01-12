@@ -15,12 +15,13 @@ endif()
 
 add_executable(neutron
 	main.cpp
+    link.cpp
 	ast.h ast.cpp
 	context.h context.cpp
 	ds.h ds.cpp
 	error.h error.cpp
 	parser.cpp
-	sourcefile.h sourcefile.cpp
+	cmdargs.h cmdargs.cpp
 	typer.h typer.cpp
     backend/tir/tir.h backend/tir/tir.cpp
 	backend/llvm/llvm.h backend/llvm/llvm.cpp
@@ -28,10 +29,10 @@ add_executable(neutron
 	${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h
 )
 
-set_property(
-	TARGET neutron 
-	PROPERTY CXX_STANDARD 20
-)
+#set_property(
+#TARGET neutron 
+#PROPERTY CXX_STANDARD 20
+#)
 
 
 # LLVM_CONFIG_PATH must be a valid executable
