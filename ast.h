@@ -125,9 +125,9 @@ struct AST_Number : AST_Value {
 
 struct AST_If : AST_Node {
     AST_Node* condition;
-    AST_Block block;
+    AST_Block then_block;
 
-    inline AST_If(Context& parent_ctx) : AST_Node(AST_IF), block(parent_ctx) {}
+    inline AST_If(Context& parent_ctx) : AST_Node(AST_IF), then_block(parent_ctx) {}
 };
 
 struct AST_While : AST_Node {

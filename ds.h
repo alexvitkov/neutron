@@ -256,6 +256,13 @@ struct arr {
         return buffer[--size];
     }
 
+    bool contains(T value) {
+        for (auto& v : *this)
+            if (v == value)
+                return true;
+        return false;
+    }
+
     T  operator[](u32 i) const { return buffer[i]; }
     T& operator[](u32 i)       { return buffer[i]; }
 

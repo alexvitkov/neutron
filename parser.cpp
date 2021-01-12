@@ -457,14 +457,16 @@ bool parse_block(AST_Block& block, TokenReader& r) {
                 break;
             }
             case KW_IF: {
+                r.pop();
                 AST_If* ifs = block.ctx.alloc<AST_If>(block.ctx);
                 ifs->condition = parse_expr(block.ctx, r);
                 MUST (ifs->condition);
-                MUST (parse_block(ifs->block, r));
+                MUST (parse_block(ifs->then_block, r));
                 block.statements.push(ifs);
                 break;
             }
             case KW_WHILE: {
+                r.pop();
                 AST_While* whiles = block.ctx.alloc<AST_While>(block.ctx);
                 whiles->condition = parse_expr(block.ctx, r);
                 MUST (whiles->condition);

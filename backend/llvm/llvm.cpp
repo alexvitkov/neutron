@@ -80,33 +80,11 @@ void translate_value(LLVM_Context& c, TIR_Value* val, llvm::Value** out) {
     */
 }
 
-Function* LLVM_Context::compile_fn(TIR_Function* fn) {
 
-    /*
-    Function::arg_iterator args = mul_add->arg_begin();
-    Value* x = args++;
-    x->setName("x");
-    Value* y = args++;
-    y->setName("y");
-    Value* z = args++;
-    z->setName("z");
-    */
+llvm::BasicBlock* LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block) {
 
-    const char* fn_name = fn->ast_fn->name;
-
-    llvm::FunctionType* l_fn_type = (llvm::FunctionType*)translate_type(fn->ast_fn->type);
-
-    if (fn->ast_fn->is_extern) {
-        llvm::Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::ExternalLinkage, fn_name, mod);
-        definitions.insert(fn->ast_fn, l_fn);
-        return l_fn;
-    }
-
-    Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::WeakAnyLinkage, fn_name, mod);
-    definitions.insert(fn->ast_fn, l_fn);
-
-
-    BasicBlock* l_bb = BasicBlock::Create(lc, "entry", l_fn);
+    BasicBlock* l_bb = BasicBlock::Create(lc, "block", l_fn);
+    blocks[block] = l_bb;
     builder.SetInsertPoint(l_bb);
 
     for (auto& instr : fn->entry->instructions) {
@@ -177,10 +155,43 @@ Function* LLVM_Context::compile_fn(TIR_Function* fn) {
                 values[instr.un.dst] = l_val;
                 break;
             }
+            case TOPC_JMP: {
+
+            }
             default:
                 assert(!"Not implemented");
         }
     }
+}
+
+
+
+
+Function* LLVM_Context::compile_fn(TIR_Function* fn) {
+
+    /*
+    Function::arg_iterator args = mul_add->arg_begin();
+    Value* x = args++;
+    x->setName("x");
+    Value* y = args++;
+    y->setName("y");
+    Value* z = args++;
+    z->setName("z");
+    */
+
+    const char* fn_name = fn->ast_fn->name;
+
+    llvm::FunctionType* l_fn_type = (llvm::FunctionType*)translate_type(fn->ast_fn->type);
+
+    if (fn->ast_fn->is_extern) {
+        llvm::Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::ExternalLinkage, fn_name, mod);
+        definitions.insert(fn->ast_fn, l_fn);
+        return l_fn;
+    }
+
+    Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::WeakAnyLinkage, fn_name, mod);
+    definitions.insert(fn->ast_fn, l_fn);
+
 
     return l_fn;
 }

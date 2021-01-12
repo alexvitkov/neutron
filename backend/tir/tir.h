@@ -15,11 +15,14 @@ enum TIR_ValueSpace : u8 {
 enum TIR_OpCode : u8 {
     TOPC_ADD,
     TOPC_SUB,
+    TOPC_EQ,
     TOPC_RET,
     TOPC_MOV,
     TOPC_CALL,
     TOPC_LOAD,
     TOPC_STORE,
+    TOPC_JMPIF,
+    TOPC_JMP,
 };
 
 struct TIR_Value {
@@ -27,6 +30,8 @@ struct TIR_Value {
     u64 offset;
     AST_Type* type;
 };
+
+struct TIR_Block;
 
 struct TIR_Instruction {
     TIR_OpCode opcode;
@@ -46,13 +51,27 @@ struct TIR_Instruction {
             AST_Fn* fn;
             arr_ref<TIR_Value*> args;
         } call;
+
+        struct {
+            TIR_Block* next_block;
+        } jmp;
+
+        struct {
+            TIR_Value* cond;
+            TIR_Block *then_block, *else_block;
+        } jmpif;
     };
 };
 
 struct TIR_Block {
+    // This is only used for printing
+    u64 id;
+
     arr<TIR_Instruction> instructions;
     bucketed_arr<TIR_Value> values;
     TIR_Block* parent;
+
+    TIR_Block();
 };
 
 struct TIR_Function;
@@ -80,6 +99,8 @@ struct TIR_Function {
     TIR_Value* alloc_val(TIR_Value val);
     void free_temp(TIR_Value* val);
     void emit(TIR_Instruction instr);
+
+    void print();
 };
 
 std::ostream& operator<< (std::ostream& o, TIR_Value& loc);

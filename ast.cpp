@@ -202,7 +202,7 @@ void print(std::ostream& o, AST_If* node) {
     o << "if ";
     print(o, node->condition, false);
     o << " ";
-    print(o, &node->block);
+    print(o, &node->then_block);
 }
 
 void print(std::ostream& o, AST_While* node) {

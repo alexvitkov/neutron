@@ -31,14 +31,15 @@ struct LLVM_Context {
 
     // TODO this will not work for phi nodes
     map<TIR_Value*, llvm::Value*> values;
-
     map<AST_Value*, llvm::Value*> definitions;
+    map<TIR_Block*, llvm::BasicBlock*> blocks;
 
     llvm::Value* retval;
 
     llvm::IRBuilder<> builder;
 
     LLVM_Context(TIR_Context& t_c);
+    llvm::BasicBlock* compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block);
     llvm::Function* compile_fn(TIR_Function* fn);
     void compile_all();
     const char* output_object();

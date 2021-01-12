@@ -44,6 +44,11 @@ std::ostream& operator<< (std::ostream& o, TIR_Value& val) {
     return o;
 }
 
+TIR_Block::TIR_Block() {
+    static u64 next_id;
+    id = next_id++;
+}
+
 std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
     o << "    ";
     switch (instr.opcode) {
@@ -63,10 +68,14 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
         case TOPC_SUB:
             o << *instr.bin.dst << " <- " << *instr.bin.lhs << " - " << *instr.bin.rhs << std::endl;
             break;
+        case TOPC_EQ:
+            o << *instr.bin.dst << " <- " << *instr.bin.lhs << " == " << *instr.bin.rhs << std::endl;
+            break;
         case TOPC_RET:
             o << "ret" << std::endl;
             break;
-        case TOPC_CALL:
+
+        case TOPC_CALL: {
             if (instr.call.dst)
                 o << *instr.call.dst << " <- ";
             
@@ -80,10 +89,63 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
 
             o << ")\n";
             break;
+        }
+
+        case TOPC_JMP: {
+            o << "jmp " << "block" << instr.jmp.next_block->id << std::endl;
+            break;
+        }
+
+        case TOPC_JMPIF: {
+            o << "if " << *instr.jmpif.cond 
+              << " jmp block" << instr.jmpif.then_block->id
+              << " else block" << instr.jmpif.else_block->id << std::endl;
+            break;
+        }
+
         default:
             assert(!"Not implemented");
     }
     return o;
+}
+
+void TIR_Function::print() {
+    printf("%s:\n", ast_fn->name);
+
+    if (ast_fn->is_extern) {
+        std::cout << "extern fn " << ast_fn->name << "...\n";
+        return;
+    }
+
+    std::cout << "fn " << ast_fn->name << ":\n";
+    arr<TIR_Block*> printed_blocks;
+    arr<TIR_Block*> queue = { entry };
+
+    while (queue.size > 0) {
+        TIR_Block* block = queue.pop();
+        printed_blocks.push(block);
+
+        std::cout << "  block" << block->id << ":\n";
+
+        for (auto& instr : block->instructions) {
+            std::cout << instr;
+
+            if (instr.opcode == TOPC_JMP) {
+                if (!printed_blocks.contains(instr.jmp.next_block)
+                        && !queue.contains(instr.jmp.next_block))
+                    queue.push(instr.jmp.next_block);
+            } 
+            else if (instr.opcode == TOPC_JMPIF) {
+                if (!printed_blocks.contains(instr.jmpif.else_block)
+                        && !queue.contains(instr.jmpif.else_block))
+                    queue.push(instr.jmpif.else_block);
+
+                if (!printed_blocks.contains(instr.jmpif.then_block)
+                        && !queue.contains(instr.jmpif.then_block))
+                    queue.push(instr.jmpif.then_block);
+            }
+        }
+    }
 }
 
 TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst);
@@ -103,8 +165,57 @@ void store(TIR_Function& fn, AST_Node* dst, AST_Node* src) {
             fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
             break;
         }
+        default:
+            assert(!"Not supported");
     }
 }
+
+
+TIR_Block* compile_block(TIR_Function& fn, AST_Block* ast_block, TIR_Block* after) {
+
+    // TODO ALLOCATION
+    TIR_Block* tir_block = new TIR_Block();
+
+    fn.writepoint = tir_block;
+
+    for (auto& kvp : ast_block->ctx.declarations_arr) {
+        AST_Node* decl = kvp.node;
+
+        // TODO this is a stupid workaround
+        // The returntype should be stored in a saner way
+        if (!strcmp(kvp.name, "returntype"))
+            continue;
+
+        switch (decl->nodetype) {
+            case AST_VAR: {
+                AST_Var* vardecl = (AST_Var*)decl;
+                TIR_Value* val = fn.alloc_temp(vardecl->type);
+
+                if (vardecl->initial_value)
+                    compile_node(fn, vardecl->initial_value, val);
+
+                fn.valmap.insert(vardecl, val);
+                break;
+            }
+            default:
+                assert(!"Not implemented");
+        }
+    }
+
+    for (AST_Node* stmt : ast_block->statements) {
+        compile_node(fn, stmt, nullptr);
+    }
+
+    if (after) {
+        fn.emit({
+            .opcode = TOPC_JMP,
+            .jmp = { after }
+        });
+    }
+
+    return tir_block;
+}
+
 
 
 TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
@@ -149,6 +260,7 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             switch (bin->op) {
                 case '+': opcode = TOPC_ADD; break;
                 case '-': opcode = TOPC_SUB; break;
+                case OP_DOUBLEEQUALS: opcode = TOPC_EQ; break;
                 default:
                     assert(!"Not implemented");
             }
@@ -196,41 +308,14 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
         }
 
         case AST_BLOCK: {
-            AST_Block* block = (AST_Block*)node;
+            AST_Block* ast_block = (AST_Block*)node;
 
-            TIR_Block* new_block = new TIR_Block();
-            fn.writepoint = new_block;
+            // TODO ALLOCATION
+            TIR_Block* continuation = new TIR_Block();
 
-            for (auto& kvp : block->ctx.declarations_arr) {
-                AST_Node* decl = kvp.node;
+            compile_block(fn, ast_block, continuation);
 
-                // TODO this is a stupid workaround
-                // The returntype should be stored in a saner way
-                if (!strcmp(kvp.name, "returntype"))
-                    continue;
-
-                switch (decl->nodetype) {
-                    case AST_VAR: {
-                        AST_Var* vardecl = (AST_Var*)decl;
-                        TIR_Value* val = fn.alloc_temp(vardecl->type);
-
-                        if (vardecl->initial_value)
-                            compile_node(fn, vardecl->initial_value, val);
-
-                        fn.valmap.insert(vardecl, val);
-                        break;
-                    }
-                    default:
-                        assert(!"Not implemented");
-                }
-            }
-
-            for (AST_Node* stmt : block->statements) {
-                compile_node(fn, stmt, nullptr);
-            }
-
-            // TODO this is a hack of course
-            return (TIR_Value*)(void*)new_block;
+            fn.writepoint = continuation;
             break;
         }
 
@@ -256,6 +341,31 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             return dst;
         }
 
+        case AST_IF: {
+            TIR_Block* current_block = fn.writepoint;
+            AST_If* ifs = (AST_If*)node;
+
+            TIR_Value* cond = compile_node(fn, ifs->condition, nullptr);
+
+            // TODO ALLOCATION
+            TIR_Block* continuation = new TIR_Block();
+
+            TIR_Block* then_block = compile_block(fn, &ifs->then_block, continuation);
+
+            fn.writepoint = current_block;
+            fn.emit({
+                .opcode = TOPC_JMPIF, 
+                .jmpif = {
+                    .cond = cond,
+                    .then_block = then_block,
+                    .else_block = continuation,
+                }
+            });
+
+            fn.writepoint = continuation;
+            break;
+        }
+
         default:
             assert(!"Not implemented");
     }
@@ -269,6 +379,7 @@ void TIR_Context::compile_all() {
             case AST_FN: {
                 AST_Fn* fn = (AST_Fn*)decl.node;
                 
+                // TODO ALLOCATION
                 TIR_Function* tirfn = new TIR_Function(*this, fn);
 
                 AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
@@ -276,7 +387,7 @@ void TIR_Context::compile_all() {
                     tirfn->retval.type = rettype;
 
                 if (!fn->is_extern) {
-                    TIR_Block* tirbl = (TIR_Block*)compile_node(*tirfn, &fn->block, nullptr);
+                    TIR_Block* tirbl = compile_block(*tirfn, &fn->block, nullptr);
                     tirfn->entry = tirbl;
                 }
 

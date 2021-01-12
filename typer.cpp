@@ -201,7 +201,7 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
         }
         case AST_IF: {
             AST_If* ifs = (AST_If*)node;
-            MUST (resolve_unresolved_references(&ifs->block));
+            MUST (resolve_unresolved_references(&ifs->then_block));
             MUST (resolve_unresolved_references(&ifs->condition));
             break;
         }
