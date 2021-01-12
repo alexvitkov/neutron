@@ -39,7 +39,7 @@ struct LLVM_Context {
     llvm::IRBuilder<> builder;
 
     LLVM_Context(TIR_Context& t_c);
-    llvm::BasicBlock* compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block);
+    void compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block);
     llvm::Function* compile_fn(TIR_Function* fn);
     void compile_all();
     const char* output_object();

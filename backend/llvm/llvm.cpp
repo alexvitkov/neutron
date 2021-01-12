@@ -81,13 +81,13 @@ void translate_value(LLVM_Context& c, TIR_Value* val, llvm::Value** out) {
 }
 
 
-llvm::BasicBlock* LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block) {
-
-    BasicBlock* l_bb = BasicBlock::Create(lc, "block", l_fn);
+void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block) {
+    BasicBlock* l_bb = blocks[block];
     blocks[block] = l_bb;
+
     builder.SetInsertPoint(l_bb);
 
-    for (auto& instr : fn->entry->instructions) {
+    for (auto& instr : block->instructions) {
         switch (instr.opcode) {
             case TOPC_MOV: {
                 llvm::Value* l_src;
@@ -101,6 +101,13 @@ llvm::BasicBlock* LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* 
                 translate_value(*this, instr.bin.lhs, &lhs);
                 translate_value(*this, instr.bin.rhs, &rhs);
                 values[instr.bin.dst] = builder.CreateAdd(lhs, rhs);
+                break;
+            }
+            case TOPC_EQ: {
+                llvm::Value *lhs, *rhs;
+                translate_value(*this, instr.bin.lhs, &lhs);
+                translate_value(*this, instr.bin.rhs, &rhs);
+                values[instr.bin.dst] = builder.CreateICmpEQ(lhs, rhs);
                 break;
             }
             case TOPC_RET: {
@@ -156,7 +163,15 @@ llvm::BasicBlock* LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* 
                 break;
             }
             case TOPC_JMP: {
-
+                builder.CreateBr(blocks[instr.jmp.next_block]);
+                break;
+            }
+            case TOPC_JMPIF: {
+                llvm::Value *cond = values[instr.jmpif.cond];
+                llvm::BasicBlock *true_b = blocks[instr.jmpif.then_block];
+                llvm::BasicBlock *false_b = blocks[instr.jmpif.else_block];
+                builder.CreateCondBr(cond, true_b, false_b);
+                break;
             }
             default:
                 assert(!"Not implemented");
@@ -165,19 +180,7 @@ llvm::BasicBlock* LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* 
 }
 
 
-
-
 Function* LLVM_Context::compile_fn(TIR_Function* fn) {
-
-    /*
-    Function::arg_iterator args = mul_add->arg_begin();
-    Value* x = args++;
-    x->setName("x");
-    Value* y = args++;
-    y->setName("y");
-    Value* z = args++;
-    z->setName("z");
-    */
 
     const char* fn_name = fn->ast_fn->name;
 
@@ -191,6 +194,13 @@ Function* LLVM_Context::compile_fn(TIR_Function* fn) {
 
     Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::WeakAnyLinkage, fn_name, mod);
     definitions.insert(fn->ast_fn, l_fn);
+
+    for (TIR_Block* block : fn->blocks) {
+        blocks.insert(block, BasicBlock::Create(lc, "block", l_fn));
+    }
+    for (TIR_Block* block : fn->blocks) {
+        compile_block(fn, l_fn, block);
+    }
 
 
     return l_fn;

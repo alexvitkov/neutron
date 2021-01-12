@@ -89,9 +89,11 @@ struct TIR_Function {
 
     TIR_Value retval = { .valuespace = TVS_RET_VALUE };
     TIR_Block* writepoint;
-    TIR_Block* entry;
     u64 temp_offset = 0;
     map<AST_Node*, TIR_Value*> valmap;
+
+    // Those are in the order they need to be compiled in
+    arr<TIR_Block*> blocks;
 
     TIR_Function(TIR_Context& c, AST_Fn* fn) : ast_fn(fn), c(c) {};
 

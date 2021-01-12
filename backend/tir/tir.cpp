@@ -110,7 +110,6 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
 }
 
 void TIR_Function::print() {
-    printf("%s:\n", ast_fn->name);
 
     if (ast_fn->is_extern) {
         std::cout << "extern fn " << ast_fn->name << "...\n";
@@ -118,33 +117,11 @@ void TIR_Function::print() {
     }
 
     std::cout << "fn " << ast_fn->name << ":\n";
-    arr<TIR_Block*> printed_blocks;
-    arr<TIR_Block*> queue = { entry };
 
-    while (queue.size > 0) {
-        TIR_Block* block = queue.pop();
-        printed_blocks.push(block);
-
+    for (TIR_Block* block : blocks) {
         std::cout << "  block" << block->id << ":\n";
-
-        for (auto& instr : block->instructions) {
+        for (auto& instr : block->instructions)
             std::cout << instr;
-
-            if (instr.opcode == TOPC_JMP) {
-                if (!printed_blocks.contains(instr.jmp.next_block)
-                        && !queue.contains(instr.jmp.next_block))
-                    queue.push(instr.jmp.next_block);
-            } 
-            else if (instr.opcode == TOPC_JMPIF) {
-                if (!printed_blocks.contains(instr.jmpif.else_block)
-                        && !queue.contains(instr.jmpif.else_block))
-                    queue.push(instr.jmpif.else_block);
-
-                if (!printed_blocks.contains(instr.jmpif.then_block)
-                        && !queue.contains(instr.jmpif.then_block))
-                    queue.push(instr.jmpif.then_block);
-            }
-        }
     }
 }
 
@@ -171,10 +148,7 @@ void store(TIR_Function& fn, AST_Node* dst, AST_Node* src) {
 }
 
 
-TIR_Block* compile_block(TIR_Function& fn, AST_Block* ast_block, TIR_Block* after) {
-
-    // TODO ALLOCATION
-    TIR_Block* tir_block = new TIR_Block();
+void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block, TIR_Block* after) {
 
     fn.writepoint = tir_block;
 
@@ -212,8 +186,6 @@ TIR_Block* compile_block(TIR_Function& fn, AST_Block* ast_block, TIR_Block* afte
             .jmp = { after }
         });
     }
-
-    return tir_block;
 }
 
 
@@ -311,9 +283,13 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             AST_Block* ast_block = (AST_Block*)node;
 
             // TODO ALLOCATION
+            TIR_Block* inner_block = new TIR_Block();
             TIR_Block* continuation = new TIR_Block();
 
-            compile_block(fn, ast_block, continuation);
+            compile_block(fn, inner_block, ast_block, continuation);
+
+            fn.blocks.push(inner_block);
+            fn.blocks.push(continuation);
 
             fn.writepoint = continuation;
             break;
@@ -348,9 +324,10 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             TIR_Value* cond = compile_node(fn, ifs->condition, nullptr);
 
             // TODO ALLOCATION
+            TIR_Block* then_block = new TIR_Block();
             TIR_Block* continuation = new TIR_Block();
 
-            TIR_Block* then_block = compile_block(fn, &ifs->then_block, continuation);
+            compile_block(fn, then_block, &ifs->then_block, continuation);
 
             fn.writepoint = current_block;
             fn.emit({
@@ -361,6 +338,9 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
                     .else_block = continuation,
                 }
             });
+
+            fn.blocks.push(then_block);
+            fn.blocks.push(continuation);
 
             fn.writepoint = continuation;
             break;
@@ -380,18 +360,19 @@ void TIR_Context::compile_all() {
                 AST_Fn* fn = (AST_Fn*)decl.node;
                 
                 // TODO ALLOCATION
-                TIR_Function* tirfn = new TIR_Function(*this, fn);
+                TIR_Function* tir_fn = new TIR_Function(*this, fn);
 
                 AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
                 if (rettype) 
-                    tirfn->retval.type = rettype;
+                    tir_fn->retval.type = rettype;
 
                 if (!fn->is_extern) {
-                    TIR_Block* tirbl = compile_block(*tirfn, &fn->block, nullptr);
-                    tirfn->entry = tirbl;
+                    TIR_Block* entry = new TIR_Block();
+                    tir_fn->blocks.push(entry);
+                    compile_block(*tir_fn, entry, &fn->block, nullptr);
                 }
 
-                fns.insert(fn, tirfn);
+                fns.insert(fn, tir_fn);
 
                 break;
             }
