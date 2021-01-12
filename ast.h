@@ -8,25 +8,33 @@
 
 struct Context;
 
+#define AST_TYPE_BIT 0x80
+
 enum AST_NodeType : u8 {
 	AST_NONE = 0,
 
-	AST_PRIMITIVE_TYPE,
-    AST_FN,
-    AST_VAR,
-    AST_BINARY_OP,
-    AST_ASSIGNMENT,
-    AST_RETURN,
-    AST_CAST,
-    AST_NUMBER,
-    AST_IF,
-    AST_WHILE,
-    AST_BLOCK,
-    AST_FN_CALL,
-    AST_STRUCT,
-    AST_MEMBER_ACCESS,
-    AST_TEMP_REF,
-    AST_UNRESOLVED_ID,
+    AST_FN            = 0x01,
+    AST_VAR           = 0x02,
+    AST_BINARY_OP     = 0x03,
+    AST_ASSIGNMENT    = 0x04,
+    AST_RETURN        = 0x05,
+    AST_CAST          = 0x06,
+    AST_NUMBER        = 0x07,
+    AST_IF            = 0x08,
+    AST_WHILE         = 0x09,
+    AST_BLOCK         = 0x0A,
+    AST_FN_CALL       = 0x0B,
+    AST_MEMBER_ACCESS = 0x0C,
+    AST_TEMP_REF      = 0x0D,
+    AST_UNRESOLVED_ID = 0x0E,
+
+    // Be careful, if there are too many nodes
+    // they can overflow into the AST_TYPES section
+    // which are the nodes who have their highest bit set
+
+    AST_STRUCT         = 0x01 | AST_TYPE_BIT,
+	AST_PRIMITIVE_TYPE = 0x02 | AST_TYPE_BIT,
+    AST_FN_TYPE        = 0x03 | AST_TYPE_BIT,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -81,6 +89,13 @@ struct AST_PrimitiveType : AST_Type {
 
     inline AST_PrimitiveType(PrimitiveTypeKind kind, u8 size, const char* name)
         : AST_Type(AST_PRIMITIVE_TYPE), kind(kind), size(size), name(name) {}
+};
+
+struct AST_FnType : AST_Type {
+    AST_Type* returntype;
+    arr<AST_Type*> param_types;
+
+    inline AST_FnType() : AST_Type(AST_FN_TYPE) {}
 };
 
 struct AST_Var : AST_Value {
@@ -139,13 +154,13 @@ struct NamedType {
     AST_Type* type;
 };
 
-struct AST_Fn : AST_Node {
+struct AST_Fn : AST_Value {
     const char* name;
     arr<NamedType> args;
     AST_Block block;
 
     inline AST_Fn(Context& parent_ctx, const char* name) 
-        : AST_Node(AST_FN), block(parent_ctx), name(name) {}
+        : AST_Value(AST_FN, nullptr), block(parent_ctx), name(name) {}
 };
 
 struct AST_Struct : AST_Type {

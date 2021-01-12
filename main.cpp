@@ -45,8 +45,11 @@ int main(int argc, const char** argv) {
         std::cout << red << "--------- AST ---------\n" << resetstyle;
 
         for (const auto& decl : global.declarations_arr) {
+            printf("%p\n", ((AST_Value*)decl.node)->type);
+
             print(std::cout, decl.node, true);
             std::cout << '\n';
+
         }
     }
 

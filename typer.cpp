@@ -16,6 +16,58 @@ AST_PrimitiveType t_f64 (PRIMITIVE_FLOAT,    8, "f64");
 AST_PrimitiveType t_type (PRIMITIVE_TYPE,    0, "type");
 AST_PrimitiveType t_void (PRIMITIVE_TYPE,    0, "void");
 
+
+
+
+// TODO DS This should be a hashset if someone ever makes one
+// The reason this exists is to make sure function types are unique
+// Type pointers MUST be comparable by checking their pointers with ==
+// so we need additional logic to make sure we don't create the same
+// composite type twice.
+map<AST_FnType*, AST_FnType*> fn_types_hash;
+
+u32 hash(AST_Type* returntype, arr<AST_Type*>& param_types) {
+    u32 hash = map_hash(returntype);
+
+    for (AST_Type* param : param_types)
+        hash ^= map_hash(param);
+
+    return hash;
+}
+
+u32 map_hash(AST_FnType* fn_type) {
+    return hash(fn_type->returntype, fn_type->param_types);
+};
+
+bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
+    MUST (lhs->returntype == rhs->returntype);
+    MUST (lhs->param_types.size == rhs->param_types.size);
+
+    for (int i = 0; i < lhs->param_types.size; i++)
+        MUST (lhs->param_types[i] == rhs->param_types[i]);
+
+    return true;
+}
+
+AST_FnType* get_fn_type(AST_Type* returntype, arr<AST_Type*> param_types) {
+    AST_FnType tmp;
+
+    tmp.param_types = std::move(param_types);
+    tmp.returntype = returntype;
+
+    AST_FnType* result;
+    if (fn_types_hash.find(&tmp, &result)) {
+        return result;
+    }
+    else {
+        // TODO we need a sane allocation here
+        AST_FnType* newtype = new AST_FnType(std::move(tmp));
+
+        fn_types_hash.insert(newtype, newtype);
+        return newtype;
+    }
+}
+
 bool implicit_cast(Context& ctx, AST_Node** dst, AST_Type* type) {
     AST_Type* dstt = gettype(ctx, *dst);
     MUST (dstt);
@@ -60,6 +112,14 @@ bool resolve_unresolved_references(AST_Node** nodeptr);
 bool resolve_unresolved_references(AST_Block* block) {
     for (auto& stmt : block->statements)
         MUST (resolve_unresolved_references(&stmt));
+    return true;
+}
+
+inline bool must_be_type(Context& ctx, AST_Node* node) {
+    if (!(node->nodetype & AST_TYPE_BIT)) {
+        ctx.error({ .code = ERR_INVALID_TYPE, .nodes = { node } });
+        return false;
+    }
     return true;
 }
 
@@ -165,18 +225,43 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
 
 AST_Type* gettype(Context& ctx, AST_Node* node) {
     switch (node->nodetype) {
-        case AST_PRIMITIVE_TYPE:
+        case AST_PRIMITIVE_TYPE: {
             return &t_type;
-        case AST_FN:
-            assert(!"Function types aren't implemented");
+        }
+
+        case AST_FN: {
+            AST_Fn *fn = (AST_Fn*)node;
+            if (fn->type)
+                return fn->type;
+
+            arr<AST_Type*> param_types(fn->args.size);
+
+            for (auto& p : fn->args) {
+                // Right now we know that the parameters' .type 
+                // are valid nodes, we must check if they're types
+                MUST (must_be_type(ctx, p.type));
+                param_types.push(p.type);
+            }
+
+            AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
+            if (rettype)
+                MUST (must_be_type(ctx, rettype));
+
+            fn->type = get_fn_type(rettype, std::move(param_types));
+            return fn->type;
+        }
+
         case AST_VAR:
         case AST_CAST:
         case AST_NUMBER:
+        {
             return ((AST_Value*)node)->type;
-        case AST_FN_CALL: {
-            AST_FnCall* fncall = (AST_FnCall*)node;
+        }
 
-            AST_Fn* fn = (AST_Fn*)fncall->fn;
+        case AST_FN_CALL: {
+            AST_FnCall *fncall = (AST_FnCall*)node;
+
+            AST_Fn *fn = (AST_Fn*)fncall->fn;
             assert(fn->nodetype == AST_FN);
 
             AST_Type* returntype = (AST_Type*)fn->block.ctx.resolve("returntype");
@@ -265,6 +350,7 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
 }
 
 
+
 bool typecheck(Context& ctx, AST_Node* node) {
     switch (node->nodetype) {
         case AST_BLOCK: {
@@ -284,18 +370,26 @@ bool typecheck(Context& ctx, AST_Node* node) {
         }
         case AST_FN: {
             AST_Fn* fn = (AST_Fn*)node;
-            return typecheck(fn->block.ctx, &fn->block);
+
+            MUST (gettype(ctx, fn));
+            MUST (typecheck(fn->block.ctx, &fn->block));
+            return true;
         }
         // TODO I should probably get rid of initial_value
         // and treat it like an assignment statment
         case AST_VAR:{
             AST_Var* var = (AST_Var*)node;
+
+            MUST (must_be_type(ctx, var->type));
+
             if (var->initial_value) {
                 AST_Type* rhst = gettype(ctx, var->initial_value);
                 MUST (rhst);
                 MUST (implicit_cast(ctx, &var->initial_value, var->type));
                 return true;
             }
+
+            return true;
         }
         case AST_RETURN: {
             // TODO child void functions right now inherit the returntype of the 
