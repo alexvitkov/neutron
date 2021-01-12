@@ -29,10 +29,10 @@ add_executable(neutron
 	${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h
 )
 
-#set_property(
-#TARGET neutron 
-#PROPERTY CXX_STANDARD 20
-#)
+set_property(
+    TARGET neutron 
+    PROPERTY CXX_STANDARD 14
+)
 
 
 # LLVM_CONFIG_PATH must be a valid executable

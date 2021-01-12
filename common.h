@@ -78,7 +78,7 @@ enum TokenType : u8 {
 	TOK_NUMBER,
 };
 
-struct ASTNode;
+struct AST_Node;
 struct Error;
 
 enum OpTraits : u8 {

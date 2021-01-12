@@ -7,7 +7,7 @@ void TIR_Function::emit(TIR_Instruction inst) {
     writepoint->instructions.push(inst);
 }
 
-TIR_Value* TIR_Function::alloc_temp(ASTType* type) {
+TIR_Value* TIR_Function::alloc_temp(AST_Type* type) {
     return &writepoint->values.push({
         .valuespace = TVS_TEMP,
         .offset = temp_offset++,
@@ -67,7 +67,7 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
     return o;
 }
 
-TIR_Value* compile_node(TIR_Function& fn, ASTNode* node, TIR_Value* dst) {
+TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
     switch (node->nodetype) {
         case AST_VAR: {
             TIR_Value* val = fn.valmap[node];
@@ -82,7 +82,7 @@ TIR_Value* compile_node(TIR_Function& fn, ASTNode* node, TIR_Value* dst) {
         }
 
         case AST_NUMBER: {
-            ASTNumber* num = (ASTNumber*)node;
+            AST_Number* num = (AST_Number*)node;
 
             TIR_Value* num_value = fn.alloc_val({
                 .valuespace = TVS_VALUE,
@@ -99,7 +99,7 @@ TIR_Value* compile_node(TIR_Function& fn, ASTNode* node, TIR_Value* dst) {
         }
 
         case AST_BINARY_OP: {
-            ASTBinaryOp* bin = (ASTBinaryOp*)node;
+            AST_BinaryOp* bin = (AST_BinaryOp*)node;
 
             TIR_Value* lhs = compile_node(fn, bin->lhs, nullptr);
             TIR_Value* rhs = compile_node(fn, bin->rhs, nullptr);
@@ -125,7 +125,7 @@ TIR_Value* compile_node(TIR_Function& fn, ASTNode* node, TIR_Value* dst) {
         }
 
         case AST_RETURN: {
-            ASTReturn* ret = (ASTReturn*)node;
+            AST_Return* ret = (AST_Return*)node;
             TIR_Value* retval = compile_node(fn, ret->value, &fn.retval);
 
             fn.emit({ TOPC_RET });
@@ -133,13 +133,13 @@ TIR_Value* compile_node(TIR_Function& fn, ASTNode* node, TIR_Value* dst) {
         }
 
         case AST_BLOCK: {
-            ASTBlock* block = (ASTBlock*)node;
+            AST_Block* block = (AST_Block*)node;
 
             TIR_Block* new_block = new TIR_Block();
             fn.writepoint = new_block;
 
             for (auto& kvp : block->ctx.declarations_arr) {
-                ASTNode* decl = kvp.node;
+                AST_Node* decl = kvp.node;
 
                 // TODO this is a stupid workaround
                 // The returntype should be stored in a saner way
@@ -148,7 +148,7 @@ TIR_Value* compile_node(TIR_Function& fn, ASTNode* node, TIR_Value* dst) {
 
                 switch (decl->nodetype) {
                     case AST_VAR: {
-                        ASTVar* vardecl = (ASTVar*)decl;
+                        AST_Var* vardecl = (AST_Var*)decl;
                         TIR_Value* val = fn.alloc_temp(vardecl->type);
 
                         if (vardecl->initial_value)
@@ -162,7 +162,7 @@ TIR_Value* compile_node(TIR_Function& fn, ASTNode* node, TIR_Value* dst) {
                 }
             }
 
-            for (ASTNode* stmt : block->statements) {
+            for (AST_Node* stmt : block->statements) {
                 compile_node(fn, stmt, nullptr);
             }
 
@@ -172,7 +172,7 @@ TIR_Value* compile_node(TIR_Function& fn, ASTNode* node, TIR_Value* dst) {
         }
 
         case AST_ASSIGNMENT: {
-            ASTBinaryOp* assign = (ASTBinaryOp*)node;
+            AST_BinaryOp* assign = (AST_BinaryOp*)node;
             TIR_Value* lhs = compile_node(fn, assign->lhs, nullptr);
             compile_node(fn, assign->rhs, lhs);
             break;
@@ -189,11 +189,11 @@ void TIR_Context::compile_all() {
     for(auto& decl : global.declarations_arr) {
         switch (decl.node->nodetype) {
             case AST_FN: {
-                ASTFn* fn = (ASTFn*)decl.node;
+                AST_Fn* fn = (AST_Fn*)decl.node;
                 
                 TIR_Function* tirfn = new TIR_Function(*this);
 
-                ASTType* rettype = (ASTType*)fn->block.ctx.resolve("returntype");
+                AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
                 if (rettype) 
                     tirfn->retval.type = rettype;
 

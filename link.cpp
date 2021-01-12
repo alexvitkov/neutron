@@ -70,12 +70,12 @@ bool link_nix(const char* object_filename) {
 }
 
 void link(const char* object_filename) {
-
     if (target == TARGET_WINDOWS) {
         assert(!"LInking is not implemented on windows");
     } else {
         link_nix(object_filename);
     }
 
+    remove(object_filename);
 }
 

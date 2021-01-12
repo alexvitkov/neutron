@@ -18,9 +18,9 @@ bool Context::is_global() {
     return global == this;
 }
 
-bool Context::declare(const char* name, ASTNode* value, Token nameToken) {
+bool Context::declare(const char* name, AST_Node* value, Token nameToken) {
     // Throw an error if another value with the same name has been declared
-    ASTNode* prev_decl;
+    AST_Node* prev_decl;
     if (declarations_table.find(name, &prev_decl)) {
         error({
             .code = ERR_ALREADY_DEFINED,
@@ -35,8 +35,8 @@ bool Context::declare(const char* name, ASTNode* value, Token nameToken) {
     return true;
 }
 
-ASTNode* Context::resolve(const char* name) {
-    ASTNode* node;
+AST_Node* Context::resolve(const char* name) {
+    AST_Node* node;
     if (!declarations_table.find(name, &node)) {
         if (parent)
             return parent->resolve(name);
@@ -45,12 +45,12 @@ ASTNode* Context::resolve(const char* name) {
     return node;
 }
 
-ASTNode* Context::try_resolve(const char* name) {
-    ASTNode* node = resolve(name);
+AST_Node* Context::try_resolve(const char* name) {
+    AST_Node* node = resolve(name);
     if (node)
         return node;
     else {
-        ASTUnresolvedId* id = alloc_temp<ASTUnresolvedId>(name, *this);
+        AST_UnresolvedId* id = alloc_temp<AST_UnresolvedId>(name, *this);
         global->unresolved.push(id);
         return id;
     }

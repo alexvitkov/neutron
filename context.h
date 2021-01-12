@@ -6,12 +6,12 @@
 #include "error.h"
 
 struct GlobalContext;
-struct ASTUnresolvedId;
+struct AST_UnresolvedId;
 
 struct Context {
     struct NameNodePair {
         const char* name;
-        ASTNode* node;
+        AST_Node* node;
     };
 
     struct DeclMeta {
@@ -19,8 +19,8 @@ struct Context {
     };
 
     arr<NameNodePair> declarations_arr;
-    map<const char*, ASTNode*> declarations_table;
-    map<ASTNode*, DeclMeta> declarations_meta;
+    map<const char*, AST_Node*> declarations_table;
+    map<AST_Node*, DeclMeta> declarations_meta;
 
     GlobalContext* global;
     Context* parent;
@@ -28,13 +28,13 @@ struct Context {
 	bool ok();
     bool is_global();
 
-    // Returns ASTNode* or null on failure
-    ASTNode* resolve(const char* name);
+    // Returns AST_Node* or null on failure
+    AST_Node* resolve(const char* name);
 
-    // Returns ASTNode* or creates a new ASTUnresolveNode* on failure
-    ASTNode* try_resolve(const char* name);
+    // Returns AST_Node* or creates a new ASTUnresolveNode* on failure
+    AST_Node* try_resolve(const char* name);
 
-    bool declare(const char* name, ASTNode* value, Token nameToken);
+    bool declare(const char* name, AST_Node* value, Token nameToken);
 
     Context(Context* parent);
     
@@ -60,7 +60,7 @@ struct Context {
 
 struct GlobalContext : Context {
 	arr<Error> errors;
-    arr<ASTUnresolvedId*> unresolved;
+    arr<AST_UnresolvedId*> unresolved;
     inline GlobalContext() : Context(nullptr) {}
 };
 

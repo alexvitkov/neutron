@@ -370,7 +370,7 @@ void print_token(TokenReader& r, Token t) {
 }
 
 
-ASTType* parse_type(Context& ctx, TokenReader& r) {
+AST_Type* parse_type(Context& ctx, TokenReader& r) {
     Token t = r.pop();
 
     switch (t.type) {
@@ -386,7 +386,7 @@ ASTType* parse_type(Context& ctx, TokenReader& r) {
         case KW_F64:  return &t_f64;
         case KW_BOOL: return &t_bool;
         case TOK_ID:
-            return (ASTType*)ctx.try_resolve(t.name);
+            return (AST_Type*)ctx.try_resolve(t.name);
         default:
             unexpected_token(r, t, TOK(':'));
             return nullptr;
@@ -401,7 +401,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedTyp
     }
 
     while (true) {
-        ASTType* type;
+        AST_Type* type;
         MUST (type = parse_type(ctx, r));
 
         Token nameToken = r.expect(TOK_ID);
@@ -421,9 +421,9 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedTyp
 }
 
 bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error);
-ASTNode* parse_expr(Context& ctx, TokenReader& r);
+AST_Node* parse_expr(Context& ctx, TokenReader& r);
 
-bool parse_block(ASTBlock& block, TokenReader& r) {
+bool parse_block(AST_Block& block, TokenReader& r) {
     MUST (r.expect(TOK('{')).type);
 
     while (true) {
@@ -435,20 +435,20 @@ bool parse_block(ASTBlock& block, TokenReader& r) {
         switch(r.peek().type) {
             case KW_RETURN: {
                 r.pop();
-                ASTReturn *ret;
+                AST_Return *ret;
                 if (r.peek().type == TOK(';')) {
-                    ret = block.ctx.alloc<ASTReturn>(nullptr);
+                    ret = block.ctx.alloc<AST_Return>(nullptr);
                 }
                 else {
-                    ret = block.ctx.alloc<ASTReturn>(parse_expr(block.ctx, r));
+                    ret = block.ctx.alloc<AST_Return>(parse_expr(block.ctx, r));
                     MUST (ret->value);
                 }
-                block.statements.push((ASTNode*)ret);
+                block.statements.push((AST_Node*)ret);
                 MUST (r.expect(TOK(';')).type);
                 break;
             }
             case KW_IF: {
-                ASTIf* ifs = block.ctx.alloc<ASTIf>(block.ctx);
+                AST_If* ifs = block.ctx.alloc<AST_If>(block.ctx);
                 ifs->condition = parse_expr(block.ctx, r);
                 MUST (ifs->condition);
                 MUST (parse_block(ifs->block, r));
@@ -456,7 +456,7 @@ bool parse_block(ASTBlock& block, TokenReader& r) {
                 break;
             }
             case KW_WHILE: {
-                ASTWhile* whiles = block.ctx.alloc<ASTWhile>(block.ctx);
+                AST_While* whiles = block.ctx.alloc<AST_While>(block.ctx);
                 whiles->condition = parse_expr(block.ctx, r);
                 MUST (whiles->condition);
                 MUST (parse_block(whiles->block, r));
@@ -468,7 +468,7 @@ bool parse_block(ASTBlock& block, TokenReader& r) {
                 return true;
             }
             default: {
-                ASTNode* expr = parse_expr(block.ctx, r);
+                AST_Node* expr = parse_expr(block.ctx, r);
                 MUST (expr);
                 MUST (r.expect(TOK(';')).type);
                 block.statements.push(expr);
@@ -478,10 +478,10 @@ bool parse_block(ASTBlock& block, TokenReader& r) {
     }
 }
 
-ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
+AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     assert (r.expect(KW_FN).type);
 
-    ASTFn* fn;
+    AST_Fn* fn;
     Token nameToken;
     const char* name = nullptr;
     if (decl) {
@@ -489,7 +489,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         name = nameToken.name;
         MUST (nameToken.type);
     }
-    fn = ctx.alloc<ASTFn>(ctx, name);
+    fn = ctx.alloc<AST_Fn>(ctx, name);
     if (decl) {
         MUST (ctx.declare(name, fn, nameToken));
     }
@@ -497,7 +497,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     MUST (r.expect(TOK('(')).type);
     MUST (parse_type_list(ctx, r, TOK(')'), &fn->args));
 
-    ASTType* rettype = nullptr;
+    AST_Type* rettype = nullptr;
     Token rettype_token;
 
     if (r.peek().type == TOK(':')) {
@@ -511,8 +511,8 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 
     int argid = 0;
     for (const auto& entry : fn->args) {
-        ASTVar* decl = ctx.alloc<ASTVar>(entry.name, entry.type, nullptr, argid++);
-        fn->block.ctx.declare(entry.name, (ASTNode*)decl, {});
+        AST_Var* decl = ctx.alloc<AST_Var>(entry.name, entry.type, nullptr, argid++);
+        fn->block.ctx.declare(entry.name, (AST_Node*)decl, {});
     }
 
     MUST (parse_block(fn->block, r));
@@ -522,7 +522,7 @@ ASTFn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 struct SYState {
     Context& ctx;
     u32 brackets = 0;
-    arr<ASTNode*> output;
+    arr<AST_Node*> output;
     arr<TokenType> stack;
 };
 
@@ -536,13 +536,13 @@ bool pop(SYState& s) {
 
     TokenType op = s.stack.pop();
 
-    ASTBinaryOp* bin;
-    ASTNode* lhs = s.output[s.output.size - 2];
-    ASTNode* rhs = s.output[s.output.size - 1];
+    AST_BinaryOp* bin;
+    AST_Node* lhs = s.output[s.output.size - 2];
+    AST_Node* rhs = s.output[s.output.size - 1];
 
     if (prec[op] & ASSIGNMENT) {
         if (op == '=') {
-            bin = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
+            bin = s.ctx.alloc<AST_BinaryOp>(op, lhs, rhs);
             bin->nodetype = AST_ASSIGNMENT;
         }
         else {
@@ -560,20 +560,20 @@ bool pop(SYState& s) {
                 default:
                                           assert(0);
             }
-            rhs = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
-            bin = s.ctx.alloc<ASTBinaryOp>(TOK('='), lhs, rhs);
+            rhs = s.ctx.alloc<AST_BinaryOp>(op, lhs, rhs);
+            bin = s.ctx.alloc<AST_BinaryOp>(TOK('='), lhs, rhs);
             bin->nodetype = AST_ASSIGNMENT;
         }
     }
     else {
-        bin = s.ctx.alloc<ASTBinaryOp>(op, lhs, rhs);
+        bin = s.ctx.alloc<AST_BinaryOp>(op, lhs, rhs);
     }
     s.output.pop();
-    s.output[s.output.size - 1] = (ASTNode*)bin;
+    s.output[s.output.size - 1] = (AST_Node*)bin;
     return true;
 }
 
-ASTNode* parse_expr(Context& ctx, TokenReader& r) {
+AST_Node* parse_expr(Context& ctx, TokenReader& r) {
     SYState s { .ctx = ctx };
     bool prev_was_value = false;
 
@@ -589,7 +589,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     return nullptr;
                 }
 
-                ASTNode* resolved = ctx.try_resolve(t.name);
+                AST_Node* resolved = ctx.try_resolve(t.name);
 
                 s.output.push(resolved);
                 prev_was_value = true;
@@ -612,7 +612,7 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     }
                 }
                 acc /= 10;
-                s.output.push(ctx.alloc<ASTNumber>(acc));
+                s.output.push(ctx.alloc<AST_Number>(acc));
                 break;
             }
             case TOK_OPENBRACKET: {
@@ -621,10 +621,10 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                         s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                         return nullptr;
                     }
-                    ASTFnCall* fncall = ctx.alloc<ASTFnCall>(s.output.pop());
+                    AST_FnCall* fncall = ctx.alloc<AST_FnCall>(s.output.pop());
 
                     while (r.peek().type != TOK(')')) {
-                        ASTNode* arg = parse_expr(ctx, r);
+                        AST_Node* arg = parse_expr(ctx, r);
                         MUST (arg);
                         fncall->args.push(arg);
                         if (r.peek().type != TOK(')'))
@@ -660,8 +660,8 @@ ASTNode* parse_expr(Context& ctx, TokenReader& r) {
                     s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                     return nullptr;
                 }
-                ASTNode* lhs = s.output.last();
-                ASTMemberAccess* ma = ctx.alloc<ASTMemberAccess>(lhs, nameToken.name);
+                AST_Node* lhs = s.output.last();
+                AST_MemberAccess* ma = ctx.alloc<AST_MemberAccess>(lhs, nameToken.name);
                 s.output.last() = ma;
                 break;
             }
@@ -704,18 +704,18 @@ bool parse_let(Context& ctx, TokenReader& r) {
     assert (r.expect(KW_LET).type);
 
     Token nameToken = r.expect(TOK_ID);
-    ASTType* type;
-    ASTValue* initial_value;
+    AST_Type* type;
+    AST_Value* initial_value;
 
     MUST (r.expect(TOK(':')).type);
     MUST (type = parse_type(ctx, r));
 
     if (r.peek().type == TOK('=')) {
         r.pop();
-        MUST (initial_value = (ASTValue*)parse_expr(ctx, r));
+        MUST (initial_value = (AST_Value*)parse_expr(ctx, r));
     };
 
-    ASTVar* var = ctx.alloc<ASTVar>(nameToken.name, type, initial_value, -1);
+    AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, type, initial_value, -1);
     MUST (ctx.declare(nameToken.name, var, nameToken));
 
     MUST (r.expect(TOK(';')).type);
@@ -723,19 +723,19 @@ bool parse_let(Context& ctx, TokenReader& r) {
 }
 
 // TODO this is broken since skim was removed
-ASTStruct* parse_struct(Context& ctx, TokenReader& r, bool decl) {
+AST_Struct* parse_struct(Context& ctx, TokenReader& r, bool decl) {
     assert (r.expect(KW_STRUCT).type);
 
-    ASTStruct* st;
+    AST_Struct* st;
     if (decl) {
         Token nameToken = r.expect(TOK_ID);
         // we've already skimmed the scope, so we know there's an identifier here
         assert(nameToken.type); 
 
-        st = (ASTStruct*)ctx.resolve(nameToken.name);
+        st = (AST_Struct*)ctx.resolve(nameToken.name);
     }
     else {
-        st = ctx.alloc<ASTStruct>(nullptr);
+        st = ctx.alloc<AST_Struct>(nullptr);
     }
 
     MUST (r.expect(TOK('{')).type);

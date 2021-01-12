@@ -39,7 +39,7 @@ struct Error {
     ErrorCode code;
     ErrorSeverity severity;
     arr<Token> tokens;
-    arr<ASTNode*> nodes;
+    arr<AST_Node*> nodes;
 };
 
 struct Context;

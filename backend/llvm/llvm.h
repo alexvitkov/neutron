@@ -27,7 +27,7 @@ struct LLVM_Context {
     llvm::LLVMContext lc;
     llvm::Module mod;
 
-    map<ASTType*, llvm::Type*> types;
+    map<AST_Type*, llvm::Type*> types;
 
     // TODO this will not work for phi nodes
     map<TIR_Value*, llvm::Value*> values;

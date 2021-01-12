@@ -23,7 +23,7 @@ enum TIR_OpCode : u8 {
 struct TIR_Value {
     TIR_ValueSpace valuespace;
     u64 offset;
-    ASTType* type;
+    AST_Type* type;
 };
 
 struct TIR_Instruction {
@@ -49,7 +49,7 @@ struct TIR_Function;
 
 struct TIR_Context {
     GlobalContext& global;
-    map<ASTFn*, TIR_Function*> fns;
+    map<AST_Fn*, TIR_Function*> fns;
 
     void compile_all();
 };
@@ -60,11 +60,11 @@ struct TIR_Function {
     TIR_Block* writepoint;
     TIR_Block* entry;
     u64 temp_offset = 0;
-    map<ASTNode*, TIR_Value*> valmap;
+    map<AST_Node*, TIR_Value*> valmap;
 
     TIR_Function(TIR_Context& c) : c(c) {};
 
-    TIR_Value* alloc_temp(ASTType* type);
+    TIR_Value* alloc_temp(AST_Type* type);
     TIR_Value* alloc_val(TIR_Value val);
     void free_temp(TIR_Value* val);
     void emit(TIR_Instruction instr);
