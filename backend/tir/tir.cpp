@@ -131,7 +131,8 @@ void store(TIR_Function& fn, AST_Node* dst, AST_Node* src) {
     switch (dst->nodetype) {
         case AST_VAR: {
             TIR_Value* dstval = fn.valmap[dst];
-            fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dstval, .src = dstval } });
+            compile_node(fn, src, dstval);
+            // fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dstval, .src = srcval } });
             break;
         }
         case AST_DEREFERENCE: {
@@ -185,6 +186,7 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
             .opcode = TOPC_JMP,
             .jmp = { after }
         });
+        after->previous_blocks.push_unique(tir_block);
     }
 }
 
@@ -338,6 +340,8 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
                     .else_block = continuation,
                 }
             });
+            then_block->previous_blocks.push_unique(fn.writepoint);
+            continuation->previous_blocks.push_unique(fn.writepoint);
 
             fn.blocks.push(then_block);
             fn.blocks.push(continuation);

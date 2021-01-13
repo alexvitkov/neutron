@@ -29,14 +29,21 @@ struct LLVM_Context {
 
     map<AST_Type*, llvm::Type*> translated_types;
 
-    // TODO this will not work for phi nodes
-    map<TIR_Value*, llvm::Value*> values;
+    // map<TIR_Value*, arr<llvm::Value*>> values;
     map<AST_Value*, llvm::Value*> definitions;
     map<TIR_Block*, llvm::BasicBlock*> blocks;
+
+    struct Tuple {
+        llvm::Value* val;
+        llvm::BasicBlock* block;
+    };
+    map<TIR_Value*, map<llvm::BasicBlock*, llvm::Value*>> _values;
 
     llvm::Value* retval;
 
     llvm::IRBuilder<> builder;
+
+    void set_value(TIR_Value* value, llvm::Value* l_value, llvm::BasicBlock* l_bb);
 
     LLVM_Context(TIR_Context& t_c);
     void compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block);
@@ -44,6 +51,7 @@ struct LLVM_Context {
     void compile_all();
     const char* output_object();
     llvm::Type* translate_type(AST_Type* type);
+    llvm::Value* translate_value(TIR_Value* val, TIR_Block* block);
 };
 
 #endif // guard

@@ -482,7 +482,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
         case AST_IF: {
             AST_If* ifs = (AST_If*)node;
             MUST (typecheck(ctx, ifs->condition));
-            MUST (typecheck(ctx, ifs->condition));
+            MUST (typecheck(ctx, &ifs->then_block));
             return true;
         }
         case AST_STRUCT: {

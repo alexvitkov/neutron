@@ -13,7 +13,6 @@ extern u32 map_hash(void* key);
 
 template <typename K, typename V>
 struct map {
-
     struct kvp {
         K key;
         V value;
@@ -36,9 +35,22 @@ struct map {
     }
 
     map(map& other)  = delete;
-    map(map&& other) = delete;
     map& operator= (const map& other)  = delete;
-    map& operator= (const map&& other) = delete;
+
+    map(map&& other) {
+        bins = other.bins;
+        numbins = other.numbins;
+        numfreebins = other.numfreebins;
+        other.bins = nullptr;
+    }
+
+    map& operator= (const map&& other) {
+        bins = other.bins;
+        numbins = other.numbins;
+        numfreebins = other.numfreebins;
+        other.bins = nullptr;
+        return *this;
+    }
 
     void alloc_bins(u32 numbins) {
         bins = (bin*)malloc(sizeof(bin) * numbins);
@@ -57,7 +69,7 @@ struct map {
             if (old_bins[i].haskey) {
                 // TODO we can avoid recalculating the hash here as its already stored inside the old bin
                 // but for now I'd like to reuse the insert function here so fuck it
-                insert(old_bins[i].key, old_bins[i].value);
+                insert(old_bins[i].key, std::move(old_bins[i].value));
             }
         }
         free(old_bins);
@@ -243,6 +255,14 @@ struct arr {
         arr_ref<T> r { .buffer = buffer, .size = size };
         this->buffer = nullptr;
         return r;
+    }
+
+    T& push_unique(T value) {
+        for (int i = 0; i < size; i++) {
+            if (buffer[i] == value)
+                return buffer[i];
+        }
+        return push(value);
     }
 
     T& push(T value) {

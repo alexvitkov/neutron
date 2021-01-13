@@ -17,6 +17,10 @@ LLVM_Context::LLVM_Context(TIR_Context& tirc) : t_c(tirc), mod("ntrmod", lc), bu
     translated_types.insert(&t_f64,  Type::getFloatTy(lc));
 }
 
+void LLVM_Context::set_value(TIR_Value* value, llvm::Value* l_value, llvm::BasicBlock* l_bb) {
+     _values[value][l_bb] = l_value;
+}
+
 llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
     llvm::Type* t;
     if (translated_types.find(type, &t))
@@ -53,31 +57,50 @@ llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
         default:
             assert(!"Not implemented");
     }
-    
 }
 
-void translate_value(LLVM_Context& c, TIR_Value* val, llvm::Value** out) {
+llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block) {
     switch (val->valuespace) {
         case TVS_VALUE: {
-            llvm::Type* l_type = c.translated_types[val->type];
+            llvm::Type* l_type = translated_types[val->type];
             assert(l_type);
-            *out = ConstantInt::get(l_type, val->offset, false);
-            break;
+            return ConstantInt::get(l_type, val->offset, false);
         }
         case TVS_RET_VALUE:
         case TVS_TEMP: {
-            llvm::Value* l_value = c.values[val];
-            assert(l_value);
-            *out = l_value;
-            break;
+
+            BasicBlock* l_bb = blocks[block];
+
+            llvm::Value* out;
+            if (_values[val].find(l_bb, &out)) {
+                return out;
+            }
+
+            arr<llvm::Value*> prev;
+
+            for (TIR_Block* p : block->previous_blocks) {
+                llvm::Value* v = _values[val][blocks[p]];
+                assert(v);
+                prev.push(v);
+            }
+
+            if (prev.size == 1) {
+                _values[val][l_bb] = prev[0];
+                return prev[0];
+            } else {
+                llvm::PHINode* phi = builder.CreatePHI(translate_type(val->type), prev.size);
+
+                for (int i = 0; i < prev.size; i++) {
+                    phi->addIncoming(prev[i], blocks[block->previous_blocks[i]]);
+                }
+                _values[val][l_bb] = phi;
+
+                return phi;
+            }
         }
         default:
             assert(!"Not implemented");
     }
-    /*
-    TVS_DISCARD = 0x00,
-    TVS_ARGUMENT,
-    */
 }
 
 
@@ -90,29 +113,25 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
     for (auto& instr : block->instructions) {
         switch (instr.opcode) {
             case TOPC_MOV: {
-                llvm::Value* l_src;
-                translate_value(*this, instr.un.src, &l_src);
+                llvm::Value* l_src = translate_value(instr.un.src, block);
 
-                values[instr.un.dst] = l_src;
+                set_value(instr.un.dst, l_src, l_bb);
                 break;
             }
             case TOPC_ADD: {
-                llvm::Value *lhs, *rhs;
-                translate_value(*this, instr.bin.lhs, &lhs);
-                translate_value(*this, instr.bin.rhs, &rhs);
-                values[instr.bin.dst] = builder.CreateAdd(lhs, rhs);
+                llvm::Value *lhs = translate_value(instr.bin.lhs, block);
+                llvm::Value *rhs = translate_value(instr.bin.rhs, block);
+                set_value(instr.bin.dst, builder.CreateAdd(lhs, rhs), l_bb);
                 break;
             }
             case TOPC_EQ: {
-                llvm::Value *lhs, *rhs;
-                translate_value(*this, instr.bin.lhs, &lhs);
-                translate_value(*this, instr.bin.rhs, &rhs);
-                values[instr.bin.dst] = builder.CreateICmpEQ(lhs, rhs);
+                llvm::Value *lhs = translate_value(instr.bin.lhs, block);
+                llvm::Value *rhs = translate_value(instr.bin.rhs, block);
+                set_value(instr.bin.dst, builder.CreateICmpEQ(lhs, rhs), l_bb);
                 break;
             }
             case TOPC_RET: {
-                llvm::Value *retval;
-                translate_value(*this, &fn->retval, &retval);
+                llvm::Value *retval = translate_value(&fn->retval, block);
                 builder.CreateRet(retval);
                 break;
             }
@@ -127,7 +146,7 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 llvm::Value** args = (llvm::Value**)malloc(sizeof(llvm::Value*) * argc);
 
                 for (int i = 0; i < instr.call.args.size; i++) {
-                    llvm::Value* l_arg = values[instr.call.args[i]];
+                    llvm::Value* l_arg = translate_value(instr.call.args[i], block);
                     assert(l_arg);
                     args[i] = l_arg;
                 }
@@ -135,7 +154,7 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 llvm::Value* l_result = builder.CreateCall(l_callee, ArrayRef<llvm::Value*>(args, argc));
 
                 if (instr.call.dst) {
-                    values[instr.un.dst] = l_result;
+                    set_value(instr.un.dst, l_result, l_bb);
                 }
 
                 break;
@@ -144,22 +163,17 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 // TODO ERROR this will fail if the pointer is uninitialized
                 // This is undefined behaviour anyway as we're deref'ing an
                 // uninitialized pointer, the typer should probably catch this
-                llvm::Value *l_dst_ptr = nullptr, *l_src = nullptr;
-
-                translate_value(*this, instr.un.dst, &l_dst_ptr);
-                translate_value(*this, instr.un.src, &l_src);
+                llvm::Value *l_dst_ptr = translate_value(instr.un.dst, block);
+                llvm::Value* l_src = translate_value(instr.un.src, block);
 
                 builder.CreateStore(l_src, l_dst_ptr, false);
                 break;
             }
             case TOPC_LOAD: {
-                llvm::Value *dst = nullptr, *src = nullptr;
-
-                translate_value(*this, instr.un.src, &src);
-
+                llvm::Value *src = translate_value(instr.un.src, block);
                 llvm::Value* l_val = builder.CreateLoad(src);
 
-                values[instr.un.dst] = l_val;
+                set_value(instr.un.dst, l_val, l_bb);
                 break;
             }
             case TOPC_JMP: {
@@ -167,7 +181,7 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 break;
             }
             case TOPC_JMPIF: {
-                llvm::Value *cond = values[instr.jmpif.cond];
+                llvm::Value *cond = translate_value(instr.jmpif.cond, block);
                 llvm::BasicBlock *true_b = blocks[instr.jmpif.then_block];
                 llvm::BasicBlock *false_b = blocks[instr.jmpif.else_block];
                 builder.CreateCondBr(cond, true_b, false_b);

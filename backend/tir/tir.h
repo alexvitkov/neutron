@@ -68,8 +68,13 @@ struct TIR_Block {
     u64 id;
 
     arr<TIR_Instruction> instructions;
+
+    // A list of all blocks that can jump into this one
+    // This is used to generate the PHI instructions in LLVM
+    arr<TIR_Block*> previous_blocks;
+
+    // We use the bucketed_arr here, so we can pass around pointers to TIR_Value safely
     bucketed_arr<TIR_Value> values;
-    TIR_Block* parent;
 
     TIR_Block();
 };
