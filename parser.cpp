@@ -211,7 +211,7 @@ bool tokenize(Context& global, SourceFile &s) {
 				};
 
                 if (tt == TOK_ID) {
-                    // TODO a more sane allocation is needed here
+                    // TODO ALLOCATION
                     u64 length = i - word_start;
                     char* word = (char*)malloc(length + 1);
                     memcpy(word, s.buffer + word_start, length);
@@ -684,13 +684,27 @@ AST_Node* parse_expr(Context& ctx, TokenReader& r) {
             case TOK_DOT: {
                 Token nameToken = r.expect(TOK_ID);
                 MUST (nameToken.type);
-                if (!s.output.size) {
+                if (s.output.size == 0) {
                     s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                     return nullptr;
                 }
                 AST_Node* lhs = s.output.last();
                 AST_MemberAccess* ma = ctx.alloc<AST_MemberAccess>(lhs, nameToken.name);
                 s.output.last() = ma;
+                break;
+            }
+            case '[': {
+                AST_Node* index = parse_expr(ctx, r);
+                MUST (index);
+                MUST (r.expect(TOK(']')).type);
+
+                if (s.output.size == 0) {
+                    s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                    return nullptr;
+                }
+
+                s.output.last() = ctx.alloc<AST_BinaryOp>(TOK('+'), s.output.last(), index);
+                s.output.last() = ctx.alloc<AST_Dereference>((AST_Value*)s.output.last());
                 break;
             }
             default: {
