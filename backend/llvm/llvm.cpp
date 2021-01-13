@@ -15,6 +15,7 @@ LLVM_Context::LLVM_Context(TIR_Context& tirc) : t_c(tirc), mod("ntrmod", lc), bu
     translated_types.insert(&t_i64,  IntegerType::get(lc, 64));
     translated_types.insert(&t_f32,  Type::getFloatTy(lc));
     translated_types.insert(&t_f64,  Type::getFloatTy(lc));
+    translated_types.insert(&t_void, Type::getVoidTy(lc));
 }
 
 void LLVM_Context::set_value(TIR_Value* value, llvm::Value* l_value, llvm::BasicBlock* l_bb) {
@@ -35,13 +36,18 @@ llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
             for (auto& param : fntype->param_types)
                 l_param_types.push(translate_type(param));
 
-            llvm::Type* returntype = translate_type(fntype->returntype);
+            llvm::Type* returntype;
+            if (!fntype->returntype || fntype->returntype == &t_void) {
+                returntype = translated_types[&t_void];
+            }
+            else {
+                returntype = translate_type(fntype->returntype);
+            }
 
             FunctionType* l_fn_type = FunctionType::get(
                     returntype, 
                     ArrayRef<llvm::Type*>(l_param_types.buffer, l_param_types.size),
-                    false
-            );
+                    fntype->is_variadic);
 
             translated_types.insert(type, l_fn_type);
             return l_fn_type;
@@ -83,6 +89,9 @@ llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block) {
                 assert(v);
                 prev.push(v);
             }
+
+            // TODO this should be handled in the typer?
+            assert(prev.size > 0);
 
             if (prev.size == 1) {
                 _values[val][l_bb] = prev[0];
@@ -187,26 +196,35 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 builder.CreateCondBr(cond, true_b, false_b);
                 break;
             }
+            case TOPC_PTR_OFFSET: {
+                llvm::Value *lhs = translate_value(instr.bin.lhs, block);
+                llvm::Value *rhs = translate_value(instr.bin.rhs, block);
+                set_value(instr.bin.dst, builder.CreateGEP(lhs, rhs), l_bb);
+                break;
+            }
             default:
                 assert(!"Not implemented");
         }
     }
 }
 
-
-Function* LLVM_Context::compile_fn(TIR_Function* fn) {
-
-    const char* fn_name = fn->ast_fn->name;
-
+void LLVM_Context::compile_fn_header(TIR_Function* fn) {
     llvm::FunctionType* l_fn_type = (llvm::FunctionType*)translate_type(fn->ast_fn->type);
 
     if (fn->ast_fn->is_extern) {
-        llvm::Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::ExternalLinkage, fn_name, mod);
+        llvm::Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::ExternalLinkage, fn->ast_fn->name, mod);
         definitions.insert(fn->ast_fn, l_fn);
-        return l_fn;
+    } else {
+        Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::WeakAnyLinkage, fn->ast_fn->name, mod);
+        definitions.insert(fn->ast_fn, l_fn);
     }
+}
 
-    Function* l_fn = Function::Create(l_fn_type, llvm::GlobalValue::WeakAnyLinkage, fn_name, mod);
+void LLVM_Context::compile_fn(TIR_Function* fn) {
+
+    const char* fn_name = fn->ast_fn->name;
+    Function* l_fn = (Function*)definitions[fn->ast_fn];
+
     definitions.insert(fn->ast_fn, l_fn);
 
     for (TIR_Block* block : fn->blocks) {
@@ -215,9 +233,6 @@ Function* LLVM_Context::compile_fn(TIR_Function* fn) {
     for (TIR_Block* block : fn->blocks) {
         compile_block(fn, l_fn, block);
     }
-
-
-    return l_fn;
 }
 
 const char* LLVM_Context::output_object() {
@@ -290,10 +305,14 @@ void LLVM_Context::compile_all() {
     Function* l_main;
 
     for (auto& kvp : t_c.fns) {
+        compile_fn_header(kvp.value);
+    }
+
+    for (auto& kvp : t_c.fns) {
         TIR_Function* t_fn = kvp.value;
-        auto l_fn = compile_fn(t_fn);
+        compile_fn(t_fn);
         if (!strcmp(t_fn->ast_fn->name, "main"))
-            l_main = l_fn;
+            l_main = (Function*)definitions[t_fn->ast_fn];
     }
 
     insert_entry_boilerplate(*this, l_main);

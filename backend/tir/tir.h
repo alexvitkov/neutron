@@ -23,6 +23,7 @@ enum TIR_OpCode : u8 {
     TOPC_STORE,
     TOPC_JMPIF,
     TOPC_JMP,
+    TOPC_PTR_OFFSET,
 };
 
 struct TIR_Value {

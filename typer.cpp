@@ -253,6 +253,19 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
     return true;
 }
 
+bool is_integral_type(AST_Type* type) {
+    switch (type->nodetype) {
+        case AST_PRIMITIVE_TYPE: {
+            AST_PrimitiveType* prim = (AST_PrimitiveType*)type;
+            return prim->kind == PRIMITIVE_BOOL
+                || prim->kind == PRIMITIVE_SIGNED
+                || prim->kind == PRIMITIVE_UNSIGNED;
+        }
+        default: 
+            return false;
+    }
+}
+
 AST_Type* gettype(Context& ctx, AST_Node* node) {
     switch (node->nodetype) {
         case AST_PRIMITIVE_TYPE: 
@@ -281,6 +294,10 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
                 MUST (must_be_type(ctx, rettype));
 
             fn->type = get_fn_type(rettype, std::move(param_types));
+
+
+            if (!strcmp(fn->name, "printf"))
+                ((AST_FnType*)fn->type)->is_variadic = true;
             return fn->type;
         }
 
@@ -343,11 +360,82 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
             AST_Type* rhst = gettype(ctx, bin->rhs);
             MUST (lhst && rhst);
 
-            if (implicit_cast(ctx, &bin->rhs, lhst))
-                return (bin->type = lhst);
+            // Handle pointer arithmetic
+            if (lhst->nodetype == AST_POINTER_TYPE || rhst->nodetype == AST_POINTER_TYPE) {
+                if (bin->op != '+' && bin->op != '-') {
+                    ctx.error({
+                        .code = ERR_INCOMPATIBLE_TYPES,
+                        .nodes = { lhst, rhst }
+                    });
+                    return nullptr;
+                }
 
-            if (implicit_cast(ctx, &bin->lhs, rhst))
-                return (bin->type = rhst);
+                // There are 6 cases here
+                // Pointer  + Integral -- valid
+                // Integral + Pointer  -- valid
+                // Pointer  + Pointer  -- invalid
+                
+                // Pointer  - Integral -- valid
+                // Pointer  - Pointer  -- valid
+                // Integral - Pointer  -- invalid
+
+                if (lhst->nodetype == AST_POINTER_TYPE) {
+                    // If LHS is a pointer and operator is +, RHS can only be an integral type
+                    if (bin->op == '+' && !is_integral_type(rhst))
+                        goto Error;
+
+                    if (bin->op == '-') {
+                        // Pointer Pointer subtraction is valid if the pointers the same type
+                        if (rhst->nodetype == AST_POINTER_TYPE) {
+                            if (lhst != rhst)
+                                goto Error;
+                            bin->op = OP_SUB_PTR_PTR;
+                        }
+                        // The other valid case is Pointer - Integral
+                        else {
+                            if (!is_integral_type(rhst))
+                                goto Error;
+                            bin->op = OP_SUB_PTR_INT;
+                        }
+                    }
+                    else {
+                        bin->op = OP_ADD_PTR_INT;
+                    }
+
+
+                } else {
+                    // LHS is not a pointer => the only valid case is Integral + Pointer
+                    if (!is_integral_type(lhst) || bin->op != '+')
+                        goto Error;
+
+                    // In order to simplify code generation
+                    // we will swap the arguments so that the pointer is LHS
+                    std::swap(bin->lhs, bin->rhs);
+                    bin->op = OP_ADD_PTR_INT;
+                }
+
+                // After this is all done, the type of the binary expression
+                // is the same as the pointer type
+                bin->type = lhst->nodetype == AST_POINTER_TYPE ? lhst : rhst;
+                return bin->type;
+
+Error:
+                ctx.error({
+                    .code = ERR_INCOMPATIBLE_TYPES,
+                    .nodes = { lhst, rhst }
+                });
+                return nullptr;
+            }
+
+
+            // Handle regular human arithmetic between numbers
+            else {
+                if (implicit_cast(ctx, &bin->rhs, lhst))
+                    return (bin->type = lhst);
+
+                if (implicit_cast(ctx, &bin->lhs, rhst))
+                    return (bin->type = rhst);
+            }
 
             ctx.error({
                 .code = ERR_INCOMPATIBLE_TYPES,
@@ -386,6 +474,8 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
                 return deref->type;
 
             AST_Type* inner_type = gettype(ctx, deref->ptr);
+            MUST (inner_type);
+
             if (inner_type->nodetype != AST_POINTER_TYPE) {
                 ctx.error({
                     .code = ERR_INVALID_DEREFERENCE,

@@ -72,7 +72,7 @@ CharTraits ctt[128] {
 /* 44  - ,   */ CT_HELPERTOKEN,
 /* 45  - -   */ CT_OPERATOR,
 /* 46  - .   */ CT_OPERATOR,
-/* 47  - /   */ CT_ERROR,
+/* 47  - /   */ CT_HELPERTOKEN,
 /* 48  - 0   */ CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT, CT_DIGIT,
 /* 58  - :   */ CT_HELPERTOKEN,
 /* 59  - ;   */ CT_HELPERTOKEN,
@@ -230,7 +230,15 @@ bool tokenize(Context& global, SourceFile &s) {
 			}
 		}
 
-		if (ct & (CT_OPERATOR | CT_HELPERTOKEN)) {
+        if (c == '/' && i < s.length - 1 && s.buffer[i + 1] == '/') {
+            while (s.buffer[i] != '\n' && i < s.length)
+                i++;
+            // Set the char to '\n', so the line can get incremented a few paragraphs down
+            if (i < s.length)
+                c = '\n';
+        } 
+
+        else if (ct & (CT_OPERATOR | CT_HELPERTOKEN)) {
 			u64 match = 0;
 
             u32 length = 1;

@@ -43,15 +43,17 @@ struct LLVM_Context {
 
     llvm::IRBuilder<> builder;
 
-    void set_value(TIR_Value* value, llvm::Value* l_value, llvm::BasicBlock* l_bb);
-
     LLVM_Context(TIR_Context& t_c);
-    void compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block);
-    llvm::Function* compile_fn(TIR_Function* fn);
     void compile_all();
     const char* output_object();
-    llvm::Type* translate_type(AST_Type* type);
+
+    void compile_fn_header(TIR_Function* fn);
+    void compile_fn(TIR_Function* fn);
+    void compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block);
+
     llvm::Value* translate_value(TIR_Value* val, TIR_Block* block);
+    llvm::Type* translate_type(AST_Type* type);
+    void set_value(TIR_Value* value, llvm::Value* l_value, llvm::BasicBlock* l_bb);
 };
 
 #endif // guard

@@ -71,6 +71,9 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
         case TOPC_EQ:
             o << *instr.bin.dst << " <- " << *instr.bin.lhs << " == " << *instr.bin.rhs << std::endl;
             break;
+        case TOPC_PTR_OFFSET:
+            o << *instr.bin.dst << " <- " << *instr.bin.lhs << "[" << *instr.bin.rhs << "]&" << std::endl;
+            break;
         case TOPC_RET:
             o << "ret" << std::endl;
             break;
@@ -232,9 +235,22 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             TIR_OpCode opcode;
 
             switch (bin->op) {
-                case '+': opcode = TOPC_ADD; break;
-                case '-': opcode = TOPC_SUB; break;
-                case OP_DOUBLEEQUALS: opcode = TOPC_EQ; break;
+                case '+':  {
+                    opcode = TOPC_ADD; 
+                    break;
+                }
+                case '-': {
+                    opcode = TOPC_SUB; 
+                    break;
+                }
+                case OP_DOUBLEEQUALS: {
+                    opcode = TOPC_EQ; 
+                    break;
+                }
+                case OP_ADD_PTR_INT: {
+                    opcode = TOPC_PTR_OFFSET;
+                    break;
+                }
                 default:
                     assert(!"Not implemented");
             }

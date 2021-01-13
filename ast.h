@@ -96,8 +96,9 @@ struct AST_PrimitiveType : AST_Type {
 struct AST_FnType : AST_Type {
     AST_Type* returntype;
     arr<AST_Type*> param_types;
+    bool is_variadic;
 
-    inline AST_FnType() : AST_Type(AST_FN_TYPE) {}
+    inline AST_FnType() : AST_Type(AST_FN_TYPE), is_variadic(false) {}
 };
 
 struct AST_PointerType : AST_Type {
