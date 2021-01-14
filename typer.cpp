@@ -310,6 +310,8 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
 
         case AST_FN_CALL: {
             AST_FnCall *fncall = (AST_FnCall*)node;
+            if (fncall->type)
+                return fncall->type;
 
             AST_Fn *fn = (AST_Fn*)fncall->fn;
             assert(fn->nodetype == AST_FN);
@@ -327,8 +329,10 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
             }
 
             if (!returntype) {
-                return &t_void;
+                returntype = &t_void;
             }
+
+            fncall->type = returntype;
             return returntype;
         }
 
@@ -487,6 +491,18 @@ Error:
             return deref->type;
         }
 
+        case AST_ADDRESS_OF: {
+            AST_AddressOf* addrof = (AST_AddressOf*)node;
+            if (addrof->type)
+                return addrof->type;
+
+            AST_Type* inner_type = gettype(ctx, addrof->inner);
+            MUST (inner_type);
+
+            addrof->type = get_pointer_type(inner_type);
+            return addrof->type;
+        }
+
         default:
             printf("gettype is not supported/implemented for nodetype %d\n", node->nodetype);
             assert(0);
@@ -566,6 +582,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
         case AST_FN_CALL:
         case AST_MEMBER_ACCESS:
         case AST_DEREFERENCE:
+        case AST_ADDRESS_OF:
         {
             return gettype(ctx, node);
         }

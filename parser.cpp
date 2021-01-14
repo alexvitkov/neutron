@@ -59,7 +59,7 @@ CharTraits ctt[128] {
 /* 31  - US  */ CT_ERROR,
 /* 32  - SPC */ CT_WHITESPACE,
 /* 33  - !   */ CT_OPERATOR,
-/* 34  - "   */ CT_ERROR,
+/* 34  - "   */ CT_HELPERTOKEN,
 /* 35  - #   */ CT_ERROR,
 /* 36  - $   */ CT_ERROR,
 /* 37  - %   */ CT_OPERATOR,
@@ -164,6 +164,8 @@ u8 prec[148] = {
 /* |= */  1 | ASSIGNMENT,
 };
 
+struct TokenReader;
+void unexpected_token(TokenReader& r, Token tok, TokenType expected);
 
 bool tokenize(Context& global, SourceFile &s) {
 	u64 word_start;
@@ -230,7 +232,39 @@ bool tokenize(Context& global, SourceFile &s) {
 			}
 		}
 
-        if (c == '/' && i < s.length - 1 && s.buffer[i + 1] == '/') {
+        if (c == '"') {
+            word_start = i + 1;
+            int string_start_line = line;
+            // Look for the matching "
+            do {
+                i++;
+                if (s.buffer[i] == '\n') {
+                    assert(!"Multiline string Not implemented");
+                }
+            } while (s.buffer[i] != '"' && i < s.length);
+
+            // Unexpected EOF
+            if (i == s.length) {
+                global.error({ .code = ERR_UNEXPECTED_TOKEN });
+            }
+
+            u32 length = i - word_start;
+            Token tok = {
+				.type = TOK_STRING_LITERAL,
+				.length = length,
+				.start = i + 1,
+                .line = line,
+                .pos_in_line = (u32)(i - string_start_line),
+            };
+
+            char* contents = (char*)malloc(length);
+            memcpy(contents, s.buffer + word_start, length);
+            tok.name = contents;
+            
+            s.tokens.push(tok);
+        }
+
+        else if (c == '/' && i < s.length - 1 && s.buffer[i + 1] == '/') {
             while (s.buffer[i] != '\n' && i < s.length)
                 i++;
             // Set the char to '\n', so the line can get incremented a few paragraphs down
@@ -305,8 +339,6 @@ bool tokenize(Context& global, SourceFile &s) {
 	return true;
 }
 
-struct TokenReader;
-void unexpected_token(TokenReader& r, Token tok, TokenType expected);
 
 struct TokenReader {
 	int pos = 0;
@@ -438,7 +470,7 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedTyp
 }
 
 bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error);
-AST_Node* parse_expr(Context& ctx, TokenReader& r);
+AST_Value* parse_expr(Context& ctx, TokenReader& r);
 
 bool parse_block(AST_Block& block, TokenReader& r) {
     MUST (r.expect(TOK('{')).type);
@@ -550,7 +582,7 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 struct SYState {
     Context& ctx;
     u32 brackets = 0;
-    arr<AST_Node*> output;
+    arr<AST_Value*> output;
     arr<TokenType> stack;
 };
 
@@ -597,11 +629,11 @@ bool pop(SYState& s) {
         bin = s.ctx.alloc<AST_BinaryOp>(op, lhs, rhs);
     }
     s.output.pop();
-    s.output[s.output.size - 1] = (AST_Node*)bin;
+    s.output[s.output.size - 1] = bin;
     return true;
 }
 
-AST_Node* parse_expr(Context& ctx, TokenReader& r) {
+AST_Value* parse_expr(Context& ctx, TokenReader& r) {
     SYState s { .ctx = ctx };
     bool prev_was_value = false;
 
@@ -617,9 +649,10 @@ AST_Node* parse_expr(Context& ctx, TokenReader& r) {
                     return nullptr;
                 }
 
+                // TODO RESOLVE we should not be trying resolution here
                 AST_Node* resolved = ctx.try_resolve(t.name);
 
-                s.output.push(resolved);
+                s.output.push((AST_Value*)resolved);
                 prev_was_value = true;
                 break;
             }
@@ -707,6 +740,28 @@ AST_Node* parse_expr(Context& ctx, TokenReader& r) {
                 s.output.last() = ctx.alloc<AST_Dereference>((AST_Value*)s.output.last());
                 break;
             }
+            case '&': {
+                if (s.output.size == 0) {
+                    s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                    return nullptr;
+                }
+
+                AST_Node* top = s.output.last();
+
+                if (top->nodetype == AST_DEREFERENCE) {
+                    // TODO ALLOCATION FREE we're leaking the Dereference node here
+
+                    // foo*& is the same as x
+                    // we hadnle this here because foo[123] is expanded to (foo + 123)* (look the '[' case on this switch)
+                    // and without this foo[123]& would become (foo + 123)*& which is ridiculous
+                    s.output.last() = ((AST_Dereference*)top)->ptr;
+                } else {
+                    s.output.last() = ctx.alloc<AST_AddressOf>((AST_Value*)top);
+                }
+
+
+                break;
+            }
             default: {
                 if (is_operator(t.type)) {
 
@@ -722,7 +777,6 @@ AST_Node* parse_expr(Context& ctx, TokenReader& r) {
                                 s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                                 return nullptr;
                             }
-                            // TODO Probably all elements parse_expr works with should be AST_Values
                             s.output.last() = ctx.alloc<AST_Dereference>((AST_Value*)s.output.last());
                             break;
                         }

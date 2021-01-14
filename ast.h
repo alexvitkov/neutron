@@ -28,9 +28,9 @@ enum AST_NodeType : u8 {
     AST_TEMP_REF      = 0x0D,
     AST_UNRESOLVED_ID = 0x0E,
     AST_DEREFERENCE   = 0x0F,
+    AST_ADDRESS_OF    = 0x10,
 
-    // Be careful, if there are too many nodes
-    // they can overflow into the AST_TYPES section
+    // NOTE If there are too many nodes, they can overflow into the AST_TYPES section
     // which are the nodes who have their highest bit set
 
     AST_STRUCT         = 0x01 | AST_TYPE_BIT,
@@ -77,11 +77,11 @@ struct AST_Value : AST_Node {
     inline AST_Value(AST_NodeType nodetype, AST_Type* type) : AST_Node(nodetype), type(type) {}
 };
 
-struct AST_FnCall : AST_Node {
+struct AST_FnCall : AST_Value {
     AST_Node* fn;
     arr<AST_Node*> args;
 
-    inline AST_FnCall(AST_Node* fn) : AST_Node(AST_FN_CALL), fn(fn), args(4) {}
+    inline AST_FnCall(AST_Node* fn) : AST_Value(AST_FN_CALL, nullptr), fn(fn), args(4) {}
 };
 
 struct AST_PrimitiveType : AST_Type {
@@ -194,6 +194,13 @@ struct AST_Dereference : AST_Value {
         : AST_Value(AST_DEREFERENCE, nullptr), ptr(ptr) {}
 };
 
+struct AST_AddressOf : AST_Value {
+    AST_Value* inner;
+
+    inline AST_AddressOf(AST_Value* inner) 
+        : AST_Value(AST_ADDRESS_OF, nullptr), inner(inner) {}
+};
+
 void print(std::ostream& o, AST_Node* node, bool decl);
 void print(std::ostream& o, AST_PrimitiveType* node);
 void print(std::ostream& o, AST_Fn* node, bool decl);
@@ -209,5 +216,7 @@ void print(std::ostream& o, AST_FnCall* node);
 void print(std::ostream& o, AST_Struct* node, bool decl);
 void print(std::ostream& o, AST_MemberAccess* node);
 void print(std::ostream& o, AST_PointerType* node);
+void print(std::ostream& o, AST_Dereference* node);
+void print(std::ostream& o, AST_AddressOf* node);
 
 #endif // guard

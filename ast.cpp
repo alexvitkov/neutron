@@ -79,6 +79,8 @@ void print(std::ostream& o, AST_Node* node, bool decl) {
         case AST_STRUCT:         print(o, (AST_Struct*)node, decl); break;
         case AST_MEMBER_ACCESS:  print(o, (AST_MemberAccess*)node); break;
         case AST_POINTER_TYPE:   print(o, (AST_PointerType*)node); break;
+        case AST_DEREFERENCE:    print(o, (AST_Dereference*)node); break;
+        case AST_ADDRESS_OF:     print(o, (AST_AddressOf*)node); break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
@@ -249,4 +251,15 @@ void print(std::ostream& o, AST_MemberAccess* node) {
     print(o, node->lhs, false);
     o << '.' << node->member_name;
     if (ALWAYS_BRACKETS) o << ')';
+}
+
+
+void print(std::ostream& o, AST_Dereference* node) {
+    print(o, node->ptr, false);
+    o << '*';
+}
+
+void print(std::ostream& o, AST_AddressOf* node) {
+    print(o, node->inner, false);
+    o << '&';
 }
