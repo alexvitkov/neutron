@@ -5,14 +5,22 @@
 #include "ds.h"
 
 struct SourceFile {
-	size_t id;
-	long length;
+	u64 id;
+
+	u64 length;
+
 	char *buffer;
     const char* filename;
-	arr<Token> tokens;
 
     // line_start[100] is the character at which the 100th line starts
     arr<u32> line_start;
+
+	arr<SmallToken> _tokens;
+    arr<LocationInFile> _token_locations;
+
+
+    Token pushToken(SmallToken st, LocationInFile loc);
+    Token getToken(u64 tok_id);
 };
 
 enum OutputType {

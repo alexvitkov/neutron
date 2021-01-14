@@ -81,6 +81,7 @@ void print(std::ostream& o, AST_Node* node, bool decl) {
         case AST_POINTER_TYPE:   print(o, (AST_PointerType*)node); break;
         case AST_DEREFERENCE:    print(o, (AST_Dereference*)node); break;
         case AST_ADDRESS_OF:     print(o, (AST_AddressOf*)node); break;
+        case AST_UNRESOLVED_ID:  print(o, (AST_UnresolvedId*)node); break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
@@ -262,4 +263,8 @@ void print(std::ostream& o, AST_Dereference* node) {
 void print(std::ostream& o, AST_AddressOf* node) {
     print(o, node->inner, false);
     o << '&';
+}
+
+void print(std::ostream& o, AST_UnresolvedId* node) {
+    o << node->name;
 }

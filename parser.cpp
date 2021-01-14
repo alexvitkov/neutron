@@ -164,15 +164,25 @@ u8 prec[148] = {
 /* |= */  1 | ASSIGNMENT,
 };
 
+Location location_of(Context& ctx, AST_Node** node) {
+    Location loc;
+    if (ctx.global->node_locations.find(*node, &loc)) {
+        return loc;
+    } else if (ctx.global->node_ptr_locations.find(node, &loc)) {
+        return loc;
+    }
+    assert(!"AST_Node doesn't have a location");
+}
+
 struct TokenReader;
-void unexpected_token(TokenReader& r, Token tok, TokenType expected);
+void unexpected_token(Context& ctx, Token actual, TokenType expected);
 
 bool tokenize(Context& global, SourceFile &s) {
 	u64 word_start;
 	enum { NONE, WORD, NUMBER } state = NONE;
 
 	struct BracketToken {
-		Token tok;
+        TokenType bracket;
 		u64 tokid;
 	};
 	arr<BracketToken> bracket_stack;
@@ -186,42 +196,37 @@ bool tokenize(Context& global, SourceFile &s) {
 		CharTraits ct = ctt[c];
 
 		if (ct == CT_ERROR) {
+            Token newTok = s.pushToken(
+                { TOK_ERROR },
+                { .start = i, .end = i + 1 });
+
 			global.error({
-                .code = ERR_UNRECOGNIZED_CHARACTER, 
-                .tokens = {{
-                    .length = 1,
-                    .start = i,
-                    .line = line,
-                    .pos_in_line = (u32)(i - line_start),
-                }}
+                .code = ERR_UNEXPECTED_TOKEN, 
+                .tokens = { newTok }
             });
 			return false;
 		}
 
 		if (state) {
 			if (!(ct & (CT_LETTER | CT_DIGIT))) {
-				tok* kw = Perfect_Hash::in_word_set(s.buffer + word_start, i - word_start);
 
+				tok* kw = Perfect_Hash::in_word_set(s.buffer + word_start, i - word_start);
                 TokenType tt = kw ? kw->type : (state == WORD ? TOK_ID : TOK_NUMBER);
 
-				Token t = {
-					.type = tt,
-					.length = (u32)(i - word_start),
-					.start = word_start,
-                    .line = line,
-                    .pos_in_line = (u32)(word_start - line_start),
-				};
+                char* name = nullptr;
 
                 if (tt == TOK_ID) {
                     // TODO ALLOCATION
                     u64 length = i - word_start;
-                    char* word = (char*)malloc(length + 1);
-                    memcpy(word, s.buffer + word_start, length);
-                    word[length] = 0;
-                    t.name = word;
+                    name = (char*)malloc(length + 1);
+                    memcpy(name, s.buffer + word_start, length);
+                    name[length] = 0;
                 }
 
-                s.tokens.push(t);
+                 s.pushToken(
+                    { .type = tt, .name = name },
+                    { .start = word_start, .end = i });
+
 				state = NONE;
 			}
 		}
@@ -234,7 +239,8 @@ bool tokenize(Context& global, SourceFile &s) {
 
         if (c == '"') {
             word_start = i + 1;
-            int string_start_line = line;
+
+            u64 string_start_line = line;
             // Look for the matching "
             do {
                 i++;
@@ -243,25 +249,20 @@ bool tokenize(Context& global, SourceFile &s) {
                 }
             } while (s.buffer[i] != '"' && i < s.length);
 
+            long length = i - word_start;
+
             // Unexpected EOF
+            // TODO ERROR
             if (i == s.length) {
                 global.error({ .code = ERR_UNEXPECTED_TOKEN });
             }
 
-            u32 length = i - word_start;
-            Token tok = {
-				.type = TOK_STRING_LITERAL,
-				.length = length,
-				.start = i + 1,
-                .line = line,
-                .pos_in_line = (u32)(i - string_start_line),
-            };
-
             char* contents = (char*)malloc(length);
             memcpy(contents, s.buffer + word_start, length);
-            tok.name = contents;
             
-            s.tokens.push(tok);
+            s.pushToken(
+                { .type = TOK_STRING_LITERAL, .name = contents },
+                { .start = word_start, .end = i });
         }
 
         else if (c == '/' && i < s.length - 1 && s.buffer[i + 1] == '/') {
@@ -273,15 +274,21 @@ bool tokenize(Context& global, SourceFile &s) {
         } 
 
         else if (ct & (CT_OPERATOR | CT_HELPERTOKEN)) {
-			u64 match = 0;
-
             u32 length = 1;
+
+            // We used to use this for skimming
+            // Right now we don't,
+            // but it's still nice to catch unbalanced brakcets during lexing
+            u64 match = 0;
+
+            // Look for two and three char-long operators
             tok* t = nullptr;
             if (i + 2 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 3)))
                 length = 3;
             else if (i + 1 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 2)))
                 length = 2;
 
+            /*
             Token tok =  {
 				.type = t ? t->type : TOK(c),
 				.match = (u32)match,
@@ -290,35 +297,42 @@ bool tokenize(Context& global, SourceFile &s) {
                 .line = line,
                 .pos_in_line = (u32)(i - line_start),
             };
+            */
 
 			switch (c) {
 				case '(': case '[': case '{': {
-					bracket_stack.push({ tok, s.tokens.size});
+					bracket_stack.push({ TOK(c), s._tokens.size});
 					break;
                 }
 				case ')': case ']': case '}': {
 					if (bracket_stack.size == 0) {
+                        // TODO ERROR
 						global.error({
                             .code = ERR_UNBALANCED_BRACKETS,
-                            .tokens = { tok },
+                            // .tokens = { tok },
                         });
 						return false;
 					}
 
 					BracketToken bt = bracket_stack.pop();
-					if ((c == ')' && bt.tok.type != '(') || (c == ']' && bt.tok.type != '[') || (c == '}' && bt.tok.type != '{')) {
+					if ((c == ')' && bt.bracket != '(') || (c == ']' && bt.bracket != '[') || (c == '}' && bt.bracket != '{')) {
+                        // TODO ERROR
 						global.error({
                             .code = ERR_UNBALANCED_BRACKETS,
-                            .tokens = { bt.tok },
+                            // .tokens = { bt.tok },
                         });
 						return false;
 					}
                     match = bt.tokid;
-                    s.tokens[match].match = s.tokens.size;
 				}
 			}
 
-            s.tokens.push(tok);
+            s.pushToken(
+                { t ? t->type : TOK(c) },
+                { .start = i, .end = i + length });
+
+            // i is getting incremented by 1 anyways
+            // if we have a 3 char token, we need to further increment it by 2
             i += length - 1;
 		}
 
@@ -332,7 +346,8 @@ bool tokenize(Context& global, SourceFile &s) {
     if (bracket_stack.size != 0) {
         global.error({
             .code = ERR_UNBALANCED_BRACKETS,
-            .tokens = { bracket_stack[0].tok },
+            // TODO ERROR
+            // .tokens = { bracket_stack[0].tok },
         });
         return false;
     }
@@ -341,109 +356,131 @@ bool tokenize(Context& global, SourceFile &s) {
 
 
 struct TokenReader {
-	int pos = 0;
+	u64 pos = 0;
+    u64 pos_in_file;
+
 	SourceFile& sf;
 	Context& ctx;
 
-	Token peek() {
-		if (pos >= sf.tokens.size)
+	SmallToken peek() {
+		if (pos >= sf._tokens.size)
 			return  {};
-		return sf.tokens[pos]; 
+		return sf._tokens[pos]; 
 	}
-	Token pop() {
-		Token t = peek();
-		pos++;
-		return t;
+    
+	Token peek_full() {
+		if (pos >= sf._tokens.size)
+			return  {};
+		return sf.getToken(pos); 
 	}
-    Token expect(TokenType tt) {
-		Token t = pop();
+
+	SmallToken pop() {
+		if (pos >= sf._tokens.size)
+			return  {};
+        pos_in_file = sf._token_locations[pos].end;
+		return sf._tokens[pos++]; 
+	}
+
+	Token pop_full() {
+		if (pos >= sf._tokens.size)
+			return  {};
+		Token t = sf.getToken(pos++); 
+        pos_in_file = t.loc.end;
+        return t;
+	}
+
+    SmallToken expect(TokenType tt) {
+		SmallToken t = pop();
+
 		if (t.type != tt) {
-			unexpected_token(*this, t, tt);
+            Token t = sf.getToken(pos - 1);
+			unexpected_token(ctx, t, tt);
 			return {};
 		}
         return t;
     }
-    Token pop_until(TokenType tt) {
-        Token t;
-        do {
-            t = pop();
-        } while (t.type && t.type != tt);
-        if (!t.type)
-            unexpected_token(*this, t, TOK(';')); // unexpected eof
+
+    Token expect_full(TokenType tt) {
+		Token t = pop_full();
+
+		if (t.type != tt) {
+			unexpected_token(ctx, t, tt);
+			return {};
+		}
         return t;
     }
+
 };
 
-void print_tokens(SourceFile& sf) {
-	for (Token& t : sf.tokens) {
-		printf("%d\t%.*s\n", t.type, (int)t.length, sf.buffer + t.start);
-	}
-}
 
-void unexpected_token(TokenReader& r, Token tok, TokenType expected) {
+void unexpected_token(Context& ctx, Token actual, TokenType expected) {
     // The virtual token gives more info about what was expected in place of to
-    Token virt = tok;
+    Token virt = actual;
     virt.virt = true;
     virt.type = expected;
 
-    // Find the token before 'tok', place the virtual token after it
-    for (int i = 1; i < r.sf.tokens.size; i++) {
-        if (r.sf.tokens[i].start == tok.start) {
-            Token prev = r.sf.tokens[i - 1];
-            virt.start = prev.start + prev.length;
-            virt.pos_in_line = prev.pos_in_line + prev.length;
-            break;
-        }
-    }
+    SourceFile& sf = sources[actual.file_id];
+
+    // Find the token before 'actual', place the virtual token after it
+
 
     // ERR_UNEXPECTED_TOKEN expects exactly two tokens - the regular and the virtual
-    r.ctx.error({
+    // TODO ERROR
+    ctx.error({
         .code = ERR_UNEXPECTED_TOKEN,
-        .tokens = { tok, virt }
+        // .tokens = { tok, virt }
     });
 }
 
-void print_token(TokenReader& r, Token t) {
-    if (!t.type)
-        printf("[EOF]");
-    else
-		printf("[%d-%.*s]", t.type, (int)t.length, r.sf.buffer + t.start);
-}
 
-
-AST_Type* parse_type(Context& ctx, TokenReader& r) {
-    Token t = r.pop();
+bool parse_type(Context& ctx, TokenReader& r, AST_Type** out, bool save_range = true) {
+    Token t = r.pop_full();
 
     switch (t.type) {
+        case KW_U8:   *out = &t_u8;   break;
+        case KW_U16:  *out = &t_u16;  break;
+        case KW_U32:  *out = &t_u32;  break;
+        case KW_U64:  *out = &t_u64;  break;
+        case KW_I8:   *out = &t_i8;   break;
+        case KW_I16:  *out = &t_i16;  break;
+        case KW_I32:  *out = &t_i32;  break;
+        case KW_I64:  *out = &t_i64;  break;
+        case KW_F32:  *out = &t_f32;  break;
+        case KW_F64:  *out = &t_f64;  break;
+        case KW_BOOL: *out = &t_bool; break;
 
         case '*': {
-            AST_Type* pointed_type = parse_type(ctx, r);
-            return get_pointer_type(pointed_type);
+            AST_Type* pointed_type;
+            MUST (parse_type(ctx, r, &pointed_type, false));
+
+            *out = get_pointer_type(pointed_type);
             break;
         }
 
-        case KW_U8:   return &t_u8;
-        case KW_U16:  return &t_u16;
-        case KW_U32:  return &t_u32;
-        case KW_U64:  return &t_u64;
-        case KW_I8:   return &t_i8;
-        case KW_I16:  return &t_i16;
-        case KW_I32:  return &t_i32;
-        case KW_I64:  return &t_i64;
-        case KW_F32:  return &t_f32;
-        case KW_F64:  return &t_f64;
-        case KW_BOOL: return &t_bool;
-        case TOK_ID:
-            // TODO this is wrong, we should not be attempting a resolution
-            return (AST_Type*)ctx.try_resolve(t.name);
+        case TOK_ID: {
+            AST_UnresolvedId* id = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
+            break;
+        }
+
         default:
-            unexpected_token(r, t, TOK(':'));
-            return nullptr;
+            unexpected_token(ctx, t, TOK(':'));
+            return false;
     }
+
+    if (save_range) {
+        ctx.global->node_ptr_locations[(AST_Node**)out] = {
+            .file_id = r.sf.id,
+            .loc = {
+                .start = t.loc.start,
+                .end = r.pos_in_file,
+            }
+        };
+    }
+    return true;
 }
 
 bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedType>* tl) {
-    Token t = r.peek();
+    SmallToken t = r.peek();
     if (t.type == delim) {
         r.pop();
         return true;
@@ -451,9 +488,9 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedTyp
 
     while (true) {
         AST_Type* type;
-        MUST (type = parse_type(ctx, r));
+        MUST (parse_type(ctx, r, &type, false));
 
-        Token nameToken = r.expect(TOK_ID);
+        SmallToken nameToken = r.expect(TOK_ID);
         MUST (nameToken.type);
 
         auto& ref = tl->push({ .name = nameToken.name, .type = type });
@@ -530,13 +567,18 @@ bool parse_block(AST_Block& block, TokenReader& r) {
 }
 
 AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
-    assert (r.expect(KW_FN).type);
+    Token fn_kw = r.expect_full(KW_FN);
+
+    // This only ever gets called if the 'struct' keyword
+    // has been peeked, no need for MUST check
+    assert (fn_kw.type);
 
     AST_Fn* fn;
     Token nameToken;
     const char* name = nullptr;
+
     if (decl) {
-        nameToken = r.expect(TOK_ID);
+        nameToken = r.expect_full(TOK_ID);
         name = nameToken.name;
         MUST (nameToken.type);
     }
@@ -553,8 +595,8 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 
     if (r.peek().type == TOK(':')) {
         r.pop();
-        rettype_token = r.peek();
-        MUST (rettype = parse_type(ctx, r));
+        rettype_token = r.peek_full();
+        MUST (parse_type(ctx, r, &rettype));
     }
 
     if (rettype)
@@ -562,7 +604,9 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 
     int argid = 0;
     for (const auto& entry : fn->args) {
-        AST_Var* decl = ctx.alloc<AST_Var>(entry.name, entry.type, nullptr, argid++);
+        AST_Var* decl = ctx.alloc<AST_Var>(entry.name, argid++);
+        decl->type = entry.type;
+
         fn->block.ctx.declare(entry.name, (AST_Node*)decl, {});
     }
 
@@ -571,11 +615,21 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         if (r.peek().type == ';') {
             r.pop();
             fn->is_extern = true;
-            return fn;
         }
     }
 
-    MUST (parse_block(fn->block, r));
+    if (!fn->is_extern) {
+        MUST (parse_block(fn->block, r));
+    }
+
+    ctx.global->node_locations[fn] = {
+        .file_id = r.sf.id,
+        .loc = {
+           .start = fn_kw.loc.start,
+           .end = r.pos_in_file,
+        }
+    };
+
     return fn;
 }
 
@@ -630,6 +684,18 @@ bool pop(SYState& s) {
     }
     s.output.pop();
     s.output[s.output.size - 1] = bin;
+
+    Location lhsloc = location_of(s.ctx, &bin->lhs);
+    Location rhsloc = location_of(s.ctx, &bin->rhs);
+
+    s.ctx.global->node_locations[bin] = {
+        .file_id = lhsloc.file_id,
+        .loc = {
+            lhsloc.loc.start,
+            rhsloc.loc.end,
+        }
+    };
+
     return true;
 }
 
@@ -639,44 +705,38 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
 
     Token t;
     while (true) {
-        t = r.pop();
+        t = r.pop_full();
 
         switch (t.type) {
-
             case TOK_ID: {
                 if (prev_was_value) {
-                    unexpected_token(r, t, TOK_NONE);
+                    unexpected_token(r.ctx, t, TOK_NONE);
                     return nullptr;
                 }
-
-                // TODO RESOLVE we should not be trying resolution here
-                AST_Node* resolved = ctx.try_resolve(t.name);
-
-                s.output.push((AST_Value*)resolved);
                 prev_was_value = true;
+
+                AST_UnresolvedId* id = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
+                ctx.global->node_locations[id] = {
+                    .file_id = r.sf.id,
+                    .loc = t.loc,
+                };
+                s.output.push(id);
                 break;
             }
 
             case TOK_NUMBER: {
                 if (prev_was_value) {
-                    unexpected_token(r, t, TOK_NONE);
+                    unexpected_token(r.ctx, t, TOK_NONE);
                     return nullptr;
                 }
                 prev_was_value = true;
 
-                u64 acc = 0;
-                for (int i = 0; i < t.length; i++) {
-                    char c = r.sf.buffer[t.start + i];
-                    if (c >= '0' && c <= '9') {
-                        acc += c - '0';
-                        acc *= 10;
-                    }
-                }
-                acc /= 10;
-                s.output.push(ctx.alloc<AST_Number>(acc));
+                s.output.push(ctx.alloc<AST_Number>(t.u64_val));
                 break;
             }
+
             case TOK_OPENBRACKET: {
+                // Value followed by a open brackets means function call
                 if (prev_was_value) {
                     if (s.output.size == 0) {
                         s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
@@ -693,13 +753,17 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     }
                     r.pop(); // discard the bracket
                     s.output.push(fncall);
-                } else {
+                } 
+                
+                // If previous isn't a value, do the shunting yard thing
+                else {
                     s.stack.push(t.type);
                     prev_was_value = false;
                     s.brackets++;
                 }
                 break;
             }
+
             case TOK_CLOSEBRACKET: {
                 if (s.brackets == 0) {
                     // This should only happen when we're the last argument of a fn call
@@ -714,9 +778,11 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                 prev_was_value = true;
                 break;
             }
+
             case TOK_DOT: {
-                Token nameToken = r.expect(TOK_ID);
+                Token nameToken = r.expect_full(TOK_ID);
                 MUST (nameToken.type);
+
                 if (s.output.size == 0) {
                     s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                     return nullptr;
@@ -726,6 +792,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                 s.output.last() = ma;
                 break;
             }
+
             case '[': {
                 AST_Node* index = parse_expr(ctx, r);
                 MUST (index);
@@ -736,10 +803,21 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     return nullptr;
                 }
 
+                u64 loc_start = location_of(s.ctx, (AST_Node**)&s.output.last()).loc.start;
+
                 s.output.last() = ctx.alloc<AST_BinaryOp>(TOK('+'), s.output.last(), index);
                 s.output.last() = ctx.alloc<AST_Dereference>((AST_Value*)s.output.last());
+
+                ctx.global->node_locations[s.output.last()] = {
+                    .file_id = r.sf.id,
+                    .loc = {
+                        .start = loc_start,
+                        .end = r.pos_in_file,
+                    }
+                };
                 break;
             }
+            
             case '&': {
                 if (s.output.size == 0) {
                     s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
@@ -756,12 +834,22 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     // and without this foo[123]& would become (foo + 123)*& which is ridiculous
                     s.output.last() = ((AST_Dereference*)top)->ptr;
                 } else {
-                    s.output.last() = ctx.alloc<AST_AddressOf>((AST_Value*)top);
-                }
+                    u64 loc_start = location_of(ctx, (AST_Node**)&s.output.last()).loc.start;
 
+                    s.output.last() = ctx.alloc<AST_AddressOf>((AST_Value*)top);
+
+                    ctx.global->node_locations[s.output.last()] = {
+                        .file_id = r.sf.id,
+                        .loc = {
+                            .start = loc_start,
+                            .end = r.pos_in_file
+                        }
+                    };
+                }
 
                 break;
             }
+
             default: {
                 if (is_operator(t.type)) {
 
@@ -820,36 +908,49 @@ Done:
 }
 
 bool parse_let(Context& ctx, TokenReader& r) {
-    assert (r.expect(KW_LET).type);
+    Token let_tok = r.expect_full(KW_LET);
+    MUST (let_tok.type);
 
-    Token nameToken = r.expect(TOK_ID);
-    AST_Type* type;
-    AST_Value* initial_value = nullptr;
+    Token nameToken = r.expect_full(TOK_ID);
+    MUST (nameToken.type);
+
+    AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, -1);
 
     MUST (r.expect(TOK(':')).type);
-    MUST (type = parse_type(ctx, r));
+    MUST (parse_type(ctx, r, &var->type));
 
     if (r.peek().type == TOK('=')) {
         r.pop();
-        MUST (initial_value = (AST_Value*)parse_expr(ctx, r));
+        MUST (var->initial_value = (AST_Value*)parse_expr(ctx, r));
     };
 
-    AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, type, initial_value, -1);
     MUST (ctx.declare(nameToken.name, var, nameToken));
 
     MUST (r.expect(TOK(';')).type);
+
+    ctx.global->node_locations[var] = {
+        .file_id = r.sf.id,
+        .loc = {
+            .start = let_tok.loc.start,
+            .end = r.pos_in_file,
+        }
+    };
+
     return true;
 }
 
-// TODO this is broken since skim was removed
 AST_Struct* parse_struct(Context& ctx, TokenReader& r, bool decl) {
-    assert (r.expect(KW_STRUCT).type);
+    Token struct_kw = r.expect_full(KW_STRUCT);
+
+    // This only ever gets called if the 'struct' keyword
+    // has been peeked, no need for MUST check
+    assert (struct_kw.type);
 
     AST_Struct* st;
     if (decl) {
-        Token nameToken = r.expect(TOK_ID);
-        // we've already skimmed the scope, so we know there's an identifier here
-        assert(nameToken.type); 
+        // TODO this is broken since skim was removed
+        Token nameToken = r.expect_full(TOK_ID);
+        MUST (nameToken.type); 
 
         st = (AST_Struct*)ctx.resolve(nameToken.name);
     }
@@ -900,7 +1001,7 @@ bool parse_top_level(Context& ctx, TokenReader r) {
     // parse_decl_statement should consume all tokens in the file
     // If there's anyhting left, it's an unexpected token
     if (r.peek().type) {
-        unexpected_token(r, r.peek(), TOK_NONE);
+        unexpected_token(r.ctx, r.peek_full(), TOK_NONE);
         return false;
     }
 

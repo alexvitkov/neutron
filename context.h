@@ -14,13 +14,8 @@ struct Context {
         AST_Node* node;
     };
 
-    struct DeclMeta {
-        Token location;
-    };
-
     arr<NameNodePair> declarations_arr;
     map<const char*, AST_Node*> declarations_table;
-    map<AST_Node*, DeclMeta> declarations_meta;
 
     GlobalContext* global;
     Context* parent;
@@ -61,9 +56,15 @@ struct Context {
 struct GlobalContext : Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
+
+    map<AST_Node*, Location> node_locations;
+
+    map<AST_Node**, Location> node_ptr_locations;
+
     inline GlobalContext() : Context(nullptr) {}
 };
 
+Location location_of(Context& ctx, AST_Node** node);
 bool parse_all(Context& global);
 
 #endif // guard

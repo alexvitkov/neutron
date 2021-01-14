@@ -18,6 +18,7 @@ AST_PrimitiveType t_void (PRIMITIVE_TYPE,    0, "void");
 
 
 // TODO This should be a hashset if someone ever makes one
+//
 // The reason this exists is to make sure function types are unique
 // Type pointers MUST be comparable by checking their pointers with ==
 // so we need additional logic to make sure we don't create the same
@@ -39,7 +40,7 @@ u32 map_hash(AST_FnType* fn_type) {
     return hash(fn_type->returntype, fn_type->param_types);
 };
 
-// TODO we should check if it's a AST_UnresolvedId
+// TODO RESOLUTION we should check if it's a AST_UnresolvedId
 AST_PointerType* get_pointer_type(AST_Type* pointed_type) {
     AST_PointerType* pt;
     if (!pointer_types.find(pointed_type, &pt)) {
@@ -70,7 +71,7 @@ AST_FnType* get_fn_type(AST_Type* returntype, arr<AST_Type*> param_types) {
         return result;
     }
     else {
-        // TODO we need a sane allocation here
+        // TODO ALLOCATION we need a sane allocation here
         AST_FnType* newtype = new AST_FnType(std::move(tmp));
 
         fn_types_hash.insert(newtype, newtype);
@@ -289,6 +290,7 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
                 param_types.push(p.type);
             }
 
+            // TODO RETURNTYPE
             AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
             if (rettype)
                 MUST (must_be_type(ctx, rettype));
@@ -316,6 +318,7 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
             AST_Fn *fn = (AST_Fn*)fncall->fn;
             assert(fn->nodetype == AST_FN);
 
+            // TODO RETURNTYPE
             AST_Type* returntype = (AST_Type*)fn->block.ctx.resolve("returntype");
 
             if (fncall->args.size != fn->args.size) {
@@ -352,6 +355,17 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
 
             if (implicit_cast(ctx, &bin->rhs, lhst))
                 return (bin->type = rhst);
+
+            ctx.error({ 
+                .code = ERR_INCOMPATIBLE_TYPES, 
+                .nodes = {
+                    bin
+                },
+                .node_ptrs = { 
+                    (AST_Node**)&bin->lhs, 
+                    (AST_Node**)&bin->rhs, 
+                }
+            });
             return nullptr;
         }
 
@@ -369,7 +383,7 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
                 if (bin->op != '+' && bin->op != '-') {
                     ctx.error({
                         .code = ERR_INCOMPATIBLE_TYPES,
-                        .nodes = { lhst, rhst }
+                        .nodes = { bin->lhs, bin-> rhs }
                     });
                     return nullptr;
                 }
@@ -426,7 +440,7 @@ AST_Type* gettype(Context& ctx, AST_Node* node) {
 Error:
                 ctx.error({
                     .code = ERR_INCOMPATIBLE_TYPES,
-                    .nodes = { lhst, rhst }
+                    .nodes = { bin->lhs, bin->rhs }
                 });
                 return nullptr;
             }
@@ -516,9 +530,6 @@ bool typecheck(Context& ctx, AST_Node* node) {
         case AST_BLOCK: {
             AST_Block* block = (AST_Block*)node;
 
-            // TODO this is a band aid
-            // The real solution is to split AST_VAR
-            // into AST_VAR_DECL and AST_VAR_REF
             for (const auto& decl : block->ctx.declarations_arr) {
                 if (decl.node->nodetype == AST_VAR)
                     MUST (typecheck(block->ctx, decl.node));
@@ -535,6 +546,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
             MUST (typecheck(fn->block.ctx, &fn->block));
             return true;
         }
+
         // TODO I should probably get rid of initial_value
         // and treat it like an assignment statment
         case AST_VAR:{
@@ -552,7 +564,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
             return true;
         }
         case AST_RETURN: {
-            // TODO child void functions right now inherit the returntype of the 
+            // TODO RETURNTYPE child void functions right now inherit the returntype of the 
             // parent funciton if the child fn's return type is void
             // this is wrong
             AST_Return* ret = (AST_Return*)node;

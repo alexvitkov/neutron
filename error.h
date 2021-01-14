@@ -14,13 +14,12 @@ enum ErrorCode {
     ERR_UNKNOWN = 0,
 
     // Tokenizer errors
-    ERR_UNRECOGNIZED_CHARACTER = 1,
-    ERR_UNBALANCED_BRACKETS = 2,
+    ERR_UNBALANCED_BRACKETS,
 
     // Parser errors
-    ERR_UNEXPECTED_TOKEN = 3,
-    ERR_ALREADY_DEFINED = 4,
-    ERR_NOT_DEFINED = 5,
+    ERR_UNEXPECTED_TOKEN,
+    ERR_ALREADY_DEFINED,
+    ERR_NOT_DEFINED,
     ERR_INVALID_EXPRESSION,
 
     // Typer errors
@@ -41,7 +40,9 @@ struct Error {
     ErrorCode code;
     ErrorSeverity severity;
     arr<Token> tokens;
+
     arr<AST_Node*> nodes;
+    arr<AST_Node**> node_ptrs;
 };
 
 struct Context;

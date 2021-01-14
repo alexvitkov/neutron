@@ -1,5 +1,6 @@
 #include "error.h"
-
+#include "context.h"
+#include "ast.h"
 #include <algorithm>
 
 
@@ -16,21 +17,26 @@ const char* virt_tokens_text[] = {
 const char* error_names[] = {
     "Generic error",
 
-    "Unrecognized character",
+    // Tokenizer errors
     "Unbalanced brackets",
 
+    // Parser errors
     "Unexpected token",
     "Already defined",
     "Not defined",
     "Invalid expression",
 
+    // Typer errors
     "Incompatible types",
     "Invalid return",
-    "Not an lvalue",
+    "Not an Lvalue",
     "No such member",
+    "Bad function call",
+    "Invalid type",
+    "Invalid derefernece",
 };
 
-void print_line(Context& global, SourceFile& sf, int line, arr<Token>& red_tokens) {
+void print_line(Context& global, SourceFile& sf, int line, arr<Location>& red_tokens) {
     if (line < 0 || line > sf.line_start.size)
         return;
 
@@ -41,96 +47,148 @@ void print_line(Context& global, SourceFile& sf, int line, arr<Token>& red_token
     u64 line_start = sf.line_start[line];
 
     for (u64 i = line_start; i < sf.length && sf.buffer[i] != '\n'; i++) {
-        for (Token& t : red_tokens) {
-            if (t.file == sf.id && t.line == line && t.pos_in_line == i - line_start) {
-                if (t.virt) {
-                    std::cout << red << virt_tokens_text[t.virt] << resetstyle;
-                }
-                else {
-                    std::cout << red;
-                }
+
+        for (Location& loc : red_tokens) {
+            if (loc.file_id == sf.id && loc.loc.start == i) {
+                std::cout << red;
             }
-            if (t.file == sf.id && t.line == line && (t.pos_in_line == i  - t.length - line_start) && !t.virt)
+            if (loc.file_id ==sf.id && loc.loc.end == i)
                 std::cout << resetstyle;
         }
+
         putc(sf.buffer[i], stdout);
     }
     std::cout << resetstyle << '\n';
 }
 
+int get_line(SourceFile& sf, LocationInFile loc) {
+    for (int i = 0; i < sf.line_start.size; i++) {
+        if (loc.start < sf.line_start[i])
+            return i - 1;
+    }
+    return sf.line_start.size - 1;
+}
 
-void print_code_segment(Context& global, arr<Token>& tokens) {
+void print_code_segment(Context& global, arr<Token>* tokens, arr<AST_Node*>* nodes, arr<AST_Node**>* node_ptrs) {
     // Group the tokens by file
-    map<SourceFile*, arr<Token>> grouped;
+    map<SourceFile*, arr<Location>> grouped;
 
-    for (Token t : tokens) {
-        SourceFile* sf = &sources[t.file];
-        if (!grouped.find(sf, nullptr)) {
-            grouped.insert(sf, arr<Token>());
+    if (tokens) {
+        for (Token& t : *tokens) {
+            SourceFile* sf = &sources[t.file_id];
+            if (!grouped.find(sf, nullptr)) {
+                grouped.insert(sf, arr<Location>());
+            }
+            grouped[sf].push({ .file_id = sf->id, .loc = t.loc });
         }
-        grouped[sf].push(t);
+    }
+
+    if (nodes) {
+        for (AST_Node* n : *nodes) {
+            Location loc = location_of(global, &n);
+            assert((loc.file_id || loc.loc.end || loc.loc.end) 
+                    && "The AST Node doesn't have a defined location");
+
+            SourceFile* sf = &sources[loc.file_id];
+
+            if (!grouped.find(sf, nullptr)) {
+                grouped.insert(sf, arr<Location>());
+            }
+            grouped[sf].push(loc);
+        }
+    }
+
+    if (node_ptrs) {
+        for (AST_Node** n : *node_ptrs) {
+            Location loc = location_of(global, n);
+            assert((loc.file_id || loc.loc.end || loc.loc.end) 
+                    && "The AST Node doesn't have a defined location");
+
+            SourceFile* sf = &sources[loc.file_id];
+
+            if (!grouped.find(sf, nullptr)) {
+                grouped.insert(sf, arr<Location>());
+            }
+            grouped[sf].push(loc);
+        }
     }
 
     for (auto& kvp : grouped) {
         printf("%s:\n", kvp.key->filename);
-        arr<Token>& toks = kvp.value;
-        std::sort(toks.begin(), toks.end());
+        arr<Location>& toks = kvp.value;
 
-        u32 l = 0;
-        for (u32 i = 0; i < toks.size; i++) {
-            for (l = std::max(l, toks[i].line - 1); l < toks[i].line + 2; l++) 
-                print_line(global, *kvp.key, l, toks);
+        arr<u64> lines;
+        for (Location& t : toks)
+            lines.push_unique(get_line(sources[t.file_id], t.loc));
+
+        std::sort(lines.begin(), lines.end());
+
+        u64 last = 0;
+
+        for (u64 l : lines) {
+            u64 start = 0;
+            if (l > 2) start = l - 2;
+
+            start = std::max(last, start);
+
+            u64 end = std::min(l + 3, (u64)kvp.key->line_start.size);
+
+            if (start != last && last != 0) {
+                std::cout << dim << "...\n" << resetstyle;
+            }
+
+            for (u64 i = start; i < end; i++)
+                print_line(global, *kvp.key, i, toks);
+            last = end;
         }
     }
 }
 
 void print_err(Context& global, Error& err) {
-    std::cout << red << "Fatal: " << resetstyle;
+    std::cout << "Fatal: ";
 
     switch (err.code) {
 
         case ERR_ALREADY_DEFINED: {
-            std::cout << err.tokens[0].name << " is defined multiple times:\n";
-            print_code_segment(global, err.tokens);
+            std::cout << red << err.tokens[0].name << resetstyle << " is defined multiple times:\n";
+            print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
             break;
         }
 
-        case ERR_UNEXPECTED_TOKEN: {
+        case ERR_INCOMPATIBLE_TYPES: {
+            AST_Value* src = (AST_Value*)*err.node_ptrs[0];
+            AST_Value* dst = (AST_Value*)*err.node_ptrs[1];
 
-            Token real = err.tokens[0];
-            Token virt = err.tokens[1];
+            std::cout << "Cannot cast " << red;
+            print(std::cout, dst, false);
+            std::cout << resetstyle << dim << " (type ";
+            print(std::cout, dst->type, false);
+            std::cout << ") " << resetstyle << "to " << red;
+            print(std::cout, src, false);
+            std::cout << resetstyle << dim << " (type ";
+            print(std::cout, src->type, false);
+            std::cout << ")" << resetstyle << ":\n";
 
-            // print_code_segment expects an array of red tokens
-            // For ERR_UNEXPECTED_TOKEN we'll either give it the virtual token
-            // which will result in an additional chunk of hint code being outputted
-            // or we'll pass it the real token to highlight it in red
-            arr<Token> t;
+            // print(std::cout, src_type, false);
+            // std::cout << resetstyle << ":\n";
 
-            switch (virt.type) {
-                case TOK_ID:
-                    printf("Expected an identifier:\n");
-                    t.push(real);
-                    break;
-                case ':':
-                    // If the expected token is a ':', then we're missing a type specifier
-                    // The virtual token will print a ': TYPE' where the type siecifier is missing
-                    printf("Missing type specifier:\n");
-                    virt.virt = VIRT_MISSING_TYPE_SPECIFIER;
-                    t.push(virt);
-                    break;
-                default:
-                    printf("Unexpected token\n");
-                    t.push(real);
-                    break;
-            }
+            arr<AST_Node*> nodes = { err.nodes[0] };
 
-            print_code_segment(global, t);
+            print_code_segment(global, nullptr, &nodes, nullptr);
+            break;
+        }
+
+        case ERR_NOT_DEFINED: {
+            std::cout << red;
+            print(std::cout, err.nodes[0], false);
+            std::cout << resetstyle << " is not defined.\n";
+            print_code_segment(global, nullptr, &err.nodes, nullptr);
             break;
         }
 
         default: {
             printf("%s.\n", error_names[err.code]);
-            print_code_segment(global, err.tokens);
+            print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
         }
 
     } 

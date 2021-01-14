@@ -9,7 +9,6 @@
 GlobalContext global;
 
 void exit_with_error() {
-    printf("Error\n");
 	for (auto& err : global.errors) {
         print_err(global, err);
 	}
@@ -35,7 +34,7 @@ int main(int argc, const char** argv) {
     }
 
     if (!typecheck_all(global)) {
-        printf("type checker failed\n");
+        // printf("type checker failed with %d errors\n", global.errors.size);
         exit_with_error();
     }
 

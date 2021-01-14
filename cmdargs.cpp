@@ -135,3 +135,21 @@ bool parse_args(int argc, const char** argv) {
 
     return true;
 }
+
+
+Token SourceFile::getToken(u64 tok_id) {
+    Token tok;
+    *(SmallToken*)&tok = _tokens[tok_id];
+
+    tok.file_id = id;
+    tok.id = tok_id;
+    tok.loc = _token_locations[tok_id];
+
+    return tok;
+}
+
+Token SourceFile::pushToken(SmallToken st, LocationInFile loc) {
+    _tokens.push(st);
+    _token_locations.push(loc);
+    return getToken(_tokens.size - 1);
+}

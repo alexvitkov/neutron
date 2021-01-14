@@ -24,14 +24,14 @@ bool Context::declare(const char* name, AST_Node* value, Token nameToken) {
     if (declarations_table.find(name, &prev_decl)) {
         error({
             .code = ERR_ALREADY_DEFINED,
-            .tokens = { nameToken, declarations_meta[prev_decl].location }
+            .tokens = { nameToken },
+            .nodes = { prev_decl }
         });
         return false;
     }
 
     declarations_arr.push({name, value});
     declarations_table.insert(name, value);
-    declarations_meta.insert(value, {.location = nameToken});
     return true;
 }
 

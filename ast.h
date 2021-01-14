@@ -62,19 +62,25 @@ struct AST_Type : AST_Node {
     inline AST_Type(AST_NodeType nodetype) : AST_Node(nodetype) {}
 };
 
-struct AST_UnresolvedId : AST_Node {
-    Context& ctx;
-    const char* name;
-    inline AST_UnresolvedId(const char* typeName, Context& ctx) 
-        : AST_Node(AST_UNRESOLVED_ID), name(typeName), ctx(ctx) {}
-};
-
 struct AST_Value : AST_Node {
     union {
         const char* typeName;
         AST_Type* type;
     };
     inline AST_Value(AST_NodeType nodetype, AST_Type* type) : AST_Node(nodetype), type(type) {}
+};
+
+struct AST_UnresolvedId : AST_Value {
+    Context& ctx;
+
+    const char* name;
+    AST_Node* resolved;
+
+    inline AST_UnresolvedId(const char* typeName, Context& ctx) 
+        : AST_Value(AST_UNRESOLVED_ID, nullptr), name(typeName), ctx(ctx) 
+    {
+        ctx.global->unresolved.push(this);
+    }
 };
 
 struct AST_FnCall : AST_Value {
@@ -114,8 +120,8 @@ struct AST_Var : AST_Value {
     // If the variable is a function argument, this is its index
     i32 argindex;
 
-    inline AST_Var(const char* name, AST_Type* type, AST_Node* initial_value, int argindex)
-        : AST_Value(AST_VAR, type), name(name), initial_value(initial_value), argindex(argindex) {};
+    inline AST_Var(const char* name, int argindex)
+        : AST_Value(AST_VAR, nullptr), name(name), argindex(argindex) {};
 };
 
 struct AST_Number : AST_Value {
@@ -218,5 +224,6 @@ void print(std::ostream& o, AST_MemberAccess* node);
 void print(std::ostream& o, AST_PointerType* node);
 void print(std::ostream& o, AST_Dereference* node);
 void print(std::ostream& o, AST_AddressOf* node);
+void print(std::ostream& o, AST_UnresolvedId* node);
 
 #endif // guard

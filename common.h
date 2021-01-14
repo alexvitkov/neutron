@@ -21,6 +21,8 @@
 
 #define MUST(v) if (!(v)) return 0;
 
+// This can be extended to u16 if needed,
+// right now there's unused space in the Token struct
 enum TokenType : u8 {
 	TOK_NONE = 0,
 
@@ -74,6 +76,8 @@ enum TokenType : u8 {
     KW_IF,
     KW_WHILE,
 
+	TOK_ERROR,
+
 	TOK_ID,
 	TOK_NUMBER,
     TOK_STRING_LITERAL,
@@ -96,39 +100,43 @@ enum OpTraits : u8 {
 
 extern u8 prec[148];
 
-struct Token {
-	TokenType type;
 
+// Each token and AST Node has one of these associated with them
+// It's not stored inside the token/node itself, 
+// because we only need it when handling errors
+struct LocationInFile {
+    u64 start;
+    u64 end;
+};
+
+struct Location {
+    u64 file_id;
+    LocationInFile loc;
+};
+
+
+struct SmallToken {
+    TokenType type;
+    
     // A virtual token doesn't exist in the source code
     // It's an additional piece of metadata that the 'unexpected_token' function
     // adds to the error, so when we print it we have information about what token
     // was expected
     u8 virt; 
 
-    i16 file;
-
-    // If the token is a bracket, 'match' is the index of the matching bracket token
-	u32 match;
-
-	u32 length;
-	u64 start;
-
-    u32 line;
-    u32 pos_in_line;
-
     union {
         const char* name;
+        u64 u64_val;
     };
-
-    // We need this so we can std::sort tokens
-    inline bool operator<(const Token& other) {
-        if (line < other.line)
-            return true;
-        if (line == other.line)
-             return this->virt;
-        return false;
-    }
 };
 
+struct Token : SmallToken {
+    u64 file_id;
+
+    // The first token in the file has ID 0, second has ID 1, etc...
+    u64 id;
+
+    LocationInFile loc;
+};
 
 #endif // guard
