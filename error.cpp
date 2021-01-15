@@ -159,15 +159,9 @@ void print_err(Context& global, Error& err) {
             AST_Value* src = (AST_Value*)*err.node_ptrs[0];
             AST_Value* dst = (AST_Value*)*err.node_ptrs[1];
 
-            std::cout << "Cannot cast " << red;
-            print(std::cout, dst, false);
-            std::cout << resetstyle << dim << " (type ";
-            print(std::cout, dst->type, false);
-            std::cout << ") " << resetstyle << "to " << red;
-            print(std::cout, src, false);
-            std::cout << resetstyle << dim << " (type ";
-            print(std::cout, src->type, false);
-            std::cout << ")" << resetstyle << ":\n";
+            std::cout << "Cannot implicitly cast " 
+                << red << dst << dim << " (" << dst->type << ')' << resetstyle << " to "
+                << red << src << dim << " (" << src->type << ')' << resetstyle << ":\n";
 
             // print(std::cout, src_type, false);
             // std::cout << resetstyle << ":\n";

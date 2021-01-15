@@ -8,35 +8,36 @@
 
 struct Context;
 
-#define AST_TYPE_BIT 0x80
+#define AST_TYPE_BIT  0x80
+#define AST_VALUE_BIT 0x40
 
 enum AST_NodeType : u8 {
 	AST_NONE = 0,
 
-    AST_FN            = 0x01,
-    AST_VAR           = 0x02,
-    AST_BINARY_OP     = 0x03,
-    AST_ASSIGNMENT    = 0x04,
-    AST_RETURN        = 0x05,
-    AST_CAST          = 0x06,
-    AST_NUMBER        = 0x07,
-    AST_IF            = 0x08,
-    AST_WHILE         = 0x09,
-    AST_BLOCK         = 0x0A,
-    AST_FN_CALL       = 0x0B,
-    AST_MEMBER_ACCESS = 0x0C,
-    AST_TEMP_REF      = 0x0D,
-    AST_UNRESOLVED_ID = 0x0E,
-    AST_DEREFERENCE   = 0x0F,
-    AST_ADDRESS_OF    = 0x10,
+    AST_RETURN        = 0x01,
+    AST_IF            = 0x02,
+    AST_WHILE         = 0x03,
+    AST_BLOCK         = 0x04,
 
-    // NOTE If there are too many nodes, they can overflow into the AST_TYPES section
-    // which are the nodes who have their highest bit set
+    AST_FN            = 0x00 | AST_VALUE_BIT,
+    AST_VAR           = 0x01 | AST_VALUE_BIT,
+    AST_BINARY_OP     = 0x02 | AST_VALUE_BIT,
+    AST_ASSIGNMENT    = 0x03 | AST_VALUE_BIT,
+    AST_CAST          = 0x04 | AST_VALUE_BIT,
+    AST_NUMBER        = 0x05 | AST_VALUE_BIT,
+    AST_FN_CALL       = 0x06 | AST_VALUE_BIT,
+    AST_MEMBER_ACCESS = 0x07 | AST_VALUE_BIT,
+    AST_TEMP_REF      = 0x08 | AST_VALUE_BIT,
+    AST_UNRESOLVED_ID = 0x09 | AST_VALUE_BIT,
+    AST_DEREFERENCE   = 0x0a | AST_VALUE_BIT,
+    AST_ADDRESS_OF    = 0x0b | AST_VALUE_BIT,
+    AST_STRING_LITERAL= 0x0c | AST_VALUE_BIT,
 
-    AST_STRUCT         = 0x01 | AST_TYPE_BIT,
-	AST_PRIMITIVE_TYPE = 0x02 | AST_TYPE_BIT,
-    AST_FN_TYPE        = 0x03 | AST_TYPE_BIT,
-    AST_POINTER_TYPE   = 0x04 | AST_TYPE_BIT,
+
+    AST_STRUCT         = 0x00 | AST_TYPE_BIT,
+	AST_PRIMITIVE_TYPE = 0x01 | AST_TYPE_BIT,
+    AST_FN_TYPE        = 0x02 | AST_TYPE_BIT,
+    AST_POINTER_TYPE   = 0x03 | AST_TYPE_BIT,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -44,7 +45,7 @@ enum PrimitiveTypeKind : u8 {
     PRIMITIVE_UNSIGNED,
     PRIMITIVE_BOOL,
     PRIMITIVE_FLOAT,
-    PRIMITIVE_TYPE
+    PRIMITIVE_UNIQUE
 };
 
 struct AST_Node {
@@ -85,7 +86,7 @@ struct AST_UnresolvedId : AST_Value {
 
 struct AST_FnCall : AST_Value {
     AST_Node* fn;
-    arr<AST_Node*> args;
+    arr<AST_Value*> args;
 
     inline AST_FnCall(AST_Node* fn) : AST_Value(AST_FN_CALL, nullptr), fn(fn), args(4) {}
 };
@@ -115,13 +116,13 @@ struct AST_PointerType : AST_Type {
 
 struct AST_Var : AST_Value {
     const char* name;
-    AST_Node* initial_value;
+    AST_Value* initial_value;
 
     // If the variable is a function argument, this is its index
     i32 argindex;
 
     inline AST_Var(const char* name, int argindex)
-        : AST_Value(AST_VAR, nullptr), name(name), argindex(argindex) {};
+        : AST_Value(AST_VAR, nullptr), name(name), argindex(argindex), initial_value(nullptr) {};
 };
 
 struct AST_Number : AST_Value {
@@ -153,15 +154,15 @@ struct AST_Cast : AST_Value {
 
 struct AST_BinaryOp : AST_Value {
     TokenType op;
-    AST_Node *lhs, *rhs;
+    AST_Value *lhs, *rhs;
 
-    inline AST_BinaryOp(TokenType op, AST_Node* lhs, AST_Node* rhs)
+    inline AST_BinaryOp(TokenType op, AST_Value* lhs, AST_Value* rhs)
         : AST_Value(AST_BINARY_OP, nullptr), lhs(lhs), rhs(rhs), op(op) {}
 };
 
 struct AST_Return : AST_Node {
-    AST_Node *value;
-    inline AST_Return(AST_Node* value) : AST_Node(AST_RETURN), value(value) {};
+    AST_Value *value;
+    inline AST_Return(AST_Value* value) : AST_Node(AST_RETURN), value(value) {};
 };
 
 struct NamedType {
@@ -186,10 +187,10 @@ struct AST_Struct : AST_Type {
 };
 
 struct AST_MemberAccess : AST_Value {
-    AST_Node* lhs;
+    AST_Value* lhs;
     int index;
     const char* member_name;
-    inline AST_MemberAccess(AST_Node* lhs, const char* member_name) 
+    inline AST_MemberAccess(AST_Value* lhs, const char* member_name) 
         : AST_Value(AST_MEMBER_ACCESS, nullptr), index(-1), lhs(lhs), member_name(member_name) {}
 };
 
@@ -207,23 +208,35 @@ struct AST_AddressOf : AST_Value {
         : AST_Value(AST_ADDRESS_OF, nullptr), inner(inner) {}
 };
 
+struct AST_StringLiteral : AST_Value {
+    u64 length;
+    const char* str;
+    
+    AST_StringLiteral(Token stringToken);
+};
+
+
+std::ostream& operator<< (std::ostream& o, AST_Node* node);
+
 void print(std::ostream& o, AST_Node* node, bool decl);
-void print(std::ostream& o, AST_PrimitiveType* node);
 void print(std::ostream& o, AST_Fn* node, bool decl);
-void print(std::ostream& o, AST_BinaryOp* node, bool brackets);
 void print(std::ostream& o, AST_Var* node, bool decl);
-void print(std::ostream& o, AST_Return* node);
-void print(std::ostream& o, AST_Cast* node);
-void print(std::ostream& o, AST_Number* node);
-void print(std::ostream& o, AST_If* node);
-void print(std::ostream& o, AST_While* node);
-void print(std::ostream& o, AST_Block* bl);
-void print(std::ostream& o, AST_FnCall* node);
 void print(std::ostream& o, AST_Struct* node, bool decl);
-void print(std::ostream& o, AST_MemberAccess* node);
-void print(std::ostream& o, AST_PointerType* node);
-void print(std::ostream& o, AST_Dereference* node);
-void print(std::ostream& o, AST_AddressOf* node);
-void print(std::ostream& o, AST_UnresolvedId* node);
+void print(std::ostream& o, AST_BinaryOp* node, bool brackets);
+
+std::ostream& operator<<(std::ostream& o, AST_PrimitiveType* node);
+std::ostream& operator<<(std::ostream& o, AST_Return* node);
+std::ostream& operator<<(std::ostream& o, AST_Cast* node);
+std::ostream& operator<<(std::ostream& o, AST_Number* node);
+std::ostream& operator<<(std::ostream& o, AST_If* node);
+std::ostream& operator<<(std::ostream& o, AST_While* node);
+std::ostream& operator<<(std::ostream& o, AST_Block* bl);
+std::ostream& operator<<(std::ostream& o, AST_FnCall* node);
+std::ostream& operator<<(std::ostream& o, AST_MemberAccess* node);
+std::ostream& operator<<(std::ostream& o, AST_PointerType* node);
+std::ostream& operator<<(std::ostream& o, AST_Dereference* node);
+std::ostream& operator<<(std::ostream& o, AST_AddressOf* node);
+std::ostream& operator<<(std::ostream& o, AST_UnresolvedId* node);
+std::ostream& operator<<(std::ostream& o, AST_StringLiteral* node);
 
 #endif // guard

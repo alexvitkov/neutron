@@ -7,6 +7,7 @@
 
 struct GlobalContext;
 struct AST_UnresolvedId;
+struct AST_StringLiteral;
 
 struct Context {
     struct NameNodePair {
@@ -20,42 +21,27 @@ struct Context {
     GlobalContext* global;
     Context* parent;
 
-	bool ok();
-    bool is_global();
-
-    // Returns AST_Node* or null on failure
-    AST_Node* resolve(const char* name);
-
-    // Returns AST_Node* or creates a new ASTUnresolveNode* on failure
-    AST_Node* try_resolve(const char* name);
-
-    bool declare(const char* name, AST_Node* value, Token nameToken);
+    map<const char*, AST_StringLiteral*> literals;
 
     Context(Context* parent);
-    
     Context(Context&) = delete;
     Context(Context&&) = delete;
 
-    template <typename T, typename ... Ts>
-    T* alloc(Ts &&...args) {
-        T* buf = (T*)malloc(sizeof(T));
-        new (buf) T (args...);
-        return buf;
-    }
-
-    template <typename T, typename ... Ts>
-    T* alloc_temp(Ts &&...args) {
-        T* buf = (T*)malloc(sizeof(T));
-        new (buf) T (args...);
-        return buf;
-    }
-
+    AST_Node* resolve(const char* name);
+    bool declare(const char* name, AST_Node* value, Token nameToken);
     void error(Error err);
+
+    template <typename T, typename ... Ts>
+    T* alloc(Ts &&...args);
+
+    template <typename T, typename ... Ts>
+    T* alloc_temp(Ts &&...args);
 };
 
 struct GlobalContext : Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
+    linear_alloc allocator, temp_allocator;
 
     map<AST_Node*, Location> node_locations;
 
@@ -63,6 +49,20 @@ struct GlobalContext : Context {
 
     inline GlobalContext() : Context(nullptr) {}
 };
+
+template <typename T, typename ... Ts>
+T* Context::alloc(Ts &&...args) {
+    T* buf = (T*)global->allocator.alloc(sizeof(T));
+    new (buf) T (args...);
+    return buf;
+}
+
+template <typename T, typename ... Ts>
+T* Context::alloc_temp(Ts &&...args) {
+    T* buf = (T*)global->temp_allocator.alloc(sizeof(T));
+    new (buf) T (args...);
+    return buf;
+}
 
 Location location_of(Context& ctx, AST_Node** node);
 bool parse_all(Context& global);

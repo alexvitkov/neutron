@@ -1,4 +1,5 @@
 #include "common.h"
+#include "ds.h"
 
 // https://github.com/explosion/murmurhash/blob/master/murmurhash/MurmurHash2.cpp
 u32 map_hash (const char* data) {
@@ -52,4 +53,26 @@ u32 map_hash(void* node) {
 
 bool map_equals(void* lhs, void* rhs) {
     return lhs == rhs;
+}
+
+char* linear_alloc::alloc(u64 bytes) {
+    if (remaining < bytes) {
+        remaining = 64 * 1024 * 1024;
+        assert(bytes < remaining);
+        current = (char*)malloc(remaining);
+        blocks.push(current);
+        assert(current);
+    }
+
+    char* r = current;
+
+    current += bytes;
+    remaining -= bytes;
+
+    return r;
+}
+
+void linear_alloc::free_all() {
+    for (char* b : blocks)
+        free(b);
 }

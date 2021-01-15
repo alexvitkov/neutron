@@ -257,12 +257,13 @@ bool tokenize(Context& global, SourceFile &s) {
                 global.error({ .code = ERR_UNEXPECTED_TOKEN });
             }
 
-            char* contents = (char*)malloc(length);
+            char* contents = (char*)malloc(length + 1);
             memcpy(contents, s.buffer + word_start, length);
+            contents[length] = 0;
             
             s.pushToken(
                 { .type = TOK_STRING_LITERAL, .name = contents },
-                { .start = word_start, .end = i });
+                { .start = word_start, .end = i + 1 });
         }
 
         else if (c == '/' && i < s.length - 1 && s.buffer[i + 1] == '/') {
@@ -315,7 +316,10 @@ bool tokenize(Context& global, SourceFile &s) {
 					}
 
 					BracketToken bt = bracket_stack.pop();
-					if ((c == ')' && bt.bracket != '(') || (c == ']' && bt.bracket != '[') || (c == '}' && bt.bracket != '{')) {
+					if ((c == ')' && bt.bracket != '(') 
+                            || (c == ']' && bt.bracket != '[') 
+                            || (c == '}' && bt.bracket != '{')) 
+                    {
                         // TODO ERROR
 						global.error({
                             .code = ERR_UNBALANCED_BRACKETS,
@@ -574,6 +578,7 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     assert (fn_kw.type);
 
     AST_Fn* fn;
+
     Token nameToken;
     const char* name = nullptr;
 
@@ -633,10 +638,15 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     return fn;
 }
 
+struct SYValue {
+    AST_Value* val;
+    Location loc;
+};
+
 struct SYState {
     Context& ctx;
     u32 brackets = 0;
-    arr<AST_Value*> output;
+    arr<SYValue> output;
     arr<TokenType> stack;
 };
 
@@ -651,12 +661,12 @@ bool pop(SYState& s) {
     TokenType op = s.stack.pop();
 
     AST_BinaryOp* bin;
-    AST_Node* lhs = s.output[s.output.size - 2];
-    AST_Node* rhs = s.output[s.output.size - 1];
+    SYValue lhs = s.output[s.output.size - 2];
+    SYValue rhs = s.output[s.output.size - 1];
 
     if (prec[op] & ASSIGNMENT) {
         if (op == '=') {
-            bin = s.ctx.alloc<AST_BinaryOp>(op, lhs, rhs);
+            bin = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
             bin->nodetype = AST_ASSIGNMENT;
         }
         else {
@@ -674,27 +684,27 @@ bool pop(SYState& s) {
                 default:
                                           assert(0);
             }
-            rhs = s.ctx.alloc<AST_BinaryOp>(op, lhs, rhs);
-            bin = s.ctx.alloc<AST_BinaryOp>(TOK('='), lhs, rhs);
+            rhs.val = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
+            bin = s.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, rhs.val);
             bin->nodetype = AST_ASSIGNMENT;
         }
     }
     else {
-        bin = s.ctx.alloc<AST_BinaryOp>(op, lhs, rhs);
+        bin = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
     }
     s.output.pop();
-    s.output[s.output.size - 1] = bin;
 
-    Location lhsloc = location_of(s.ctx, &bin->lhs);
-    Location rhsloc = location_of(s.ctx, &bin->rhs);
-
-    s.ctx.global->node_locations[bin] = {
-        .file_id = lhsloc.file_id,
+    Location loc = {
+        .file_id = lhs.loc.file_id,
         .loc = {
-            lhsloc.loc.start,
-            rhsloc.loc.end,
+            lhs.loc.loc.start,
+            rhs.loc.loc.end,
         }
     };
+
+    s.ctx.global->node_locations[bin] = loc;
+    
+    s.output[s.output.size - 1] = { bin, loc };
 
     return true;
 }
@@ -708,30 +718,42 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
         t = r.pop_full();
 
         switch (t.type) {
-            case TOK_ID: {
+            case TOK_ID:
+            case TOK_NUMBER:
+            case TOK_STRING_LITERAL: 
+            {
                 if (prev_was_value) {
                     unexpected_token(r.ctx, t, TOK_NONE);
                     return nullptr;
                 }
                 prev_was_value = true;
 
-                AST_UnresolvedId* id = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
-                ctx.global->node_locations[id] = {
+                AST_Value* val = nullptr;
+
+                switch (t.type) {
+                    case TOK_ID:
+                        val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
+                        break;
+                    case TOK_NUMBER:
+                        val = ctx.alloc<AST_Number>(t.u64_val);
+                        break;
+                    case TOK_STRING_LITERAL:
+                        if (!ctx.global->literals.find(t.name, (AST_StringLiteral**)&val)) {
+                            val = ctx.alloc<AST_StringLiteral>(t);
+                        }
+                        break;
+                }
+
+                Location loc = {
                     .file_id = r.sf.id,
                     .loc = t.loc,
                 };
-                s.output.push(id);
-                break;
-            }
+                // TODO ALLOCATION we should not be storing the node locations
+                // for the unresolved IDs here, as they'll get discarded
+                if (!ctx.global->node_locations.find(val, nullptr))
+                    ctx.global->node_locations[val] = loc;
 
-            case TOK_NUMBER: {
-                if (prev_was_value) {
-                    unexpected_token(r.ctx, t, TOK_NONE);
-                    return nullptr;
-                }
-                prev_was_value = true;
-
-                s.output.push(ctx.alloc<AST_Number>(t.u64_val));
+                s.output.push({val, loc });
                 break;
             }
 
@@ -742,18 +764,29 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                         s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                         return nullptr;
                     }
-                    AST_FnCall* fncall = ctx.alloc<AST_FnCall>(s.output.pop());
+
+                    SYValue fn = s.output.pop();
+                    AST_FnCall* fncall = ctx.alloc<AST_FnCall>(fn.val);
 
                     while (r.peek().type != TOK(')')) {
-                        AST_Node* arg = parse_expr(ctx, r);
+                        AST_Value* arg = parse_expr(ctx, r);
                         MUST (arg);
                         fncall->args.push(arg);
                         if (r.peek().type != TOK(')'))
                             MUST (r.expect(TOK(',')).type);
                     }
-                    r.pop(); // discard the bracket
-                    s.output.push(fncall);
-                } 
+                    r.pop(); // discard the closing bracket
+
+                    Location loc = {
+                        .file_id = fn.loc.file_id,
+                        .loc = {
+                            .start = fn.loc.loc.start,
+                            .end = r.pos_in_file,
+                        }
+                    };
+
+                    s.output.push({ fncall, loc });
+                }
                 
                 // If previous isn't a value, do the shunting yard thing
                 else {
@@ -787,14 +820,18 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                     return nullptr;
                 }
-                AST_Node* lhs = s.output.last();
-                AST_MemberAccess* ma = ctx.alloc<AST_MemberAccess>(lhs, nameToken.name);
-                s.output.last() = ma;
+                SYValue lhs = s.output.last();
+
+                AST_MemberAccess* ma = ctx.alloc<AST_MemberAccess>(lhs.val, nameToken.name);
+
+                lhs.loc.loc.end = r.pos_in_file;
+
+                s.output.last() = { ma, lhs.loc };
                 break;
             }
 
             case '[': {
-                AST_Node* index = parse_expr(ctx, r);
+                AST_Value* index = parse_expr(ctx, r);
                 MUST (index);
                 MUST (r.expect(TOK(']')).type);
 
@@ -803,18 +840,22 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     return nullptr;
                 }
 
-                u64 loc_start = location_of(s.ctx, (AST_Node**)&s.output.last()).loc.start;
+                SYValue inner = s.output.last();
 
-                s.output.last() = ctx.alloc<AST_BinaryOp>(TOK('+'), s.output.last(), index);
-                s.output.last() = ctx.alloc<AST_Dereference>((AST_Value*)s.output.last());
+                // When we see foo[bar] we output (foo + bar)*
+                AST_BinaryOp* add = ctx.alloc<AST_BinaryOp>(TOK('+'), s.output.last().val, index);
+                AST_Dereference* deref = ctx.alloc<AST_Dereference>(s.output.last().val);
 
-                ctx.global->node_locations[s.output.last()] = {
+                Location loc = {
                     .file_id = r.sf.id,
                     .loc = {
-                        .start = loc_start,
+                        .start = inner.loc.loc.start,
                         .end = r.pos_in_file,
                     }
                 };
+
+                s.output.last() = { deref, loc };
+                ctx.global->node_locations[deref] = loc;
                 break;
             }
             
@@ -824,7 +865,16 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     return nullptr;
                 }
 
-                AST_Node* top = s.output.last();
+                SYValue syval = s.output.last();
+                AST_Value* top = syval.val;
+
+                Location loc = {
+                    .file_id = syval.loc.file_id,
+                    .loc = {
+                        .start = syval.loc.loc.start,
+                        .end = r.pos_in_file,
+                    }
+                };
 
                 if (top->nodetype == AST_DEREFERENCE) {
                     // TODO ALLOCATION FREE we're leaking the Dereference node here
@@ -832,19 +882,13 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     // foo*& is the same as x
                     // we hadnle this here because foo[123] is expanded to (foo + 123)* (look the '[' case on this switch)
                     // and without this foo[123]& would become (foo + 123)*& which is ridiculous
-                    s.output.last() = ((AST_Dereference*)top)->ptr;
+                    s.output.last() = { ((AST_Dereference*)top)->ptr, loc };
                 } else {
                     u64 loc_start = location_of(ctx, (AST_Node**)&s.output.last()).loc.start;
 
-                    s.output.last() = ctx.alloc<AST_AddressOf>((AST_Value*)top);
+                    s.output.last() = { ctx.alloc<AST_AddressOf>((AST_Value*)top), loc };
 
-                    ctx.global->node_locations[s.output.last()] = {
-                        .file_id = r.sf.id,
-                        .loc = {
-                            .start = loc_start,
-                            .end = r.pos_in_file
-                        }
-                    };
+                    ctx.global->node_locations[s.output.last().val] = loc;
                 }
 
                 break;
@@ -852,7 +896,6 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
 
             default: {
                 if (is_operator(t.type)) {
-
                     // * can be either postfix, in which case it means dereference
                     // or be infix, in which case it means multiplication
                     if (t.type == '*') {
@@ -860,12 +903,23 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
 
                         // If the next token type is id/number/open bracket, the * is infix
                         // in all other cases it is postfix
-                        if (next != TOK_OPENBRACKET && next != TOK_ID && next != TOK_NUMBER) {
+                        
+                        if (next != TOK_OPENBRACKET 
+                                && next != TOK_ID 
+                                && next != TOK_NUMBER 
+                                && next != TOK_STRING_LITERAL) 
+                        {
                             if (s.output.size == 0) {
                                 s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                                 return nullptr;
                             }
-                            s.output.last() = ctx.alloc<AST_Dereference>((AST_Value*)s.output.last());
+                            SYValue last = s.output.last();
+                            last.loc.loc.end = r.pos_in_file;
+
+                            s.output.last() = {
+                                ctx.alloc<AST_Dereference>(s.output.last().val),
+                                last.loc
+                            };
                             break;
                         }
                     }
@@ -881,7 +935,8 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                 }
                 else {
                     if (prev_was_value) {
-                        // Our expression is over, this token is part fo whatever comes next - don't consume it
+                        // The expression is over.
+                        // This token is part fo whatever comes next - don't consume it
                         r.pos --;
                         goto Done;
                     }
@@ -891,6 +946,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     }
                 }
             }
+
         }
     }
 
@@ -904,7 +960,7 @@ Done:
         });
         return nullptr;
     }
-    return s.output[0];
+    return s.output[0].val;
 }
 
 bool parse_let(Context& ctx, TokenReader& r) {

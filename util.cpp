@@ -45,6 +45,7 @@ std::ostream& operator<<(std::ostream& o, Dim& r) {
 #ifdef _WINDOWS
 	SetConsoleTextAttribute(console, 8 | csbi.wAttributes & 0x00F0);
 #else
+	o << "\e[0m";
 	o << "\e[2m";
 #endif
 	return o;

@@ -336,4 +336,25 @@ struct bucketed_arr {
     }
 };
 
+
+
+struct linear_alloc {
+    arr<char*> blocks;
+    char* current;
+    u64 remaining;
+
+    char* alloc(u64 bytes);
+    void free_all();
+
+    inline linear_alloc() : blocks(), current(nullptr), remaining(0) {}
+
+    linear_alloc(linear_alloc& other) = delete;
+    linear_alloc(linear_alloc&& other) = delete;
+    linear_alloc& operator=(const linear_alloc& other) = delete;
+    linear_alloc& operator=(linear_alloc&& other) = delete;
+};
+
+
+
+
 #endif // guard

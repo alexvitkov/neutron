@@ -17,9 +17,10 @@ extern AST_PrimitiveType t_f32;
 extern AST_PrimitiveType t_f64;
 extern AST_PrimitiveType t_type;
 extern AST_PrimitiveType t_void;
+extern AST_PrimitiveType t_string_literal;
 
-bool typecheck_all(Context& global);
-AST_Type* gettype(Context& ctx, AST_Node* node);
+bool typecheck_all(GlobalContext& global);
+AST_Type* gettype(Context& ctx, AST_Value* node);
 AST_PointerType* get_pointer_type(AST_Type* pointed_type);
 
 #endif // guard

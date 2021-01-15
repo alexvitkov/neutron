@@ -16,14 +16,18 @@ AST_Number::AST_Number(u64 floorabs) : AST_Value(AST_NUMBER, nullptr), floorabs(
         type = &t_u64;
 }
 
-void print(std::ostream& o, arr<NamedType>& tl) {
+AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_LITERAL, &t_string_literal) {
+    length = strlen(stringToken.name);
+    str = stringToken.name;
+}
+
+std::ostream& operator<< (std::ostream& o, arr<NamedType>& tl) {
     for (const auto& entry : tl) {
-        print(o, entry.type, false);
-        o << " " << entry.name;
-        o << ", ";
+        o << entry.type << " " << entry.name << ", ";
     }
     if (tl.size)
         o << "\b\b \b"; // clear the last comma
+    return o;
 }
 
 void indent_line(std::ostream& o) {
@@ -31,7 +35,7 @@ void indent_line(std::ostream& o) {
         o << "    ";
 }
 
-void print(std::ostream& o, AST_Block* bl) {
+std::ostream& operator<< (std::ostream& o, AST_Block* bl) {
     indent ++;
     o << "{ \n";
 
@@ -61,61 +65,65 @@ void print(std::ostream& o, AST_Block* bl) {
     indent--;
     indent_line(o);
     o << "}\n";
+    return o;
 }
 
 void print(std::ostream& o, AST_Node* node, bool decl) {
     switch (node->nodetype) {
         case AST_FN:             print(o, (AST_Fn*)node, decl); break;
-        case AST_PRIMITIVE_TYPE: print(o, (AST_PrimitiveType*)node); break;
         case AST_BINARY_OP:      print(o, (AST_BinaryOp*)node, false); break;
         case AST_ASSIGNMENT:     print(o, (AST_BinaryOp*)node, false); break;
         case AST_VAR:            print(o, (AST_Var*)node, decl); break;
-        case AST_RETURN:         print(o, (AST_Return*)node); break;
-        case AST_CAST:           print(o, (AST_Cast*)node); break;
-        case AST_NUMBER:         print(o, (AST_Number*)node); break;
-        case AST_IF:             print(o, (AST_If*)node); break;
-        case AST_WHILE:          print(o, (AST_While*)node); break;
-        case AST_FN_CALL:        print(o, (AST_FnCall*)node); break;
-        case AST_STRUCT:         print(o, (AST_Struct*)node, decl); break;
-        case AST_MEMBER_ACCESS:  print(o, (AST_MemberAccess*)node); break;
-        case AST_POINTER_TYPE:   print(o, (AST_PointerType*)node); break;
-        case AST_DEREFERENCE:    print(o, (AST_Dereference*)node); break;
-        case AST_ADDRESS_OF:     print(o, (AST_AddressOf*)node); break;
-        case AST_UNRESOLVED_ID:  print(o, (AST_UnresolvedId*)node); break;
+
+        case AST_PRIMITIVE_TYPE: o << (AST_PrimitiveType*)node; break;
+        case AST_RETURN:         o << (AST_Return*)node; break;
+        case AST_CAST:           o << (AST_Cast*)node; break;
+        case AST_NUMBER:         o << (AST_Number*)node; break;
+        case AST_IF:             o << (AST_If*)node; break;
+        case AST_WHILE:          o << (AST_While*)node; break;
+        case AST_FN_CALL:        o << (AST_FnCall*)node; break;
+        case AST_MEMBER_ACCESS:  o << (AST_MemberAccess*)node; break;
+        case AST_POINTER_TYPE:   o << (AST_PointerType*)node; break;
+        case AST_DEREFERENCE:    o << (AST_Dereference*)node; break;
+        case AST_ADDRESS_OF:     o << (AST_AddressOf*)node; break;
+        case AST_UNRESOLVED_ID:  o << (AST_UnresolvedId*)node; break;
+        case AST_STRING_LITERAL: o << (AST_StringLiteral*)node; break;
         default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
     }
 }
 
-void print(std::ostream& o, AST_Fn* node, bool decl) {
+std::ostream& operator<< (std::ostream& o, AST_Node* node) {
+    print(o, node, false);
+    return o;
+}
+
+void print(std::ostream& o, AST_Fn* fn, bool decl) {
     if (decl) {
-        AST_Fn* fn = (AST_Fn*)node;
         o << "fn ";
         if (fn->name)
             o << fn->name;
-        o << '(';
-        print(o, fn->args);
-        o << ")";
 
-        AST_Type* rettype = (AST_Type*)node->block.ctx.resolve("returntype");
-        if (rettype) {
-            o << ": ";
-            print(o, rettype, false);
-        }
+        o << '(' << fn->args << ')';
+
+        // TODO RETURNTYPE
+        AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
+        if (rettype)
+            o << ": " << rettype;
 
         if (fn->is_extern) {
             o << ";\n";
         } else {
-            o << ' ';
-            print(o, &node->block);
+            o << ' ' << &fn->block;
         }
-    }
+    } 
     else {
-        o << node->name;
+        o << fn->name;
     }
 }
 
-void print(std::ostream& o, AST_PrimitiveType* node) {
+std::ostream& operator<< (std::ostream& o, AST_PrimitiveType* node) {
     o << node->name;
+    return o;
 }
 
 
@@ -161,18 +169,14 @@ void print(std::ostream& o, AST_BinaryOp* node, bool brackets = false) {
         print(o, node->rhs, false);
     if (ALWAYS_BRACKETS || brackets)
         o << ')';
-    // << node->lhs << " # " << node->rhs << ')';
 }
 
 void print(std::ostream& o, AST_Var* node, bool decl) {
     if (decl) {
-        o << "let " << node->name << ": ";
-        print(o, node->type, false);
+        o << "let " << node->name << ": " << node->type;
         if (node->initial_value) {
-            o << " = " ;
-            print(o, node->initial_value, false);
+            o << " = "  << node->initial_value;
         }
-
         o << ";\n";
     }
     else {
@@ -180,91 +184,89 @@ void print(std::ostream& o, AST_Var* node, bool decl) {
     }
 }
 
-void print(std::ostream& o, AST_Return* node) {
-    if (node->value) {
-        o << "return ";
-        print(o, node->value, false);
-    }
-    else {
-        o << "return";
-    }
-}
-
-void print(std::ostream& o, AST_Cast* node) {
-    print(o, node->type, false);
-    o << '(';
-    print(o, node->inner, false);
-    o << ')';
-}
-
-void print(std::ostream& o, AST_Number* node) {
-    o << node->floorabs;
-}
-
-void print(std::ostream& o, AST_If* node) {
-    o << "if ";
-    print(o, node->condition, false);
-    o << " ";
-    print(o, &node->then_block);
-}
-
-void print(std::ostream& o, AST_While* node) {
-    o << "while ";
-    print(o, node->condition, false);
-    o << " ";
-    print(o, &node->block);
-}
-
-void print(std::ostream& o, AST_FnCall* node) {
-    print(o, node->fn, false);
-    o << "(";
-    for (AST_Node*& a : node->args) {
-        print(o, a, false);
-        o << ", ";
-    }
-    if (node->args.size)
-        o << "\b\b \b"; // clear the last comma
-    o << ")";
-}
-
 void print(std::ostream& o, AST_Struct* node, bool decl) {
     if (decl) {
-        AST_Struct* fn = (AST_Struct*)node;
+        AST_Struct* str = (AST_Struct*)node;
         o << "struct ";
-        if (fn->name)
-            o << fn->name;
-        o << '{';
-        print(o, fn->members);
-        o << '}';
+        if (str->name)
+            o << str->name;
+        o << '{' << str->members << '}';
     }
     else {
         o << node->name;
     }
 }
 
-void print(std::ostream& o, AST_PointerType* node) {
-    o << '*';
-    print(o, node->pointed_type, false);
+std::ostream& operator<< (std::ostream& o, AST_Return* node) {
+    if (node->value) {
+        o << "return " << node->value;
+    } else {
+        o << "return";
+    }
+    return o;
 }
 
-void print(std::ostream& o, AST_MemberAccess* node) {
+std::ostream& operator<< (std::ostream& o, AST_Cast* node) {
+    o << node->type << '(' << node->inner << ')';
+    return o;
+}
+
+std::ostream& operator<< (std::ostream& o, AST_Number* node) {
+    o << node->floorabs;
+    return o;
+}
+
+std::ostream& operator<< (std::ostream& o, AST_If* node) {
+    o << "if " << node->condition << " " << &node->then_block;
+    return o;
+}
+
+std::ostream& operator<< (std::ostream& o, AST_While* node) {
+    o << "while " << node->condition << " " << &node->block;
+    return o;
+}
+
+std::ostream& operator<< (std::ostream& o, AST_FnCall* node) {
+    o << node->fn << "(";
+
+    for (AST_Value*& a : node->args) {
+        o << a << ", ";
+    }
+    if (node->args.size)
+        o << "\b\b \b"; // clear the last comma
+    o << ")";
+    return o;
+}
+
+
+std::ostream& operator<< (std::ostream& o, AST_PointerType* node) {
+    o << '*' << node->pointed_type;
+    return o;
+}
+
+std::ostream& operator<< (std::ostream& o, AST_MemberAccess* node) {
     if (ALWAYS_BRACKETS) o << '(';
-    print(o, node->lhs, false);
-    o << '.' << node->member_name;
+    o << node->lhs << '.' << node->member_name;
     if (ALWAYS_BRACKETS) o << ')';
+    return o;
 }
 
-
-void print(std::ostream& o, AST_Dereference* node) {
-    print(o, node->ptr, false);
-    o << '*';
+std::ostream& operator<< (std::ostream& o, AST_Dereference* node) {
+    o << node->ptr << '*';
+    return o;
 }
 
-void print(std::ostream& o, AST_AddressOf* node) {
-    print(o, node->inner, false);
-    o << '&';
+std::ostream& operator<< (std::ostream& o, AST_AddressOf* node) {
+    o << node->inner << '&';
+    return o;
 }
 
-void print(std::ostream& o, AST_UnresolvedId* node) {
+std::ostream& operator<< (std::ostream& o, AST_UnresolvedId* node) {
     o << node->name;
+    return o;
+}
+
+std::ostream& operator<< (std::ostream& o, AST_StringLiteral* node) {
+    o << '"' << node->str << '"';
+    return o;
 }
