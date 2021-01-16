@@ -39,6 +39,8 @@ struct LLVM_Context {
     };
     map<TIR_Value*, map<llvm::BasicBlock*, llvm::Value*>> _values;
 
+    map<TIR_Value*, llvm::Value*> translated_globals;
+
     llvm::Value* retval;
 
     llvm::IRBuilder<> builder;

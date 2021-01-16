@@ -38,6 +38,7 @@ enum AST_NodeType : u8 {
 	AST_PRIMITIVE_TYPE = 0x01 | AST_TYPE_BIT,
     AST_FN_TYPE        = 0x02 | AST_TYPE_BIT,
     AST_POINTER_TYPE   = 0x03 | AST_TYPE_BIT,
+    AST_ARRAY_TYPE     = 0x04 | AST_TYPE_BIT,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -114,6 +115,13 @@ struct AST_PointerType : AST_Type {
         : AST_Type(AST_POINTER_TYPE), pointed_type(pointed_type) {}
 };
 
+struct AST_ArrayType : AST_Type { 
+    AST_Type* base_type;
+    u64 array_length;
+    inline AST_ArrayType(AST_Type* base_type, u64 length) 
+        : AST_Type(AST_ARRAY_TYPE), base_type(base_type), array_length(length) {}
+};
+
 struct AST_Var : AST_Value {
     const char* name;
     AST_Value* initial_value;
@@ -146,9 +154,9 @@ struct AST_While : AST_Node {
 };
 
 struct AST_Cast : AST_Value {
-    AST_Node* inner;
+    AST_Value* inner;
 
-    inline AST_Cast(AST_Type* targetType, AST_Node* inner)
+    inline AST_Cast(AST_Type* targetType, AST_Value* inner)
         : AST_Value(AST_CAST, targetType), inner(inner) {};
 };
 
@@ -234,6 +242,7 @@ std::ostream& operator<<(std::ostream& o, AST_Block* bl);
 std::ostream& operator<<(std::ostream& o, AST_FnCall* node);
 std::ostream& operator<<(std::ostream& o, AST_MemberAccess* node);
 std::ostream& operator<<(std::ostream& o, AST_PointerType* node);
+std::ostream& operator<<(std::ostream& o, AST_ArrayType* node);
 std::ostream& operator<<(std::ostream& o, AST_Dereference* node);
 std::ostream& operator<<(std::ostream& o, AST_AddressOf* node);
 std::ostream& operator<<(std::ostream& o, AST_UnresolvedId* node);

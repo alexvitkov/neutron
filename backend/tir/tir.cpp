@@ -1,4 +1,5 @@
 #include "tir.h"
+#include "../../typer.h"
 #include <iostream>
 
 void TIR_Function::free_temp(TIR_Value* val) { }
@@ -8,7 +9,7 @@ void TIR_Function::emit(TIR_Instruction inst) {
 }
 
 TIR_Value* TIR_Function::alloc_temp(AST_Type* type) {
-    return &writepoint->values.push({
+    return &values.push({
         .valuespace = TVS_TEMP,
         .offset = temp_offset++,
         .type = type,
@@ -16,7 +17,16 @@ TIR_Value* TIR_Function::alloc_temp(AST_Type* type) {
 }
 
 TIR_Value* TIR_Function::alloc_val(TIR_Value val) {
-    return &writepoint->values.push(val);
+    return &values.push(val);
+}
+
+TIR_Value* TIR_Function::resolve(AST_Value* val) {
+    TIR_Value* v = _valmap[val];
+    if (!v) {
+        assert(this->c.valmap[val]);
+        return this->c.valmap[val];
+    }
+    return v;
 }
 
 std::ostream& operator<< (std::ostream& o, TIR_Value& val) {
@@ -40,6 +50,8 @@ std::ostream& operator<< (std::ostream& o, TIR_Value& val) {
         case TVS_TEMP:
             o << "$" << val.offset;
             break;
+        case TVS_GLOBAL:
+            o << "#" << val.offset;
     }
     return o;
 }
@@ -130,12 +142,11 @@ void TIR_Function::print() {
 
 TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst);
 
-void store(TIR_Function& fn, AST_Node* dst, AST_Node* src) {
+void store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
     switch (dst->nodetype) {
         case AST_VAR: {
-            TIR_Value* dstval = fn.valmap[dst];
+            TIR_Value* dstval = fn.resolve(dst);
             compile_node(fn, src, dstval);
-            // fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dstval, .src = srcval } });
             break;
         }
         case AST_DEREFERENCE: {
@@ -156,12 +167,12 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
 
     fn.writepoint = tir_block;
 
-    for (auto& kvp : ast_block->ctx.declarations_arr) {
-        AST_Node* decl = kvp.node;
+    for (auto& kvp : ast_block->ctx.declarations) {
+        AST_Node* decl = kvp.value;
 
         // TODO this is a stupid workaround
         // The returntype should be stored in a saner way
-        if (!strcmp(kvp.name, "returntype"))
+        if (!strcmp(kvp.key.name, "returntype"))
             continue;
 
         switch (decl->nodetype) {
@@ -172,7 +183,7 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
                 if (vardecl->initial_value)
                     compile_node(fn, vardecl->initial_value, val);
 
-                fn.valmap.insert(vardecl, val);
+                fn._valmap.insert(vardecl, val);
                 break;
             }
             default:
@@ -198,7 +209,7 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
 TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
     switch (node->nodetype) {
         case AST_VAR: {
-            TIR_Value* val = fn.valmap[node];
+            TIR_Value* val = fn.resolve((AST_Var*)node);
             assert(val);
 
             if (dst && dst != val)
@@ -366,6 +377,37 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             break;
         }
 
+        case AST_STRING_LITERAL: {
+            AST_StringLiteral* str = (AST_StringLiteral*)node;
+            TIR_Value* val = fn.resolve(str);
+
+            fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
+
+            return val;
+        }
+
+        case AST_CAST: {
+            AST_Cast* cast = (AST_Cast*)node;
+
+            if (cast->inner->type->nodetype == AST_ARRAY_TYPE) {
+
+                TIR_Value* var_location = fn.resolve(cast->inner);
+
+                TIR_Value* offset_0 = fn.alloc_val({ .valuespace = TVS_VALUE, .offset = 0, .type = &t_u32 });
+
+                fn.emit({ 
+                    .opcode =  TOPC_PTR_OFFSET, 
+                    .bin = { 
+                        .dst = dst, 
+                        .lhs = var_location, 
+                        .rhs = offset_0 
+                    },
+                });
+                return dst;
+            }
+            assert(!"Cast not supported");
+        }
+
         default:
             assert(!"Not implemented");
     }
@@ -374,15 +416,32 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
 }
 
 void TIR_Context::compile_all() {
-    for(auto& decl : global.declarations_arr) {
-        switch (decl.node->nodetype) {
+
+    // We have to run through the global variables and assign them TIR_Value*s
+    for(auto& decl : global.declarations) {
+        switch (decl.value->nodetype) {
+            case AST_VAR: {
+                TIR_Value& val = values.push({
+                    .valuespace = TVS_GLOBAL,
+                    .offset = values.size,
+                    .type = ((AST_Var*)decl.value)->type,
+                });
+                valmap[(AST_Value*)decl.value] = &val;
+                break;
+            }
+        }
+    }
+
+    for(auto& decl : global.declarations) {
+        switch (decl.value->nodetype) {
             case AST_FN: {
-                AST_Fn* fn = (AST_Fn*)decl.node;
+                AST_Fn* fn = (AST_Fn*)decl.value;
                 
                 // TODO ALLOCATION
                 TIR_Function* tir_fn = new TIR_Function(*this, fn);
 
-                AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
+                // TODO RETURNTYPE
+                AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
                 if (rettype) 
                     tir_fn->retval.type = rettype;
 
@@ -396,6 +455,11 @@ void TIR_Context::compile_all() {
 
                 break;
             }
+
+            // We already ran through them in the previous loop
+            case AST_VAR:
+                continue;
+
             default:
                 assert(!"Not implemented");
         }

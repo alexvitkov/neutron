@@ -52,6 +52,7 @@ llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
             translated_types.insert(type, l_fn_type);
             return l_fn_type;
         }
+
         case AST_POINTER_TYPE: {
             AST_PointerType* pt = (AST_PointerType*)type;
             llvm::Type* l_pointed_type = translate_type(pt->pointed_type);
@@ -60,6 +61,17 @@ llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
             translated_types.insert(type, l_pt);
             return l_pt;
         }
+
+        case AST_ARRAY_TYPE: {
+            AST_ArrayType* at = (AST_ArrayType*)type;
+            llvm::Type* l_base_type = translate_type(at->base_type);
+
+            llvm::ArrayType* l_at = llvm::ArrayType::get(l_base_type, at->array_length);
+
+            translated_types.insert(type, l_at);
+            return l_at;
+        }
+
         default:
             assert(!"Not implemented");
     }
@@ -74,7 +86,6 @@ llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block) {
         }
         case TVS_RET_VALUE:
         case TVS_TEMP: {
-
             BasicBlock* l_bb = blocks[block];
 
             llvm::Value* out;
@@ -106,6 +117,9 @@ llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block) {
 
                 return phi;
             }
+        }
+        case TVS_GLOBAL: {
+            return translated_globals[val];
         }
         default:
             assert(!"Not implemented");
@@ -166,6 +180,7 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                     set_value(instr.un.dst, l_result, l_bb);
                 }
 
+                free(args);
                 break;
             }
             case TOPC_STORE: {
@@ -199,7 +214,13 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
             case TOPC_PTR_OFFSET: {
                 llvm::Value *lhs = translate_value(instr.bin.lhs, block);
                 llvm::Value *rhs = translate_value(instr.bin.rhs, block);
-                set_value(instr.bin.dst, builder.CreateGEP(lhs, rhs), l_bb);
+
+                llvm::Value* vals[2];
+                vals[0] = Constant::getNullValue(Type::getInt32Ty(lc));
+                vals[1] = rhs;
+
+                llvm::Value *gep = builder.CreateGEP(lhs, vals);
+                set_value(instr.bin.dst, gep, l_bb);
                 break;
             }
             default:
@@ -221,7 +242,6 @@ void LLVM_Context::compile_fn_header(TIR_Function* fn) {
 }
 
 void LLVM_Context::compile_fn(TIR_Function* fn) {
-
     const char* fn_name = fn->ast_fn->name;
     Function* l_fn = (Function*)definitions[fn->ast_fn];
 
@@ -303,6 +323,31 @@ void insert_entry_boilerplate(LLVM_Context& c, Function* l_main) {
 
 void LLVM_Context::compile_all() {
     Function* l_main;
+
+    for (auto& x : t_c.valmap) {
+        AST_Value* ast = x.key;
+        TIR_Value* tirv = x.value;
+
+        assert (ast->nodetype == AST_VAR);
+        AST_Var* var = (AST_Var*)ast;
+
+        assert(var->initial_value && var->initial_value->nodetype == AST_STRING_LITERAL);
+
+        AST_StringLiteral* str = (AST_StringLiteral*)var->initial_value;
+
+        llvm::Constant* l_val = llvm::ConstantDataArray::getString(lc, str->str, true);
+
+        auto l_var = new llvm::GlobalVariable(
+                mod,
+                l_val->getType(), 
+                true, 
+                GlobalValue::WeakAnyLinkage,
+                l_val,
+                "");
+
+        translated_globals[tirv] = l_var;
+    }
+
 
     for (auto& kvp : t_c.fns) {
         compile_fn_header(kvp.value);

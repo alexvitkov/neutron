@@ -22,5 +22,6 @@ extern AST_PrimitiveType t_string_literal;
 bool typecheck_all(GlobalContext& global);
 AST_Type* gettype(Context& ctx, AST_Value* node);
 AST_PointerType* get_pointer_type(AST_Type* pointed_type);
+AST_ArrayType* get_array_type(AST_Type* base_type, u64 length);
 
 #endif // guard

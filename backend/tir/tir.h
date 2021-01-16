@@ -6,6 +6,7 @@
 
 enum TIR_ValueSpace : u8 {
     TVS_DISCARD = 0x00,
+    TVS_GLOBAL,
     TVS_ARGUMENT,
     TVS_RET_VALUE,
     TVS_TEMP,
@@ -74,9 +75,6 @@ struct TIR_Block {
     // This is used to generate the PHI instructions in LLVM
     arr<TIR_Block*> previous_blocks;
 
-    // We use the bucketed_arr here, so we can pass around pointers to TIR_Value safely
-    bucketed_arr<TIR_Value> values;
-
     TIR_Block();
 };
 
@@ -85,6 +83,9 @@ struct TIR_Function;
 struct TIR_Context {
     GlobalContext& global;
     map<AST_Fn*, TIR_Function*> fns;
+
+    bucketed_arr<TIR_Value> values;
+    map<AST_Value*, TIR_Value*> valmap;
 
     void compile_all();
 };
@@ -96,10 +97,13 @@ struct TIR_Function {
     TIR_Value retval = { .valuespace = TVS_RET_VALUE };
     TIR_Block* writepoint;
     u64 temp_offset = 0;
-    map<AST_Node*, TIR_Value*> valmap;
+    map<AST_Value*, TIR_Value*> _valmap;
 
-    // Those are in the order they need to be compiled in
+    // Blocks are stored in the order they need to be compiled in
     arr<TIR_Block*> blocks;
+
+    // We use the bucketed_arr here, so we can pass around pointers to TIR_Value safely
+    bucketed_arr<TIR_Value> values;
 
     TIR_Function(TIR_Context& c, AST_Fn* fn) : ast_fn(fn), c(c) {};
 
@@ -107,6 +111,7 @@ struct TIR_Function {
     TIR_Value* alloc_val(TIR_Value val);
     void free_temp(TIR_Value* val);
     void emit(TIR_Instruction instr);
+    TIR_Value* resolve(AST_Value* node);
 
     void print();
 };

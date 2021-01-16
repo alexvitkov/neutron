@@ -39,12 +39,11 @@ int main(int argc, const char** argv) {
     }
 
     // Print the source code
-
     if (debug_output) {
         std::cout << red << "--------- AST ---------\n" << resetstyle;
 
-        for (const auto& decl : global.declarations_arr) {
-            print(std::cout, decl.node, true);
+        for (const auto& decl : global.declarations) {
+            print(std::cout, decl.value, true);
             std::cout << '\n';
 
         }

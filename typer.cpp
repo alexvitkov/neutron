@@ -29,6 +29,22 @@ map<AST_FnType*, AST_FnType*> fn_types_hash;
 
 map<AST_Type*, AST_PointerType*> pointer_types;
 
+struct TypeSizeTuple {
+    AST_Type* t;
+    u64 u;
+};
+
+map<TypeSizeTuple, AST_ArrayType*> array_types;
+
+
+u32 map_hash(TypeSizeTuple tst) {
+    return map_hash(tst.t) ^ (u32)tst.u;
+}
+
+u32 map_equals(TypeSizeTuple lhs, TypeSizeTuple rhs) {
+    return lhs.t == rhs.t && lhs.u == rhs.u;
+}
+
 u32 hash(AST_Type* returntype, arr<AST_Type*>& param_types) {
     u32 hash = map_hash(returntype);
 
@@ -50,6 +66,16 @@ AST_PointerType* get_pointer_type(AST_Type* pointed_type) {
         pointer_types.insert(pointed_type, pt);
     }
     return pt;
+}
+
+AST_ArrayType* get_array_type(AST_Type* base_type, u64 size) {
+    TypeSizeTuple key = { base_type, size };
+    AST_ArrayType* at;
+    if (!array_types.find(key, &at)) {
+        at = new AST_ArrayType(base_type, size);
+        array_types.insert(key, at);
+    }
+    return at;
 }
 
 bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
@@ -110,9 +136,30 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
     }
 
     else if (dstt == &t_string_literal) {
+
         if (type == get_pointer_type(&t_i8)) {
+
+            AST_StringLiteral* str = (AST_StringLiteral*)*dst;
+
+            // If the same string literal has been seen before
+            // There's already a static variable defined for it
+            AST_Var* string_static_var = (AST_Var*)ctx.resolve({ .string_literal = str });
+
+            if (!string_static_var) {
+                // Get an array type that's just big enough to fit the C string 
+                AST_ArrayType* string_array_type = get_array_type(&t_i8, str->length + 1);
+
+                string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
+                string_static_var->type = string_array_type;
+                string_static_var->initial_value = str;
+
+                ctx.global->declare({ .string_literal = str }, string_static_var);
+            }
+
+            *dst =  ctx.alloc<AST_Cast>(get_pointer_type(&t_i8), string_static_var);
             return true;
         }
+
         return false;
     }
 
@@ -156,7 +203,7 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
     switch (node->nodetype) {
         case AST_UNRESOLVED_ID: {
             AST_UnresolvedId* id = (AST_UnresolvedId*)node;
-            AST_Node* resolved = id->ctx.resolve(id->name);
+            AST_Node* resolved = id->ctx.resolve({ id->name });
             if (!resolved) {
                 id->ctx.error({
                     .code = ERR_NOT_DEFINED,
@@ -178,7 +225,7 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
 
         case AST_CAST: {
             AST_Cast* cast = (AST_Cast*)node;
-            MUST (resolve_unresolved_references(&cast->inner));
+            MUST (resolve_unresolved_references((AST_Node**)&cast->inner));
             MUST (resolve_unresolved_references((AST_Node**)&cast->type));
             break;
         }
@@ -316,7 +363,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
             }
 
             // TODO RETURNTYPE
-            AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
+            AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
             if (rettype)
                 MUST (must_be_type(ctx, rettype));
 
@@ -335,7 +382,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
             assert(fn->nodetype == AST_FN);
 
             // TODO RETURNTYPE
-            AST_Type* returntype = (AST_Type*)fn->block.ctx.resolve("returntype");
+            AST_Type* returntype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
 
             if (fncall->args.size != fn->args.size) {
                 ctx.error({ .code = ERR_BAD_FN_CALL });
@@ -536,9 +583,9 @@ bool typecheck(Context& ctx, AST_Node* node) {
         case AST_BLOCK: {
             AST_Block* block = (AST_Block*)node;
 
-            for (const auto& decl : block->ctx.declarations_arr) {
-                if (decl.node->nodetype == AST_VAR)
-                    MUST (typecheck(block->ctx, decl.node));
+            for (const auto& decl : block->ctx.declarations) {
+                if (decl.value->nodetype == AST_VAR)
+                    MUST (typecheck(block->ctx, decl.value));
             }
 
             for (const auto& stmt : block->statements)
@@ -576,7 +623,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
             // parent funciton if the child fn's return type is void
             // this is wrong
             AST_Return* ret = (AST_Return*)node;
-            AST_Type* rettype = (AST_Type*)ctx.resolve("returntype");
+            AST_Type* rettype = (AST_Type*)ctx.resolve({ "returntype" });
 
             if (rettype) {
                 if (!ret->value) {
@@ -622,13 +669,22 @@ bool typecheck(Context& ctx, AST_Node* node) {
 }
 
 bool typecheck_all(GlobalContext& global) {
-    for (auto& decl : global.declarations_arr)
-        MUST (resolve_unresolved_references(&decl.node));
+
+    for (auto& decl : global.declarations)
+        MUST (resolve_unresolved_references(&decl.value));
 
     global.temp_allocator.free_all();
 
-    for (auto& decl : global.declarations_arr)
-        MUST (typecheck(global, decl.node));
+    // During typechecking we can declare more stuff
+    // so it's not safe to iterate over global.declarations as it may relocate
+    // Right now we copy the original declartions into an array and iterate over those
+    // This means that the new declarations WON'T BE TYPECHECKED
+    arr<AST_Node*> declarations_copy;
+    for (auto& decl : global.declarations)
+        declarations_copy.push(decl.value);
+
+    for (auto& decl : declarations_copy)
+        MUST (typecheck(global, decl));
 
     return true;
 }

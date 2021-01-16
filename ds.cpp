@@ -64,6 +64,7 @@ char* linear_alloc::alloc(u64 bytes) {
         assert(current);
     }
 
+    // TODO ALIGNMENT
     char* r = current;
 
     current += bytes;

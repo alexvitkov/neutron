@@ -301,8 +301,10 @@ template<typename T>
 struct bucketed_arr {
     arr<T*> buckets;
     u32 last_bucket_size = 0;
+    u32 size;
 
     bucketed_arr() {
+        size = 0;
         new_bucket();
     }
 
@@ -332,6 +334,7 @@ struct bucketed_arr {
 
         T& ref = buckets.last()[last_bucket_size++];
         ref = value;
+        size ++;
         return ref;
     }
 };

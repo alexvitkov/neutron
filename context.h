@@ -7,16 +7,26 @@
 
 struct GlobalContext;
 struct AST_UnresolvedId;
+struct AST_FnType;
 struct AST_StringLiteral;
 
-struct Context {
-    struct NameNodePair {
-        const char* name;
-        AST_Node* node;
-    };
+// VOLATILE If you drastically change this, you will have to change the map_hash and map_equals functions defined in context.cpp
+struct DeclarationKey {
+    // This must come first, as when we sometimes initialize the DeclarationKey like this: { the_name }
+    const char* name;
+    
+    union {
+        // For functions we can have two fns with the same name but different signatures.
+        AST_FnType* fn_type;
 
-    arr<NameNodePair> declarations_arr;
-    map<const char*, AST_Node*> declarations_table;
+        // String literals get translated to nameless static arrays,
+        // that we index by the AST_StringLiteral that is responsible for making them
+        AST_StringLiteral* string_literal;
+    };
+};
+
+struct Context {
+    map<DeclarationKey, AST_Node*> declarations;
 
     GlobalContext* global;
     Context* parent;
@@ -27,8 +37,8 @@ struct Context {
     Context(Context&) = delete;
     Context(Context&&) = delete;
 
-    AST_Node* resolve(const char* name);
-    bool declare(const char* name, AST_Node* value, Token nameToken);
+    AST_Node* resolve(DeclarationKey key);
+    bool declare(DeclarationKey key, AST_Node* value);
     void error(Error err);
 
     template <typename T, typename ... Ts>

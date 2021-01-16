@@ -589,7 +589,7 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     }
     fn = ctx.alloc<AST_Fn>(ctx, name);
     if (decl) {
-        MUST (ctx.declare(name, fn, nameToken));
+        MUST (ctx.declare({ name }, fn));
     }
 
     MUST (r.expect(TOK('(')).type);
@@ -605,14 +605,14 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     }
 
     if (rettype)
-        fn->block.ctx.declare("returntype", rettype, rettype_token);
+        fn->block.ctx.declare({ "returntype" }, rettype);
 
     int argid = 0;
     for (const auto& entry : fn->args) {
         AST_Var* decl = ctx.alloc<AST_Var>(entry.name, argid++);
         decl->type = entry.type;
 
-        fn->block.ctx.declare(entry.name, (AST_Node*)decl, {});
+        fn->block.ctx.declare({ entry.name }, (AST_Node*)decl);
     }
 
     // If it's a declaration without body, it's an extern fn
@@ -740,6 +740,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     case TOK_STRING_LITERAL:
                         if (!ctx.global->literals.find(t.name, (AST_StringLiteral**)&val)) {
                             val = ctx.alloc<AST_StringLiteral>(t);
+                            ctx.global->literals.insert(t.name, (AST_StringLiteral*)val);
                         }
                         break;
                 }
@@ -980,7 +981,7 @@ bool parse_let(Context& ctx, TokenReader& r) {
         MUST (var->initial_value = (AST_Value*)parse_expr(ctx, r));
     };
 
-    MUST (ctx.declare(nameToken.name, var, nameToken));
+    MUST (ctx.declare({ nameToken.name }, var));
 
     MUST (r.expect(TOK(';')).type);
 
@@ -1008,7 +1009,7 @@ AST_Struct* parse_struct(Context& ctx, TokenReader& r, bool decl) {
         Token nameToken = r.expect_full(TOK_ID);
         MUST (nameToken.type); 
 
-        st = (AST_Struct*)ctx.resolve(nameToken.name);
+        st = (AST_Struct*)ctx.resolve({ nameToken.name });
     }
     else {
         st = ctx.alloc<AST_Struct>(nullptr);

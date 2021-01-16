@@ -39,17 +39,17 @@ std::ostream& operator<< (std::ostream& o, AST_Block* bl) {
     indent ++;
     o << "{ \n";
 
-    for (auto nnp : bl->ctx.declarations_arr) {
+    for (auto nnp : bl->ctx.declarations) {
         indent_line(o);
 
-        switch (nnp.node->nodetype) {
+        switch (nnp.value->nodetype) {
         case AST_FN:
         case AST_VAR:
-            print(o, nnp.node, true);
+            print(o, nnp.value, true);
             break;
         default:
-            o << "const " << nnp.name << " = ";
-            print(o, nnp.node, true);
+            o << "const " << nnp.key.name << " = ";
+            print(o, nnp.value, true);
             o << ";\n";
         }
     }
@@ -84,6 +84,7 @@ void print(std::ostream& o, AST_Node* node, bool decl) {
         case AST_FN_CALL:        o << (AST_FnCall*)node; break;
         case AST_MEMBER_ACCESS:  o << (AST_MemberAccess*)node; break;
         case AST_POINTER_TYPE:   o << (AST_PointerType*)node; break;
+        case AST_ARRAY_TYPE:     o << (AST_ArrayType*)node; break;
         case AST_DEREFERENCE:    o << (AST_Dereference*)node; break;
         case AST_ADDRESS_OF:     o << (AST_AddressOf*)node; break;
         case AST_UNRESOLVED_ID:  o << (AST_UnresolvedId*)node; break;
@@ -106,7 +107,7 @@ void print(std::ostream& o, AST_Fn* fn, bool decl) {
         o << '(' << fn->args << ')';
 
         // TODO RETURNTYPE
-        AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve("returntype");
+        AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
         if (rettype)
             o << ": " << rettype;
 
@@ -173,14 +174,17 @@ void print(std::ostream& o, AST_BinaryOp* node, bool brackets = false) {
 
 void print(std::ostream& o, AST_Var* node, bool decl) {
     if (decl) {
-        o << "let " << node->name << ": " << node->type;
+        o << "let " << (node->name ? node->name : "_") << ": " << node->type;
         if (node->initial_value) {
             o << " = "  << node->initial_value;
         }
         o << ";\n";
     }
     else {
-        o << node->name;
+        if (node->name)
+            o << node->name;
+        else
+            o << "_";
     }
 }
 
@@ -238,9 +242,13 @@ std::ostream& operator<< (std::ostream& o, AST_FnCall* node) {
     return o;
 }
 
-
 std::ostream& operator<< (std::ostream& o, AST_PointerType* node) {
     o << '*' << node->pointed_type;
+    return o;
+}
+
+std::ostream& operator<< (std::ostream& o, AST_ArrayType* node) {
+    o << '[' << node->array_length << ']' << node->base_type;
     return o;
 }
 
