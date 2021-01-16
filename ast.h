@@ -34,11 +34,11 @@ enum AST_NodeType : u8 {
     AST_STRING_LITERAL= 0x0c | AST_VALUE_BIT,
 
 
-    AST_STRUCT         = 0x00 | AST_TYPE_BIT,
-	AST_PRIMITIVE_TYPE = 0x01 | AST_TYPE_BIT,
-    AST_FN_TYPE        = 0x02 | AST_TYPE_BIT,
-    AST_POINTER_TYPE   = 0x03 | AST_TYPE_BIT,
-    AST_ARRAY_TYPE     = 0x04 | AST_TYPE_BIT,
+    AST_STRUCT         = 0x00 | AST_VALUE_BIT | AST_TYPE_BIT,
+	AST_PRIMITIVE_TYPE = 0x01 | AST_VALUE_BIT | AST_TYPE_BIT,
+    AST_FN_TYPE        = 0x02 | AST_VALUE_BIT | AST_TYPE_BIT,
+    AST_POINTER_TYPE   = 0x03 | AST_VALUE_BIT | AST_TYPE_BIT,
+    AST_ARRAY_TYPE     = 0x04 | AST_VALUE_BIT | AST_TYPE_BIT,
 };
 
 enum PrimitiveTypeKind : u8 {
@@ -60,9 +60,9 @@ struct AST_Block : AST_Node {
     inline AST_Block(Context& parent) : AST_Node(AST_BLOCK), ctx(&parent) {}
 };
 
-struct AST_Type : AST_Node {
-    inline AST_Type(AST_NodeType nodetype) : AST_Node(nodetype) {}
-};
+struct AST_Type;
+struct AST_PrimitiveType;;
+extern AST_PrimitiveType t_type;
 
 struct AST_Value : AST_Node {
     union {
@@ -70,6 +70,11 @@ struct AST_Value : AST_Node {
         AST_Type* type;
     };
     inline AST_Value(AST_NodeType nodetype, AST_Type* type) : AST_Node(nodetype), type(type) {}
+};
+
+
+struct AST_Type : AST_Value {
+    inline AST_Type(AST_NodeType nodetype) : AST_Value(nodetype, (AST_Type*)&t_type) {}
 };
 
 struct AST_UnresolvedId : AST_Value {
@@ -109,11 +114,6 @@ struct AST_FnType : AST_Type {
     inline AST_FnType() : AST_Type(AST_FN_TYPE), is_variadic(false) {}
 };
 
-struct AST_PointerType : AST_Type {
-    AST_Type* pointed_type;
-    inline AST_PointerType(AST_Type* pointed_type) 
-        : AST_Type(AST_POINTER_TYPE), pointed_type(pointed_type) {}
-};
 
 struct AST_ArrayType : AST_Type { 
     AST_Type* base_type;
@@ -202,12 +202,26 @@ struct AST_MemberAccess : AST_Value {
         : AST_Value(AST_MEMBER_ACCESS, nullptr), index(-1), lhs(lhs), member_name(member_name) {}
 };
 
+
+// VOLATILE
+// Right now AST_PointerType and AST_Dereference have the same
+// size and layout. The typechecker depends on that.
+// If that has to change, update the validate_type function
+struct AST_PointerType : AST_Type {
+    AST_Type* pointed_type;
+    inline AST_PointerType(AST_Type* pointed_type) 
+        : AST_Type(AST_POINTER_TYPE), pointed_type(pointed_type) {}
+};
+
 struct AST_Dereference : AST_Value {
     AST_Value* ptr;
 
     inline AST_Dereference(AST_Value* ptr) 
         : AST_Value(AST_DEREFERENCE, nullptr), ptr(ptr) {}
 };
+
+
+
 
 struct AST_AddressOf : AST_Value {
     AST_Value* inner;

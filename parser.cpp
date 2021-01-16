@@ -467,52 +467,8 @@ void unexpected_token(Context& ctx, Token actual, TokenType expected) {
     });
 }
 
-
-bool parse_type(Context& ctx, TokenReader& r, AST_Type** out, bool save_range = true) {
-    Token t = r.pop_full();
-
-    switch (t.type) {
-        case KW_U8:   *out = &t_u8;   break;
-        case KW_U16:  *out = &t_u16;  break;
-        case KW_U32:  *out = &t_u32;  break;
-        case KW_U64:  *out = &t_u64;  break;
-        case KW_I8:   *out = &t_i8;   break;
-        case KW_I16:  *out = &t_i16;  break;
-        case KW_I32:  *out = &t_i32;  break;
-        case KW_I64:  *out = &t_i64;  break;
-        case KW_F32:  *out = &t_f32;  break;
-        case KW_F64:  *out = &t_f64;  break;
-        case KW_BOOL: *out = &t_bool; break;
-
-        case '*': {
-            AST_Type* pointed_type;
-            MUST (parse_type(ctx, r, &pointed_type, false));
-
-            *out = get_pointer_type(pointed_type);
-            break;
-        }
-
-        case TOK_ID: {
-            AST_UnresolvedId* id = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
-            break;
-        }
-
-        default:
-            unexpected_token(ctx, t, TOK(':'));
-            return false;
-    }
-
-    if (save_range) {
-        ctx.global->node_ptr_locations[(AST_Node**)out] = {
-            .file_id = r.sf.id,
-            .loc = {
-                .start = t.loc.start,
-                .end = r.pos_in_file,
-            }
-        };
-    }
-    return true;
-}
+bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error);
+AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim = TOK_NONE);
 
 bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedType>* tl) {
     SmallToken t = r.peek();
@@ -522,13 +478,15 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedTyp
     }
 
     while (true) {
-        AST_Type* type;
-        MUST (parse_type(ctx, r, &type, false));
-
         SmallToken nameToken = r.expect(TOK_ID);
         MUST (nameToken.type);
 
-        auto& ref = tl->push({ .name = nameToken.name, .type = type });
+        MUST (r.expect(TOK(':')).type);
+
+        AST_Value* type = parse_expr(ctx, r);
+        MUST (type);
+
+        auto& ref = tl->push({ .name = nameToken.name, .type = (AST_Type*)type });
 
         t = r.peek();
         if (t.type == delim) {
@@ -541,8 +499,6 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedTyp
     return true;
 }
 
-bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error);
-AST_Value* parse_expr(Context& ctx, TokenReader& r);
 
 bool parse_block(AST_Block& block, TokenReader& r) {
     MUST (r.expect(TOK('{')).type);
@@ -632,7 +588,7 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     if (r.peek().type == TOK(':')) {
         r.pop();
         rettype_token = r.peek_full();
-        MUST (parse_type(ctx, r, &rettype));
+        MUST (rettype = (AST_Type*)parse_expr(ctx, r));
     }
 
     if (rettype)
@@ -740,13 +696,27 @@ bool pop(SYState& s) {
     return true;
 }
 
-AST_Value* parse_expr(Context& ctx, TokenReader& r) {
+bool _token_is_value(TokenType t) {
+    if (IS_TYPE_KW(t))
+        return true;
+    if (t == TOK_ID || t == TOK_NUMBER || t == TOK_STRING_LITERAL || t == '(')
+        return true;
+    return false;
+}
+
+AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
     SYState s { .ctx = ctx };
-    bool prev_was_value = false;
 
     Token t;
+    bool prev_was_value = false;
+
     while (true) {
         t = r.pop_full();
+
+        Location kwloc = {
+            .file_id = r.sf.id,
+            .loc = t.loc,
+        };
 
         switch (t.type) {
             case TOK_ID:
@@ -822,8 +792,8 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                 
                 // If previous isn't a value, do the shunting yard thing
                 else {
-                    s.stack.push(t.type);
                     prev_was_value = false;
+                    s.stack.push(t.type);
                     s.brackets++;
                 }
                 break;
@@ -862,8 +832,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                 break;
             }
 
-            case '[': {
-                AST_Value* index = parse_expr(ctx, r);
+            case TOK_OPENSQUARE: { AST_Value* index = parse_expr(ctx, r);
                 MUST (index);
                 MUST (r.expect(TOK(']')).type);
 
@@ -891,7 +860,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                 break;
             }
             
-            case '&': {
+            case TOK_AMPERSAND: {
                 if (s.output.size == 0) {
                     s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                     return nullptr;
@@ -926,21 +895,33 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                 break;
             }
 
+            case KW_U8:   s.output.push({ &t_u8,   kwloc }); prev_was_value = true; break;
+            case KW_U16:  s.output.push({ &t_u16,  kwloc }); prev_was_value = true; break;
+            case KW_U32:  s.output.push({ &t_u32,  kwloc }); prev_was_value = true; break;
+            case KW_U64:  s.output.push({ &t_u64,  kwloc }); prev_was_value = true; break;
+            case KW_I8:   s.output.push({ &t_i8,   kwloc }); prev_was_value = true; break;
+            case KW_I16:  s.output.push({ &t_i16,  kwloc }); prev_was_value = true; break;
+            case KW_I32:  s.output.push({ &t_i32,  kwloc }); prev_was_value = true; break;
+            case KW_I64:  s.output.push({ &t_i64,  kwloc }); prev_was_value = true; break;
+            case KW_BOOL: s.output.push({ &t_bool, kwloc }); prev_was_value = true; break;
+            case KW_F32:  s.output.push({ &t_f32,  kwloc }); prev_was_value = true; break;
+            case KW_F64:  s.output.push({ &t_f64,  kwloc }); prev_was_value = true; break;
+
             default: {
+                if (delim == t.type) {
+                    r.pos --;
+                    goto Done;
+                }
+
                 if (is_operator(t.type)) {
                     // * can be either postfix, in which case it means dereference
                     // or be infix, in which case it means multiplication
                     if (t.type == '*') {
                         TokenType next = r.peek().type;
 
-                        // If the next token type is id/number/open bracket, the * is infix
-                        // in all other cases it is postfix
-                        
-                        if (next != TOK_OPENBRACKET 
-                                && next != TOK_ID 
-                                && next != TOK_NUMBER 
-                                && next != TOK_STRING_LITERAL) 
-                        {
+                        // If the next token type is value, the * is infix
+                        // if it's an operator, the * is postfix
+                        if (!_token_is_value(next)) {
                             if (s.output.size == 0) {
                                 s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                                 return nullptr;
@@ -952,6 +933,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                                 ctx.alloc<AST_Dereference>(s.output.last().val),
                                 last.loc
                             };
+                            s.ctx.global->node_locations[s.output.last().val] = last.loc;
                             break;
                         }
                     }
@@ -963,7 +945,6 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                     }
 
                     s.stack.push(t.type);
-                    prev_was_value = false;
                 }
                 else {
                     if (prev_was_value) {
@@ -1005,7 +986,7 @@ bool parse_let(Context& ctx, TokenReader& r) {
     AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, -1);
 
     MUST (r.expect(TOK(':')).type);
-    MUST (parse_type(ctx, r, &var->type));
+    MUST (var->type = (AST_Type*)parse_expr(ctx, r, TOK('=')));
 
     if (r.peek().type == TOK('=')) {
         r.pop();

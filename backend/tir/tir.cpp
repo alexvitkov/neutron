@@ -246,11 +246,11 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             TIR_OpCode opcode;
 
             switch (bin->op) {
-                case '+':  {
+                case TOK_ADD:  {
                     opcode = TOPC_ADD; 
                     break;
                 }
-                case '-': {
+                case TOK_SUBTRACT: {
                     opcode = TOPC_SUB; 
                     break;
                 }

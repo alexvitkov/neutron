@@ -36,6 +36,7 @@ struct TypeSizeTuple {
 
 map<TypeSizeTuple, AST_ArrayType*> array_types;
 
+bool validate_type(Context& ctx, AST_Type** type);
 
 u32 map_hash(TypeSizeTuple tst) {
     return map_hash(tst.t) ^ (u32)tst.u;
@@ -184,14 +185,6 @@ bool resolve_unresolved_references(AST_Node** nodeptr);
 bool resolve_unresolved_references(AST_Block* block) {
     for (auto& stmt : block->statements)
         MUST (resolve_unresolved_references(&stmt));
-    return true;
-}
-
-inline bool must_be_type(Context& ctx, AST_Node* node) {
-    if (!(node->nodetype & AST_TYPE_BIT)) {
-        ctx.error({ .code = ERR_INVALID_TYPE, .nodes = { node } });
-        return false;
-    }
     return true;
 }
 
@@ -358,14 +351,14 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
             for (auto& p : fn->args) {
                 // Right now we know that the parameters' .type 
                 // are valid nodes, we must check if they're types
-                MUST (must_be_type(ctx, p.type));
+                MUST (validate_type(ctx, &p.type));
                 param_types.push(p.type);
             }
 
             // TODO RETURNTYPE
             AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
             if (rettype)
-                MUST (must_be_type(ctx, rettype));
+                MUST (validate_type(ctx, &rettype));
 
             fn->type = get_fn_type(rettype, std::move(param_types));
 
@@ -576,6 +569,47 @@ Error:
     }
 }
 
+// Types are parsed by the parse_expr function
+// When parse_expr sees foo* it doesn't know it it's a dereference 
+// or a pointer type, so it just assumes it's a dereference
+//
+// Same goes for foo[123], is it a index operator or array type?
+//
+// This is called on a AST_Value outputted by parse_expr
+// to patch up the node into a valid type
+//
+// TODO ALLOCATION this function leaks from all sides
+bool validate_type(Context& ctx, AST_Type** type) {
+    
+    AST_Value* val = (AST_Value*)*type;
+
+    if (val->nodetype & AST_TYPE_BIT)
+        return true;
+
+    switch (val->nodetype) {
+        case AST_DEREFERENCE: {
+            AST_Dereference* deref = (AST_Dereference*)val;
+
+            MUST (validate_type(ctx, (AST_Type**)&deref->ptr));
+
+            Location loc = location_of(ctx, (AST_Node**)&deref);
+
+            *type = get_pointer_type((AST_Type*)deref->ptr);
+            ctx.global->node_ptr_locations[(AST_Node**)type] = loc;
+
+            return true;
+        }
+        default: {
+            ctx.error({
+                .code = ERR_INVALID_TYPE,
+                .nodes = { val },
+            });
+            return false;
+        }
+    }
+
+    return true;
+};
 
 bool typecheck(Context& ctx, AST_Node* node) {
 
@@ -606,7 +640,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
 
-            MUST (must_be_type(ctx, var->type));
+            MUST (validate_type(ctx, &var->type));
 
             if (var->initial_value) {
                 AST_Type* rhst = gettype(ctx, var->initial_value);

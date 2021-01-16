@@ -21,19 +21,27 @@
 
 #define MUST(v) if (!(v)) return 0;
 
+#define IS_TYPE_KW(t) ((t) >= KW_U8 && (t) <= KW_F64)
+
 // This can be extended to u16 if needed,
 // right now there's unused space in the Token struct
 enum TokenType : u8 {
 	TOK_NONE = 0,
 
+    TOK_ADD = '+',
+    TOK_SUBTRACT = '-',
+
+    TOK_AMPERSAND = '&',
+    TOK_OPENSQUARE = '[',
+    TOK_CLOSESQUARE = ']',
     TOK_OPENCURLY = '{',
     TOK_CLOSECURLY = '}',
     TOK_OPENBRACKET = '(',
     TOK_CLOSEBRACKET = ')',
     TOK_DOT = '.',
 
-
-    // VOLATILE - if you reorder the operators, you have to change 
+    // VOLATILE
+    // If you reorder the operators, you have to change 
     // the precedence table in parser.cpp
     OP_PLUSPLUS = 128,
     OP_MINUSMINUS,
@@ -56,6 +64,10 @@ enum TokenType : u8 {
     OP_BITXORASSIGN,
     OP_BITORASSIGN,
 
+
+    // VOLATILE 
+    // IS_TYPE_KW checks if a keyword is a type by doing t >= KW_U8 && t <= KW_F64
+    // If you add a new type keyword update IS_TYPE_KW accordingly
 	KW_U8,
 	KW_U16,
 	KW_U32,
@@ -67,6 +79,8 @@ enum TokenType : u8 {
 	KW_BOOL,
 	KW_F32,
 	KW_F64,
+
+
 	KW_FN,
 	KW_LET,
 	KW_STRUCT,
@@ -75,6 +89,8 @@ enum TokenType : u8 {
 	KW_FALSE,
     KW_IF,
     KW_WHILE,
+
+
 
 	TOK_ERROR,
 
