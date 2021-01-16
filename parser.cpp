@@ -177,6 +177,50 @@ Location location_of(Context& ctx, AST_Node** node) {
 struct TokenReader;
 void unexpected_token(Context& ctx, Token actual, TokenType expected);
 
+
+
+NumberData* parse_number(Context& ctx, char* start, char* end) {
+    // TODO ALLOCATION
+    NumberData* data = new NumberData();
+
+    u64 acc[2] = { 0, 0 };
+    u8 acc_index = 0;
+
+    for (char* i = start; i != end; i++) {
+        char ch = *i;
+
+        if (ch >= '0' && ch <= '9') {
+            if (acc[acc_index])
+                acc[acc_index] *= 10;
+
+            acc[acc_index] += ch - '0';
+        }
+        else if (ch == '.') {
+            // Multiple decimal places
+            if (acc_index) {
+                ctx.error({
+                    .code = ERR_INVALID_NUMBER_FORMAT
+                });
+                return nullptr;
+            }
+            acc_index ++;
+        }
+    }
+
+    if (acc_index) {
+        data->is_float = true;
+        assert(!"Not implemented");
+        //data->f64_data = (double)data0] / (double)acc_index[1];
+    }
+    else {
+        data->is_float = false;
+        data->u64_data = acc[0];
+    }
+
+    return data;
+}
+
+
 bool tokenize(Context& global, SourceFile &s) {
 	u64 word_start;
 	enum { NONE, WORD, NUMBER } state = NONE;
@@ -221,6 +265,11 @@ bool tokenize(Context& global, SourceFile &s) {
                     name = (char*)malloc(length + 1);
                     memcpy(name, s.buffer + word_start, length);
                     name[length] = 0;
+                }
+                else if (tt == TOK_NUMBER) {
+                    name = (char*)parse_number(global, s.buffer + word_start, s.buffer + i);
+                    if (!name)
+                        return false;
                 }
 
                  s.pushToken(
@@ -288,18 +337,6 @@ bool tokenize(Context& global, SourceFile &s) {
                 length = 3;
             else if (i + 1 < s.length && (t = Perfect_Hash::in_word_set(s.buffer + i, 2)))
                 length = 2;
-
-            /*
-            Token tok =  {
-				.type = t ? t->type : TOK(c),
-				.match = (u32)match,
-				.length = length,
-				.start = i,
-                .line = line,
-                .pos_in_line = (u32)(i - line_start),
-            };
-            */
-
 			switch (c) {
 				case '(': case '[': case '{': {
 					bracket_stack.push({ TOK(c), s._tokens.size});
@@ -308,10 +345,7 @@ bool tokenize(Context& global, SourceFile &s) {
 				case ')': case ']': case '}': {
 					if (bracket_stack.size == 0) {
                         // TODO ERROR
-						global.error({
-                            .code = ERR_UNBALANCED_BRACKETS,
-                            // .tokens = { tok },
-                        });
+						global.error({ .code = ERR_UNBALANCED_BRACKETS, });
 						return false;
 					}
 
@@ -321,10 +355,7 @@ bool tokenize(Context& global, SourceFile &s) {
                             || (c == '}' && bt.bracket != '{')) 
                     {
                         // TODO ERROR
-						global.error({
-                            .code = ERR_UNBALANCED_BRACKETS,
-                            // .tokens = { bt.tok },
-                        });
+						global.error({ .code = ERR_UNBALANCED_BRACKETS, });
 						return false;
 					}
                     match = bt.tokid;
@@ -735,7 +766,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
                         val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
                         break;
                     case TOK_NUMBER:
-                        val = ctx.alloc<AST_Number>(t.u64_val);
+                        val = ctx.alloc<AST_Number>(t.number_data->u64_data);
                         break;
                     case TOK_STRING_LITERAL:
                         if (!ctx.global->literals.find(t.name, (AST_StringLiteral**)&val)) {
@@ -845,7 +876,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r) {
 
                 // When we see foo[bar] we output (foo + bar)*
                 AST_BinaryOp* add = ctx.alloc<AST_BinaryOp>(TOK('+'), s.output.last().val, index);
-                AST_Dereference* deref = ctx.alloc<AST_Dereference>(s.output.last().val);
+                AST_Dereference* deref = ctx.alloc<AST_Dereference>(add);
 
                 Location loc = {
                     .file_id = r.sf.id,

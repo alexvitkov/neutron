@@ -114,6 +114,13 @@ struct Location {
     LocationInFile loc;
 };
 
+struct NumberData {
+    bool is_float;
+    union {
+        u64 u64_data;
+        double f64_data;
+    };
+};
 
 struct SmallToken {
     TokenType type;
@@ -126,7 +133,7 @@ struct SmallToken {
 
     union {
         const char* name;
-        u64 u64_val;
+        NumberData* number_data;
     };
 };
 

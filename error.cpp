@@ -25,6 +25,7 @@ const char* error_names[] = {
     "Already defined",
     "Not defined",
     "Invalid expression",
+    "Invalid number format",
 
     // Typer errors
     "Incompatible types",

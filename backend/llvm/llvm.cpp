@@ -215,11 +215,18 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 llvm::Value *lhs = translate_value(instr.bin.lhs, block);
                 llvm::Value *rhs = translate_value(instr.bin.rhs, block);
 
-                llvm::Value* vals[2];
-                vals[0] = Constant::getNullValue(Type::getInt32Ty(lc));
-                vals[1] = rhs;
+                llvm::Value* gep;
 
-                llvm::Value *gep = builder.CreateGEP(lhs, vals);
+                if (instr.bin.lhs->type->nodetype == AST_ARRAY_TYPE) {
+                    llvm::Value* vals[2];
+                    vals[0] = Constant::getNullValue(Type::getInt32Ty(lc));
+                    vals[1] = rhs;
+                    gep = builder.CreateGEP(lhs, vals);
+                }
+                else {
+                    gep = builder.CreateGEP(lhs, rhs);
+                }
+
                 set_value(instr.bin.dst, gep, l_bb);
                 break;
             }
