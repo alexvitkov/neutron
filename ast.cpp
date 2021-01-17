@@ -104,7 +104,18 @@ void print(std::ostream& o, AST_Fn* fn, bool decl) {
         if (fn->name)
             o << fn->name;
 
-        o << '(' << fn->args << ')';
+        o << '(';
+
+        AST_FnType* fntype = (AST_FnType*)fn->type;
+        for (int i = 0; i < fn->argument_names.size; i++)
+            o << fn->argument_names[i] << ": " << fntype->param_types[i] << ", ";
+
+        // Delete the last comma
+        if (fn->argument_names.size)
+            o << "\b\b \b";
+
+        o << ')';
+
 
         // TODO RETURNTYPE
         AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });

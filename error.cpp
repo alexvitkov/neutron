@@ -221,7 +221,7 @@ void print_err(Context& global, Error& err) {
         }
 
         default: {
-            printf("%d.\n", err.code);
+            printf("Error %d.\n", err.code);
             print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
         }
 

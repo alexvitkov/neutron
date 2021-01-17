@@ -3,7 +3,9 @@
 #include "error.h"
 
 Context::Context(Context* parent)
-    : parent(parent), global(parent ? parent->global : (GlobalContext*)this) { }
+    : parent(parent), 
+      global(parent ? parent->global : (GlobalContext*)this), 
+      fn(parent ? parent->fn : nullptr) { }
 
 u32 map_hash(DeclarationKey key) {
     u32 hash = 0;

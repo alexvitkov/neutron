@@ -290,11 +290,12 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
             
             assert(fncall->fn->nodetype == AST_FN);
             AST_Fn* callee = (AST_Fn*)fncall->fn;
+            AST_FnType* callee_type = (AST_FnType*)fncall->fn->type;
 
             arr<TIR_Value*> args;
 
             for (int i = 0; i < fncall->args.size; i++) {
-                AST_Type* param_type = callee->args[i].type;
+                AST_Type* param_type = callee_type->param_types[i];
                 TIR_Value*  arg_dst = fn.alloc_temp(param_type);
 
                 TIR_Value* arg = compile_node(fn, fncall->args[i], arg_dst);
@@ -449,11 +450,9 @@ void TIR_Context::compile_all() {
             case AST_FN: {
                 AST_Fn* fn = (AST_Fn*)decl.value;
                 
-                // TODO ALLOCATION
                 TIR_Function* tir_fn = new TIR_Function(*this, fn);
 
-                // TODO RETURNTYPE
-                AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
+                AST_Type* rettype = ((AST_FnType*)fn->type)->returntype;
                 if (rettype) 
                     tir_fn->retval.type = rettype;
 

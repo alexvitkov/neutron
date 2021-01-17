@@ -166,9 +166,9 @@ u8 prec[148] = {
 
 Location location_of(Context& ctx, AST_Node** node) {
     Location loc;
-    if (ctx.global->node_ptr_locations.find(node, &loc)) {
+    if (ctx.global->reference_locations.find(node, &loc)) {
         return loc;
-    } else if (ctx.global->node_locations.find(*node, &loc)) {
+    } else if (ctx.global->definition_locations.find(*node, &loc)) {
         return loc;
     } 
     assert(!"AST_Node doesn't have a location");
@@ -554,8 +554,6 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     // has been peeked, no need for MUST check
     assert (fn_kw.type);
 
-    AST_Fn* fn;
-
     Token nameToken;
     const char* name = nullptr;
 
@@ -564,35 +562,53 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         name = nameToken.name;
         MUST (nameToken.type);
     }
-    fn = ctx.alloc<AST_Fn>(ctx, name);
+
+    AST_Fn* fn = ctx.alloc<AST_Fn>(ctx, name);
+    AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>();
+
+    fn->type = temp_fn_type;
+    fn->block.ctx.fn = fn;
+
     if (decl) {
         MUST (ctx.declare({ name }, fn));
     }
 
     MUST (r.expect(TOK('(')).type);
-    MUST (parse_type_list(ctx, r, TOK(')'), &fn->args));
 
-    AST_Type* rettype = nullptr;
-    Token rettype_token;
+    // Parse the function arguments
+    while (r.peek().type != TOK_CLOSEBRACKET) {
+        SmallToken nameToken = r.expect(TOK_ID);
+        MUST (nameToken.type);
 
+        MUST (r.expect(TOK(':')).type);
+
+        AST_Value* type = parse_expr(ctx, r);
+        MUST (type);
+
+        temp_fn_type->param_types.push((AST_Type*)type);
+        
+        TokenType p = r.peek().type;
+
+        if (p == TOK_CLOSEBRACKET) {
+            break;
+        } else if (p == TOK(',')) {
+            r.pop();
+        } else {
+            unexpected_token(ctx, r.pop_full(), TOK(','));
+            return nullptr;
+        }
+    }
+
+    r.pop(); // Discard the closing bracket
+
+    // Parse the return type
     if (r.peek().type == TOK(':')) {
         r.pop();
-        rettype_token = r.peek_full();
-        MUST (rettype = (AST_Type*)parse_expr(ctx, r));
+        MUST (temp_fn_type->returntype = (AST_Type*)parse_expr(ctx, r));
     }
 
-    if (rettype)
-        fn->block.ctx.declare({ "returntype" }, rettype);
 
-    int argid = 0;
-    for (const auto& entry : fn->args) {
-        AST_Var* decl = ctx.alloc<AST_Var>(entry.name, argid++);
-        decl->type = entry.type;
-
-        fn->block.ctx.declare({ entry.name }, (AST_Node*)decl);
-    }
-
-    // If it's a declaration without body, it's an extern fn
+    // If it's a declaration without body, it's implictly extern
     if (decl) {
         if (r.peek().type == ';') {
             r.pop();
@@ -604,7 +620,7 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         MUST (parse_block(fn->block, r));
     }
 
-    ctx.global->node_locations[fn] = {
+    ctx.global->definition_locations[fn] = {
         .file_id = r.sf.id,
         .loc = {
            .start = fn_kw.loc.start,
@@ -679,7 +695,7 @@ bool pop(SYState& s) {
         }
     };
 
-    s.ctx.global->node_locations[bin] = loc;
+    s.ctx.global->definition_locations[bin] = loc;
     
     s.output[s.output.size - 1] = { bin, loc };
 
@@ -740,10 +756,11 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                     .file_id = r.sf.id,
                     .loc = t.loc,
                 };
+
                 // TODO ALLOCATION we should not be storing the node locations
                 // for the unresolved IDs here, as they'll get discarded
-                if (!ctx.global->node_locations.find(val, nullptr))
-                    ctx.global->node_locations[val] = loc;
+                if (!ctx.global->definition_locations.find(val, nullptr))
+                    ctx.global->definition_locations[val] = loc;
 
                 s.output.push({val, loc });
                 break;
@@ -778,7 +795,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                     r.pop(); // discard the closing bracket
 
                     for (int i = 0; i < arg_locs.size; i++) {
-                        ctx.global->node_ptr_locations[(AST_Node**)&fncall->args[i]] = arg_locs[i];
+                        ctx.global->reference_locations[(AST_Node**)&fncall->args[i]] = arg_locs[i];
                     }
 
                     Location loc = {
@@ -858,7 +875,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                 };
 
                 s.output.last() = { deref, loc };
-                ctx.global->node_locations[deref] = loc;
+                ctx.global->definition_locations[deref] = loc;
                 break;
             }
             
@@ -891,7 +908,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
 
                     s.output.last() = { ctx.alloc<AST_AddressOf>((AST_Value*)top), loc };
 
-                    ctx.global->node_locations[s.output.last().val] = loc;
+                    ctx.global->definition_locations[s.output.last().val] = loc;
                 }
 
                 break;
@@ -935,7 +952,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                                 ctx.alloc<AST_Dereference>(s.output.last().val),
                                 last.loc
                             };
-                            s.ctx.global->node_locations[s.output.last().val] = last.loc;
+                            s.ctx.global->definition_locations[s.output.last().val] = last.loc;
                             prev_was_value = true;
                             break;
                         }
@@ -1001,7 +1018,7 @@ bool parse_let(Context& ctx, TokenReader& r) {
 
     MUST (r.expect(TOK(';')).type);
 
-    ctx.global->node_locations[var] = {
+    ctx.global->definition_locations[var] = {
         .file_id = r.sf.id,
         .loc = {
             .start = let_tok.loc.start,

@@ -89,19 +89,15 @@ bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     return true;
 }
 
-AST_FnType* get_fn_type(AST_Type* returntype, arr<AST_Type*> param_types) {
-    AST_FnType tmp;
-
-    tmp.param_types = std::move(param_types);
-    tmp.returntype = returntype;
+AST_FnType* make_function_type_unique(AST_FnType* temp_type) {
 
     AST_FnType* result;
-    if (fn_types_hash.find(&tmp, &result)) {
+    if (fn_types_hash.find(temp_type, &result)) {
         return result;
     }
     else {
-        // TODO ALLOCATION we need a sane allocation here
-        AST_FnType* newtype = new AST_FnType(std::move(tmp));
+        // TODO ALLOCATION
+        AST_FnType* newtype = new AST_FnType(std::move(*temp_type));
 
         fn_types_hash.insert(newtype, newtype);
         return newtype;
@@ -234,7 +230,7 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
 
         case AST_FN_CALL: {
             AST_FnCall* fncall = (AST_FnCall*)node;
-            MUST (resolve_unresolved_references(&fncall->fn));
+            MUST (resolve_unresolved_references((AST_Node**)&fncall->fn));
             for (auto& arg : fncall->args)
                 MUST (resolve_unresolved_references((AST_Node**)&arg));
             break;
@@ -242,8 +238,8 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
 
         case AST_FN: {
             AST_Fn* fn = (AST_Fn*)node;
-            for (auto& arg : fn->args)
-                MUST (resolve_unresolved_references((AST_Node**)&arg.type));
+            for (auto& param_type : ((AST_FnType*)(fn->type))->param_types)
+                MUST (resolve_unresolved_references((AST_Node**)&param_type));
             MUST (resolve_unresolved_references(&fn->block));
             break;
         }
@@ -340,6 +336,26 @@ bool is_integral_type(AST_Type* type) {
     }
 }
 
+
+bool validate_fn_type(Context& ctx, AST_Fn* fn) {
+    AST_FnType *fntype = (AST_FnType*)fn->type;
+    
+    for (auto& p : fntype->param_types) {
+        // we must check if the parameters are valid AST_Types
+        MUST (validate_type(ctx, &fntype->type));
+    }
+    MUST (validate_type(ctx, &fntype->returntype));
+    
+    fntype = make_function_type_unique(fntype);
+    fn->type = fntype;
+    
+    // TODO TODO TODO TODO VARIADIC
+    if (!strcmp(fn->name, "printf"))
+        ((AST_FnType*)fn->type)->is_variadic = true;
+    return fn->type;
+}
+
+
 AST_Type* gettype(Context& ctx, AST_Value* node) {
     if (node->type)
         return node->type;
@@ -353,70 +369,89 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
         }
 
         case AST_FN: {
-            AST_Fn *fn = (AST_Fn*)node;
-
-            arr<AST_Type*> param_types(fn->args.size);
-
-            for (auto& p : fn->args) {
-                // Right now we know that the parameters' .type 
-                // are valid nodes, we must check if they're types
-                MUST (validate_type(ctx, &p.type));
-                param_types.push(p.type);
-            }
-
-            // TODO RETURNTYPE
-            AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
-            if (rettype)
-                MUST (validate_type(ctx, &rettype));
-
-            fn->type = get_fn_type(rettype, std::move(param_types));
-
-
-            if (!strcmp(fn->name, "printf"))
-                ((AST_FnType*)fn->type)->is_variadic = true;
-            return fn->type;
+            assert(!"Not supported");
         }
 
         case AST_FN_CALL: {
             AST_FnCall *fncall = (AST_FnCall*)node;
 
-            AST_Fn *fn = (AST_Fn*)fncall->fn;
-            assert(fn->nodetype == AST_FN);
+            // The parser can't tell apart function calls from casts
+            // We are smarter than the parser though so we can
+            if (fncall->fn->nodetype == AST_FN) {
+                AST_Fn *fn = (AST_Fn*)fncall->fn;
+                AST_FnType *fntype = (AST_FnType*)fn->type;
 
-            // TODO RETURNTYPE
-            AST_Type* returntype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
 
-            // TODO ERROR
-            if (fncall->args.size != fn->args.size) {
-                ctx.error({ .code = ERR_BAD_FN_CALL });
-                return nullptr;
-            }
+                u64 num_args = fncall->args.size;
+                u64 num_params = fntype->param_types.size;
 
-            for (int i = 0; i < fn->args.size; i++) {
-                if (!implicit_cast(ctx, &fncall->args[i], fn->args[i].type)) {
-
-                    ctx.error({
-                        .code = ERR_BAD_FN_CALL,
-                        .node_ptrs = { 
-                            (AST_Node**)&fncall->args[i] 
-                        },
-                        .args = {{  
-                            .arg_name = fn->args[i].name,
-                            .arg_type_ptr = (AST_Node**)&fn->args[i].type,
-                            .arg_index = (u64)i
-                        }}
-                    });
-
+                if (num_args != num_params || (fntype->is_variadic && num_args < num_params)) {
+                    // TODO ERROR
+                    ctx.error({ .code = ERR_BAD_FN_CALL });
                     return nullptr;
                 }
+
+
+                for (int i = 0; i < fncall->args.size; i++) {
+
+                    if (!implicit_cast(ctx, &fncall->args[i], fntype->param_types[i])) {
+                        ctx.error({
+                            .code = ERR_BAD_FN_CALL,
+                            .node_ptrs = { 
+                                (AST_Node**)&fncall->args[i] 
+                            },
+                            .args = {{  
+                                .arg_name = fn->argument_names[i],
+                                .arg_type_ptr = (AST_Node**)&fntype->param_types[i],
+                                .arg_index = (u64)i
+                            }}
+                        });
+                        return nullptr;
+                    }
+                }
+
+                fncall->type = fntype->returntype;
+                return fntype->returntype;
             }
 
-            if (!returntype) {
-                returntype = &t_void;
+            // If the user is trying to 'call' a type then that's a cast.
+            // Here the node is patched up from a AST_FnCall to a AST_Cast
+            else if (fncall->fn->nodetype & AST_TYPE_BIT) {
+
+                // There  must be exactly one 'argument' to the function call -
+                // the value the user is trying to cast
+
+                if (fncall->args.size != 1) {
+                    // TODO ERROR
+                    ctx.error({ .code = ERR_BAD_FN_CALL });
+                }
+                
+                AST_Cast* cast = (AST_Cast*)fncall;
+
+                cast->type = (AST_Type*)fncall->fn;
+                cast->nodetype = AST_CAST;
+                cast->inner = fncall->args[0];
+
+                MUST (validate_type(ctx, &cast->type));
+
+                // Right now we only support pointer->pointer casts
+                if ((cast->type->nodetype == AST_POINTER_TYPE || cast->type->nodetype == AST_ARRAY_TYPE)
+                    && (cast->inner->type->nodetype == AST_POINTER_TYPE || cast->inner->type->nodetype == AST_ARRAY_TYPE))
+                {
+                    return cast->type;
+                }
+                else 
+                {
+                    // TODO ERROR
+                    ctx.error({ .code = ERR_INVALID_CAST });
+                }
+
+                return cast->type;
+            }
+            else {
+                assert(!"Invalid node");
             }
 
-            fncall->type = returntype;
-            return returntype;
         }
 
         case AST_ASSIGNMENT: {
@@ -621,7 +656,7 @@ bool validate_type(Context& ctx, AST_Type** type) {
             Location loc = location_of(ctx, (AST_Node**)&deref);
 
             *type = get_pointer_type((AST_Type*)deref->ptr);
-            ctx.global->node_ptr_locations[(AST_Node**)type] = loc;
+            ctx.global->reference_locations[(AST_Node**)type] = loc;
 
             return true;
         }
@@ -669,8 +704,10 @@ bool typecheck(Context& ctx, AST_Node* node) {
             return true;
         }
 
-        // TODO I should probably get rid of initial_value
-        // and treat it like an assignment statment
+        // TODO INITIAL_VALUE
+        // There should be a prepass for variables outside the global scope
+        // that converts initial values into assignments
+        // Way too many checks have to be written twice, for assignments and init values
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
 
@@ -689,23 +726,27 @@ bool typecheck(Context& ctx, AST_Node* node) {
         }
 
         case AST_RETURN: {
-            // TODO RETURNTYPE child void functions right now inherit the returntype of the 
-            // parent funciton if the child fn's return type is void
-            // this is wrong
-            AST_Return* ret = (AST_Return*)node;
-            AST_Type* rettype = (AST_Type*)ctx.resolve({ "returntype" });
+            AST_Return *ret = (AST_Return*)node;
+            AST_Type *rettype = ((AST_FnType*)ctx.fn->type)->returntype;
 
             if (rettype) {
                 if (!ret->value) {
+                    // TODO ERROR
                     ctx.error({
                         .code = ERR_INVALID_RETURN,
                     });
                     return false;
                 }
-                if (!implicit_cast(ctx, &ret->value, rettype))
+                if (!implicit_cast(ctx, &ret->value, rettype)) {
+                    // TODO ERROR
+                    ctx.error({
+                        .code = ERR_INVALID_RETURN,
+                    });
                     return false;
+                }
             }
             else if (ret->value) {
+                // TODO ERROR
                 ctx.error({
                     .code = ERR_INVALID_RETURN,
                     .nodes = { ret->value, }
@@ -742,13 +783,14 @@ bool typecheck_all(GlobalContext& global) {
     for (auto& decl : global.declarations)
         MUST (resolve_unresolved_references(&decl.value));
 
-    global.temp_allocator.free_all();
 
     // First resolve the function types, we need their signatures for everything else
     for (auto& decl : global.declarations) {
         if (decl.value->nodetype == AST_FN)
-            gettype(global, (AST_Value*)decl.value);
+            MUST (validate_fn_type(global, (AST_Fn*)decl.value));
     }
+
+    global.temp_allocator.free_all();
 
     // During typechecking we can declare more stuff
     // so it's not safe to iterate over global.declarations as it may relocate

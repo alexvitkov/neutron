@@ -25,13 +25,15 @@ struct DeclarationKey {
     };
 };
 
+struct AST_Fn;
+
 struct Context {
     map<DeclarationKey, AST_Node*> declarations;
 
     GlobalContext* global;
     Context* parent;
 
-    map<const char*, AST_StringLiteral*> literals;
+    AST_Fn* fn; // the function that this context is a part of
 
     Context(Context* parent);
     Context(Context&) = delete;
@@ -44,6 +46,22 @@ struct Context {
     template <typename T, typename ... Ts>
     T* alloc(Ts &&...args);
 
+    // In the temp allocator we store:
+    //    1. AST_UnresolvedIds
+    //           When we hit an identifier we create a AST_UnresolvedId node
+    //       The typer runs a pass (resolve_unresolved_reference), which replaces those
+    //       with whatever those identifiers happen to refer to
+    //
+    //    2. Temporary function types
+    //           When we parse the function we gradually fill out its type
+    //       It can later on turn out that two functions have the same type, so we have two different
+    //       type nodes that mean the same function type.
+    //           This is is bad, as we check type equality bo comparing their pointers
+    //       So before the typing stage we run another pass on all the functions that looks for 
+    //       (see make_function_type_unique)
+    //
+    //    After those passes, the valeus allocated here are no longer relevant and they're released
+    //    If something is only needed until before the typing stage, you should allocate it here
     template <typename T, typename ... Ts>
     T* alloc_temp(Ts &&...args);
 };
@@ -51,11 +69,24 @@ struct Context {
 struct GlobalContext : Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
+
+    map<const char*, AST_StringLiteral*> literals;
+
     linear_alloc allocator, temp_allocator;
 
-    map<AST_Node*, Location> node_locations;
-
-    map<AST_Node**, Location> node_ptr_locations;
+    // This is silly, but there are two ways of storing information about a node's location
+    //
+    // definition_locations[node] tells us where a node is defined
+    //
+    // However that node may be referenced from a lot of different places in the tree
+    // We don't have a Reference node, we just slap a pointer to the original node
+    // when we need to reference it
+    //
+    // The issue is that we still need location info for those references to print nice errors
+    // if "AST_Node* some_node = ..." is referencing some node,
+    // the address of the 'some_node' pointer itself is what we use as a key in reference_locations
+    map<AST_Node*, Location> definition_locations;
+    map<AST_Node**, Location> reference_locations;
 
     inline GlobalContext() : Context(nullptr) {}
 };

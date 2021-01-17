@@ -29,6 +29,7 @@ enum ErrorCode {
     ERR_BAD_FN_CALL,
     ERR_INVALID_TYPE,
     ERR_INVALID_DEREFERENCE,
+    ERR_INVALID_CAST,
 };
 
 enum ErrorSeverity {

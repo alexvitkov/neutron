@@ -90,11 +90,28 @@ struct AST_UnresolvedId : AST_Value {
     }
 };
 
+
+// VOLATILE
+// The parser miscategorizes casts as function calls as they have the same syntax
+//  - foo(100) can either be a cast or a fn call, we don't know at parse time
+//
+// The typer then patches up AST_FnCalls into AST_Casts by changing their nodetype,
+// so their structures must be compatible.
+struct AST_Cast : AST_Value {
+    AST_Value* inner;
+
+    inline AST_Cast(AST_Type* targetType, AST_Value* inner)
+        : AST_Value(AST_CAST, targetType), inner(inner) {};
+};
+
+
+// VOLATILE
+// Read the comment before AST_Cast before changing this
 struct AST_FnCall : AST_Value {
-    AST_Node* fn;
+    AST_Value* fn;
     arr<AST_Value*> args;
 
-    inline AST_FnCall(AST_Node* fn) : AST_Value(AST_FN_CALL, nullptr), fn(fn), args(4) {}
+    inline AST_FnCall(AST_Value* fn) : AST_Value(AST_FN_CALL, nullptr), fn(fn), args(4) {}
 };
 
 struct AST_PrimitiveType : AST_Type {
@@ -153,13 +170,6 @@ struct AST_While : AST_Node {
     inline AST_While(Context& parent_ctx) : AST_Node(AST_WHILE), block(parent_ctx) {}
 };
 
-struct AST_Cast : AST_Value {
-    AST_Value* inner;
-
-    inline AST_Cast(AST_Type* targetType, AST_Value* inner)
-        : AST_Value(AST_CAST, targetType), inner(inner) {};
-};
-
 struct AST_BinaryOp : AST_Value {
     TokenType op;
     AST_Value *lhs, *rhs;
@@ -180,7 +190,9 @@ struct NamedType {
 
 struct AST_Fn : AST_Value {
     const char* name;
-    arr<NamedType> args;
+
+    arr<const char*> argument_names;
+
     AST_Block block;
     bool is_extern = false;
 
