@@ -186,8 +186,8 @@ void print_err(Context& global, Error& err) {
             AST_Value* dst = (AST_Value*)*err.node_ptrs[1];
 
             std::cout << "Cannot assign " 
-                << red << dst << dim << " (" << dst->type << ')' << resetstyle << " to "
-                << red << src << dim << " (" << src->type << ')' << resetstyle << ":\n";
+                << red << dst << dim << " (of type " << dst->type << ')' << resetstyle << " to "
+                << red << src << dim << " (of type " << src->type << ')' << resetstyle << ":\n";
 
             // print(std::cout, src_type, false);
             // std::cout << resetstyle << ":\n";

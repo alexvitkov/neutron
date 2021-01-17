@@ -423,7 +423,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
             }
 
             if (implicit_cast(ctx, &bin->rhs, lhst))
-                return (bin->type = rhst);
+                return (bin->type = lhst);
 
             ctx.error({ 
                 .code = ERR_INVALID_ASSIGNMENT, 
@@ -435,7 +435,9 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                     (AST_Node**)&bin->rhs, 
                 }
             });
-            return nullptr;
+
+            bin->type = lhst;
+            return lhst;
         }
 
         case AST_BINARY_OP: {

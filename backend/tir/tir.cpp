@@ -142,12 +142,11 @@ void TIR_Function::print() {
 
 TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst);
 
-void store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
+TIR_Value* store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
     switch (dst->nodetype) {
         case AST_VAR: {
             TIR_Value* dstval = fn.resolve(dst);
-            compile_node(fn, src, dstval);
-            break;
+            return compile_node(fn, src, dstval);
         }
         case AST_DEREFERENCE: {
             AST_Dereference* deref = (AST_Dereference*)dst;
@@ -155,7 +154,7 @@ void store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
             TIR_Value* srcloc = compile_node(fn, src, nullptr);
 
             fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
-            break;
+            return ptrloc;
         }
         default:
             assert(!"Not supported");
@@ -335,8 +334,12 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
 
         case AST_ASSIGNMENT: {
             AST_BinaryOp* assign = (AST_BinaryOp*)node;
-            store(fn, assign->lhs, assign->rhs);
-            break;
+            TIR_Value* tv = store(fn, assign->lhs, assign->rhs);
+
+            if (dst) {
+                fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = tv } });
+            }
+            return dst;
         }
 
         case AST_DEREFERENCE: {
