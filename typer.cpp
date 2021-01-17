@@ -183,6 +183,13 @@ bool is_valid_lvalue(AST_Node* expr) {
 bool resolve_unresolved_references(AST_Node** nodeptr);
 
 bool resolve_unresolved_references(AST_Block* block) {
+    for (const auto& decl : block->ctx.declarations) {
+        if (decl.value->nodetype == AST_VAR) {
+            AST_Var* var = (AST_Var*)decl.value;
+            MUST (resolve_unresolved_references((AST_Node**)&var->initial_value));
+        }
+    }
+
     for (auto& stmt : block->statements)
         MUST (resolve_unresolved_references(&stmt));
     return true;
@@ -209,12 +216,14 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
 
         }
 
+        /*
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
             MUST (resolve_unresolved_references((AST_Node**)&var->initial_value));
             MUST (resolve_unresolved_references((AST_Node**)&var->type));
             break;
         }
+        */
 
         case AST_CAST: {
             AST_Cast* cast = (AST_Cast*)node;
@@ -635,8 +644,13 @@ bool typecheck(Context& ctx, AST_Node* node) {
             AST_Block* block = (AST_Block*)node;
 
             for (const auto& decl : block->ctx.declarations) {
-                if (decl.value->nodetype == AST_VAR)
-                    MUST (typecheck(block->ctx, decl.value));
+                if (decl.value->nodetype == AST_VAR) {
+                    AST_Var* var = (AST_Var*)decl.value;
+
+                    MUST (typecheck(block->ctx, var));
+                    if (var->initial_value)
+                        MUST (typecheck(block->ctx, var->initial_value));
+                }
             }
 
             for (const auto& stmt : block->statements)
@@ -647,8 +661,11 @@ bool typecheck(Context& ctx, AST_Node* node) {
         case AST_FN: {
             AST_Fn* fn = (AST_Fn*)node;
 
-            MUST (gettype(ctx, fn));
-            MUST (typecheck(fn->block.ctx, &fn->block));
+            // MUST (gettype(ctx, fn)); // This is done in a prepass
+
+            if (!fn->is_extern) {
+                MUST (typecheck(fn->block.ctx, &fn->block));
+            }
             return true;
         }
 
@@ -660,8 +677,10 @@ bool typecheck(Context& ctx, AST_Node* node) {
             MUST (validate_type(ctx, &var->type));
 
             if (var->initial_value) {
-                AST_Type* rhst = gettype(ctx, var->initial_value);
-                MUST (rhst);
+                MUST (gettype(ctx, var->initial_value));
+
+                MUST (validate_type(ctx, &var->initial_value->type));
+
                 MUST (implicit_cast(ctx, &var->initial_value, var->type));
                 return true;
             }
@@ -720,7 +739,6 @@ bool typecheck(Context& ctx, AST_Node* node) {
 }
 
 bool typecheck_all(GlobalContext& global) {
-
     for (auto& decl : global.declarations)
         MUST (resolve_unresolved_references(&decl.value));
 
