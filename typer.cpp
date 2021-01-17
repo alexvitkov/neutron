@@ -377,14 +377,29 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
             // TODO RETURNTYPE
             AST_Type* returntype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
 
+            // TODO ERROR
             if (fncall->args.size != fn->args.size) {
                 ctx.error({ .code = ERR_BAD_FN_CALL });
                 return nullptr;
             }
 
             for (int i = 0; i < fn->args.size; i++) {
-                if (!implicit_cast(ctx, &fncall->args[i], fn->args[i].type))
+                if (!implicit_cast(ctx, &fncall->args[i], fn->args[i].type)) {
+
+                    ctx.error({
+                        .code = ERR_BAD_FN_CALL,
+                        .node_ptrs = { 
+                            (AST_Node**)&fncall->args[i] 
+                        },
+                        .args = {{  
+                            .arg_name = fn->args[i].name,
+                            .arg_type_ptr = (AST_Node**)&fn->args[i].type,
+                            .arg_index = (u64)i
+                        }}
+                    });
+
                     return nullptr;
+                }
             }
 
             if (!returntype) {
@@ -411,7 +426,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 return (bin->type = rhst);
 
             ctx.error({ 
-                .code = ERR_INCOMPATIBLE_TYPES, 
+                .code = ERR_INVALID_ASSIGNMENT, 
                 .nodes = {
                     bin
                 },
@@ -434,7 +449,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
             if (lhst->nodetype == AST_POINTER_TYPE || rhst->nodetype == AST_POINTER_TYPE) {
                 if (bin->op != '+' && bin->op != '-') {
                     ctx.error({
-                        .code = ERR_INCOMPATIBLE_TYPES,
+                        .code = ERR_INVALID_ASSIGNMENT,
                         .nodes = { bin->lhs, bin-> rhs }
                     });
                     return nullptr;
@@ -491,7 +506,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
 
 Error:
                 ctx.error({
-                    .code = ERR_INCOMPATIBLE_TYPES,
+                    .code = ERR_INVALID_ASSIGNMENT,
                     .nodes = { bin->lhs, bin->rhs }
                 });
                 return nullptr;
@@ -508,7 +523,7 @@ Error:
             }
 
             ctx.error({
-                .code = ERR_INCOMPATIBLE_TYPES,
+                .code = ERR_INVALID_ASSIGNMENT,
                 .nodes = { lhst, rhst }
             });
             return nullptr;

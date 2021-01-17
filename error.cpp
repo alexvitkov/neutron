@@ -8,35 +8,6 @@ enum VirtualTokens {
     VIRT_MISSING_TYPE_SPECIFIER = 2,
 };
 
-const char* virt_tokens_text[] = {
-    nullptr,
-    nullptr,
-    ": TYPE",
-};
-
-const char* error_names[] = {
-    "Generic error",
-
-    // Tokenizer errors
-    "Unbalanced brackets",
-
-    // Parser errors
-    "Unexpected token",
-    "Already defined",
-    "Not defined",
-    "Invalid expression",
-    "Invalid number format",
-
-    // Typer errors
-    "Incompatible types",
-    "Invalid return",
-    "Not an Lvalue",
-    "No such member",
-    "Bad function call",
-    "Invalid type",
-    "Invalid derefernece",
-};
-
 void print_line(Context& global, SourceFile& sf, int line, arr<Location>& red_tokens) {
     if (line < 0 || line > sf.line_start.size)
         return;
@@ -145,6 +116,42 @@ void print_code_segment(Context& global, arr<Token>* tokens, arr<AST_Node*>* nod
     }
 }
 
+std::ostream& operator<< (std::ostream& o, TokenType& tt) {
+    switch (tt) {
+        case ':':      o << "type"; break;
+        case ';':      o << "semicolon"; break;
+        case TOK_NONE: o << "end of file"; break; 
+        case TOK_ID:   o << "identifier";  break;
+        default: {
+            o << "TOK(" << (int)tt << ")";
+            break;
+        }
+    }
+    return o;
+}
+
+void th(u64 n) {
+    static const char* first_10[10] = {
+         "zeroth", "first", "second", "third", "fourth", 
+         "fifth", "sixth", "seventh", "eighth", "ninth", 
+    };
+
+    if (n < 10) {
+        std::cout << first_10[n];
+        return;
+    } 
+    else {
+        std::cout << n;
+
+        switch (n % 10) {
+            case 1:  std::cout << "st"; break;
+            case 2:  std::cout << "nd"; break;
+            case 3:  std::cout << "rd"; break;
+            default: std::cout << "th"; break;
+        }
+    }
+}
+
 void print_err(Context& global, Error& err) {
     std::cout << "Fatal: ";
 
@@ -156,11 +163,29 @@ void print_err(Context& global, Error& err) {
             break;
         }
 
-        case ERR_INCOMPATIBLE_TYPES: {
+        case ERR_BAD_FN_CALL: {
+            AST_Value* src = (AST_Value*)*err.node_ptrs[0];
+
+            auto arg = err.args[0];
+
+            std::cout << "Expected the ";
+            th(arg.arg_index + 1);
+            std::cout << " argument to be of type " 
+                << red << *arg.arg_type_ptr << resetstyle 
+                << " but instead got "
+                << red << src << dim << " (" << src->type << ')' << resetstyle << ":\n";
+
+            print_code_segment(global, nullptr, nullptr, &err.node_ptrs);
+
+            break;
+            
+        }
+
+        case ERR_INVALID_ASSIGNMENT: {
             AST_Value* src = (AST_Value*)*err.node_ptrs[0];
             AST_Value* dst = (AST_Value*)*err.node_ptrs[1];
 
-            std::cout << "Cannot implicitly cast " 
+            std::cout << "Cannot assign " 
                 << red << dst << dim << " (" << dst->type << ')' << resetstyle << " to "
                 << red << src << dim << " (" << src->type << ')' << resetstyle << ":\n";
 
@@ -173,6 +198,20 @@ void print_err(Context& global, Error& err) {
             break;
         }
 
+        case ERR_UNEXPECTED_TOKEN: {
+            Token actual = err.tokens[0];
+            Token expected = err.tokens[1];
+
+            std::cout << "Unexpected "         << red << actual.type << resetstyle
+                      << " while looking for " << red << expected.type << resetstyle << ":\n";
+
+            arr<Token> toks = { actual };
+            print_code_segment(global, &toks, nullptr, nullptr);
+            break;
+
+            break;
+        }
+
         case ERR_NOT_DEFINED: {
             std::cout << red;
             print(std::cout, err.nodes[0], false);
@@ -182,7 +221,7 @@ void print_err(Context& global, Error& err) {
         }
 
         default: {
-            printf("%s.\n", error_names[err.code]);
+            printf("%d.\n", err.code);
             print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
         }
 

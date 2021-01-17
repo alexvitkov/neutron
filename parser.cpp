@@ -166,11 +166,11 @@ u8 prec[148] = {
 
 Location location_of(Context& ctx, AST_Node** node) {
     Location loc;
-    if (ctx.global->node_locations.find(*node, &loc)) {
+    if (ctx.global->node_ptr_locations.find(node, &loc)) {
         return loc;
-    } else if (ctx.global->node_ptr_locations.find(node, &loc)) {
+    } else if (ctx.global->node_locations.find(*node, &loc)) {
         return loc;
-    }
+    } 
     assert(!"AST_Node doesn't have a location");
 }
 
@@ -244,10 +244,7 @@ bool tokenize(Context& global, SourceFile &s) {
                 { TOK_ERROR },
                 { .start = i, .end = i + 1 });
 
-			global.error({
-                .code = ERR_UNEXPECTED_TOKEN, 
-                .tokens = { newTok }
-            });
+            unexpected_token(global, newTok, TOK_NONE);
 			return false;
 		}
 
@@ -303,7 +300,8 @@ bool tokenize(Context& global, SourceFile &s) {
             // Unexpected EOF
             // TODO ERROR
             if (i == s.length) {
-                global.error({ .code = ERR_UNEXPECTED_TOKEN });
+                unexpected_token(global, {}, TOK('"'));
+                return false;
             }
 
             char* contents = (char*)malloc(length + 1);
@@ -448,22 +446,14 @@ struct TokenReader {
 };
 
 
-void unexpected_token(Context& ctx, Token actual, TokenType expected) {
-    // The virtual token gives more info about what was expected in place of to
-    Token virt = actual;
-    virt.virt = true;
-    virt.type = expected;
+void unexpected_token(Context& ctx, Token actual, TokenType expected_tt) {
+    Token expected = actual;
+    expected.type = expected_tt;
 
-    SourceFile& sf = sources[actual.file_id];
-
-    // Find the token before 'actual', place the virtual token after it
-
-
-    // ERR_UNEXPECTED_TOKEN expects exactly two tokens - the regular and the virtual
-    // TODO ERROR
+    // ERR_UNEXPECTED_TOKEN expects exactly two tokens - the actual token and the expected
     ctx.error({
         .code = ERR_UNEXPECTED_TOKEN,
-        // .tokens = { tok, virt }
+        .tokens = { actual, expected }
     });
 }
 
@@ -770,14 +760,26 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                     SYValue fn = s.output.pop();
                     AST_FnCall* fncall = ctx.alloc<AST_FnCall>(fn.val);
 
+                    arr<Location> arg_locs;
+
                     while (r.peek().type != TOK(')')) {
+
+
                         AST_Value* arg = parse_expr(ctx, r);
                         MUST (arg);
                         fncall->args.push(arg);
+
+                        Location argloc = location_of(ctx, (AST_Node**)&arg);
+                        arg_locs.push(argloc);
+
                         if (r.peek().type != TOK(')'))
                             MUST (r.expect(TOK(',')).type);
                     }
                     r.pop(); // discard the closing bracket
+
+                    for (int i = 0; i < arg_locs.size; i++) {
+                        ctx.global->node_ptr_locations[(AST_Node**)&fncall->args[i]] = arg_locs[i];
+                    }
 
                     Location loc = {
                         .file_id = fn.loc.file_id,
@@ -934,6 +936,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                                 last.loc
                             };
                             s.ctx.global->node_locations[s.output.last().val] = last.loc;
+                            prev_was_value = true;
                             break;
                         }
                     }
@@ -944,6 +947,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                         MUST (pop(s));
                     }
 
+                    prev_was_value = false;
                     s.stack.push(t.type);
                 }
                 else {

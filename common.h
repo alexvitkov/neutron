@@ -141,12 +141,6 @@ struct NumberData {
 struct SmallToken {
     TokenType type;
     
-    // A virtual token doesn't exist in the source code
-    // It's an additional piece of metadata that the 'unexpected_token' function
-    // adds to the error, so when we print it we have information about what token
-    // was expected
-    u8 virt; 
-
     union {
         const char* name;
         NumberData* number_data;

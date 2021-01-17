@@ -8,8 +8,6 @@
 
 #include <iostream>
 
-// @VOLATILE
-// If you add/reorder entries here, update error_names in error.cpp accordingly
 enum ErrorCode {
     ERR_UNKNOWN = 0,
 
@@ -24,7 +22,7 @@ enum ErrorCode {
     ERR_INVALID_NUMBER_FORMAT,
 
     // Typer errors
-    ERR_INCOMPATIBLE_TYPES,
+    ERR_INVALID_ASSIGNMENT,
     ERR_INVALID_RETURN,
     ERR_NOT_AN_LVALUE,
     ERR_NO_SUCH_MEMBER,
@@ -37,6 +35,12 @@ enum ErrorSeverity {
     SEVERITY_FATAL = 0,
 };
 
+struct ArgumentErr {
+    const char* arg_name;
+    AST_Node** arg_type_ptr;
+    u64 arg_index;
+};
+
 struct Error {
     ErrorCode code;
     ErrorSeverity severity;
@@ -44,6 +48,7 @@ struct Error {
 
     arr<AST_Node*> nodes;
     arr<AST_Node**> node_ptrs;
+    arr<ArgumentErr> args;
 };
 
 struct Context;
