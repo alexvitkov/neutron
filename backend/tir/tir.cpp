@@ -170,15 +170,24 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
     for (auto& kvp : ast_block->ctx.declarations) {
         AST_Node* decl = kvp.value;
 
-        // TODO this is a stupid workaround
-        // The returntype should be stored in a saner way
+        // TODO RETURNTYPE
         if (!strcmp(kvp.key.name, "returntype"))
             continue;
 
         switch (decl->nodetype) {
             case AST_VAR: {
                 AST_Var* vardecl = (AST_Var*)decl;
-                TIR_Value* val = fn.alloc_temp(vardecl->type);
+                TIR_Value* val;
+
+                if (vardecl->argindex >= 0) {
+                    val = fn.alloc_val({
+                        .valuespace = TVS_ARGUMENT,
+                        .offset = (u64)vardecl->argindex,
+                        .type = vardecl->type
+                    });
+                } else {
+                    val = fn.alloc_temp(vardecl->type);
+                }
 
                 if (vardecl->initial_value)
                     compile_node(fn, vardecl->initial_value, val);
@@ -417,7 +426,7 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
 
 void TIR_Context::compile_all() {
 
-    // We have to run through the global variables and assign them TIR_Value*s
+    // RUn through the global variables and assign them TIR_Values*
     for(auto& decl : global.declarations) {
         switch (decl.value->nodetype) {
             case AST_VAR: {

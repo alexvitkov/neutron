@@ -53,7 +53,7 @@ struct LLVM_Context {
     void compile_fn(TIR_Function* fn);
     void compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block);
 
-    llvm::Value* translate_value(TIR_Value* val, TIR_Block* block);
+    llvm::Value* translate_value(TIR_Value* val, TIR_Block* block, llvm::Function* l_fn);
     llvm::Type* translate_type(AST_Type* type);
     void set_value(TIR_Value* value, llvm::Value* l_value, llvm::BasicBlock* l_bb);
 };

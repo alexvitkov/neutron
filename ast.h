@@ -127,9 +127,9 @@ struct AST_Var : AST_Value {
     AST_Value* initial_value;
 
     // If the variable is a function argument, this is its index
-    i32 argindex;
+    i64 argindex;
 
-    inline AST_Var(const char* name, int argindex)
+    inline AST_Var(const char* name, i64 argindex)
         : AST_Value(AST_VAR, nullptr), name(name), argindex(argindex), initial_value(nullptr) {};
 };
 

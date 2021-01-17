@@ -724,6 +724,12 @@ bool typecheck_all(GlobalContext& global) {
 
     global.temp_allocator.free_all();
 
+    // First resolve the function types, we need their signatures for everything else
+    for (auto& decl : global.declarations) {
+        if (decl.value->nodetype == AST_FN)
+            gettype(global, (AST_Value*)decl.value);
+    }
+
     // During typechecking we can declare more stuff
     // so it's not safe to iterate over global.declarations as it may relocate
     // Right now we copy the original declartions into an array and iterate over those

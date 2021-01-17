@@ -77,7 +77,7 @@ llvm::Type* LLVM_Context::translate_type(AST_Type* type) {
     }
 }
 
-llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block) {
+llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block, llvm::Function* l_fn) {
     switch (val->valuespace) {
         case TVS_VALUE: {
             llvm::Type* l_type = translated_types[val->type];
@@ -101,8 +101,8 @@ llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block) {
                 prev.push(v);
             }
 
-            // TODO this should be handled in the typer?
-            assert(prev.size > 0);
+            // TODO this should be handled in the typer
+            assert(prev.size > 0 || !"Attempting to use uninitialized value");
 
             if (prev.size == 1) {
                 _values[val][l_bb] = prev[0];
@@ -118,9 +118,15 @@ llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block) {
                 return phi;
             }
         }
+
         case TVS_GLOBAL: {
             return translated_globals[val];
         }
+
+        case TVS_ARGUMENT: {
+            return l_fn->arg_begin() + val->offset;
+        }
+
         default:
             assert(!"Not implemented");
     }
@@ -136,25 +142,25 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
     for (auto& instr : block->instructions) {
         switch (instr.opcode) {
             case TOPC_MOV: {
-                llvm::Value* l_src = translate_value(instr.un.src, block);
+                llvm::Value* l_src = translate_value(instr.un.src, block, l_fn);
 
                 set_value(instr.un.dst, l_src, l_bb);
                 break;
             }
             case TOPC_ADD: {
-                llvm::Value *lhs = translate_value(instr.bin.lhs, block);
-                llvm::Value *rhs = translate_value(instr.bin.rhs, block);
+                llvm::Value *lhs = translate_value(instr.bin.lhs, block, l_fn);
+                llvm::Value *rhs = translate_value(instr.bin.rhs, block, l_fn);
                 set_value(instr.bin.dst, builder.CreateAdd(lhs, rhs), l_bb);
                 break;
             }
             case TOPC_EQ: {
-                llvm::Value *lhs = translate_value(instr.bin.lhs, block);
-                llvm::Value *rhs = translate_value(instr.bin.rhs, block);
+                llvm::Value *lhs = translate_value(instr.bin.lhs, block, l_fn);
+                llvm::Value *rhs = translate_value(instr.bin.rhs, block, l_fn);
                 set_value(instr.bin.dst, builder.CreateICmpEQ(lhs, rhs), l_bb);
                 break;
             }
             case TOPC_RET: {
-                llvm::Value *retval = translate_value(&fn->retval, block);
+                llvm::Value *retval = translate_value(&fn->retval, block, l_fn);
                 builder.CreateRet(retval);
                 break;
             }
@@ -169,7 +175,7 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 llvm::Value** args = (llvm::Value**)malloc(sizeof(llvm::Value*) * argc);
 
                 for (int i = 0; i < instr.call.args.size; i++) {
-                    llvm::Value* l_arg = translate_value(instr.call.args[i], block);
+                    llvm::Value* l_arg = translate_value(instr.call.args[i], block, l_fn);
                     assert(l_arg);
                     args[i] = l_arg;
                 }
@@ -187,14 +193,14 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 // TODO ERROR this will fail if the pointer is uninitialized
                 // This is undefined behaviour anyway as we're deref'ing an
                 // uninitialized pointer, the typer should probably catch this
-                llvm::Value *l_dst_ptr = translate_value(instr.un.dst, block);
-                llvm::Value* l_src = translate_value(instr.un.src, block);
+                llvm::Value *l_dst_ptr = translate_value(instr.un.dst, block, l_fn);
+                llvm::Value* l_src = translate_value(instr.un.src, block, l_fn);
 
                 builder.CreateStore(l_src, l_dst_ptr, false);
                 break;
             }
             case TOPC_LOAD: {
-                llvm::Value *src = translate_value(instr.un.src, block);
+                llvm::Value *src = translate_value(instr.un.src, block, l_fn);
                 llvm::Value* l_val = builder.CreateLoad(src);
 
                 set_value(instr.un.dst, l_val, l_bb);
@@ -205,15 +211,15 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 break;
             }
             case TOPC_JMPIF: {
-                llvm::Value *cond = translate_value(instr.jmpif.cond, block);
+                llvm::Value *cond = translate_value(instr.jmpif.cond, block, l_fn);
                 llvm::BasicBlock *true_b = blocks[instr.jmpif.then_block];
                 llvm::BasicBlock *false_b = blocks[instr.jmpif.else_block];
                 builder.CreateCondBr(cond, true_b, false_b);
                 break;
             }
             case TOPC_PTR_OFFSET: {
-                llvm::Value *lhs = translate_value(instr.bin.lhs, block);
-                llvm::Value *rhs = translate_value(instr.bin.rhs, block);
+                llvm::Value *lhs = translate_value(instr.bin.lhs, block, l_fn);
+                llvm::Value *rhs = translate_value(instr.bin.rhs, block, l_fn);
 
                 llvm::Value* gep;
 

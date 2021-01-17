@@ -173,7 +173,7 @@ void print_err(Context& global, Error& err) {
             std::cout << " argument to be of type " 
                 << red << *arg.arg_type_ptr << resetstyle 
                 << " but instead got "
-                << red << src << dim << " (" << src->type << ')' << resetstyle << ":\n";
+                << red << src << dim << " (of type " << src->type << ')' << resetstyle << ":\n";
 
             print_code_segment(global, nullptr, nullptr, &err.node_ptrs);
 

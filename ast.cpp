@@ -23,7 +23,7 @@ AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_L
 
 std::ostream& operator<< (std::ostream& o, arr<NamedType>& tl) {
     for (const auto& entry : tl) {
-        o << entry.type << " " << entry.name << ", ";
+        o << entry.name << ": " << entry.type << ", ";
     }
     if (tl.size)
         o << "\b\b \b"; // clear the last comma
@@ -243,12 +243,12 @@ std::ostream& operator<< (std::ostream& o, AST_FnCall* node) {
 }
 
 std::ostream& operator<< (std::ostream& o, AST_PointerType* node) {
-    o << '*' << node->pointed_type;
+    o << node->pointed_type << '*';
     return o;
 }
 
 std::ostream& operator<< (std::ostream& o, AST_ArrayType* node) {
-    o << '[' << node->array_length << ']' << node->base_type;
+    o << node->base_type << '[' << node->array_length << ']';
     return o;
 }
 
