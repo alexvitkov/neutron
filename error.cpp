@@ -189,9 +189,6 @@ void print_err(Context& global, Error& err) {
                 << red << dst << dim << " (of type " << dst->type << ')' << resetstyle << " to "
                 << red << src << dim << " (of type " << src->type << ')' << resetstyle << ":\n";
 
-            // print(std::cout, src_type, false);
-            // std::cout << resetstyle << ":\n";
-
             arr<AST_Node*> nodes = { err.nodes[0] };
 
             print_code_segment(global, nullptr, &nodes, nullptr);
@@ -217,6 +214,37 @@ void print_err(Context& global, Error& err) {
             print(std::cout, err.nodes[0], false);
             std::cout << resetstyle << " is not defined.\n";
             print_code_segment(global, nullptr, &err.nodes, nullptr);
+            break;
+        }
+
+        case ERR_RETURN_TYPE_MISSING: {
+            AST_Return* ret = (AST_Return*)err.nodes[0];
+            AST_Fn* fn = (AST_Fn*)err.nodes[1];
+            AST_FnType* fntype = (AST_FnType*)fn->type;
+            std::cout << "Missing return value - expected a value of type " 
+                << red << fntype->returntype << resetstyle << ":\n";
+
+            arr<AST_Node*> nodes_to_print = { ret };
+            print_code_segment(global, nullptr, &nodes_to_print, nullptr);
+            break;
+        }
+
+        case ERR_RETURN_TYPE_INVALID: {
+            AST_Return* ret = (AST_Return*)err.nodes[0];
+            AST_Fn* fn = (AST_Fn*)err.nodes[1];
+            AST_FnType* fntype = (AST_FnType*)fn->type;
+
+            std::cout << "Cannot return " 
+                << red << ret->value << dim << " (of type " << ret->value->type << ')' << resetstyle 
+                << ", the function's return type is ";
+
+            if (fntype->returntype)
+                std::cout << fntype->returntype << ":\n";
+            else
+                std::cout << "void:\n";
+
+            arr<AST_Node*> nodes_to_print = { ret };
+            print_code_segment(global, nullptr, &nodes_to_print, nullptr);
             break;
         }
 

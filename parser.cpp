@@ -501,7 +501,8 @@ bool parse_block(AST_Block& block, TokenReader& r) {
 
         switch(r.peek().type) {
             case KW_RETURN: {
-                r.pop();
+                Token return_tok = r.pop_full();
+
                 AST_Return *ret;
                 if (r.peek().type == TOK(';')) {
                     ret = block.ctx.alloc<AST_Return>(nullptr);
@@ -511,25 +512,54 @@ bool parse_block(AST_Block& block, TokenReader& r) {
                     MUST (ret->value);
                 }
                 block.statements.push((AST_Node*)ret);
+
+                r.ctx.global->definition_locations[ret] = {
+                    .file_id = r.sf.id,
+                    .loc = {
+                        .start = return_tok.loc.start,
+                        .end = r.pos_in_file,
+                    }
+                };
+
                 MUST (r.expect(TOK(';')).type);
                 break;
             }
             case KW_IF: {
-                r.pop();
+                Token if_tok = r.pop_full();
+
                 AST_If* ifs = block.ctx.alloc<AST_If>(block.ctx);
                 ifs->condition = parse_expr(block.ctx, r);
                 MUST (ifs->condition);
                 MUST (parse_block(ifs->then_block, r));
                 block.statements.push(ifs);
+
+                r.ctx.global->definition_locations[ifs] = {
+                    .file_id = r.sf.id,
+                    .loc = {
+                        .start = if_tok.loc.start,
+                        .end = r.pos_in_file,
+                    }
+                };
+
                 break;
             }
             case KW_WHILE: {
-                r.pop();
+                Token while_tok = r.pop_full();
+
                 AST_While* whiles = block.ctx.alloc<AST_While>(block.ctx);
                 whiles->condition = parse_expr(block.ctx, r);
                 MUST (whiles->condition);
                 MUST (parse_block(whiles->block, r));
                 block.statements.push(whiles);
+
+                r.ctx.global->definition_locations[whiles] = {
+                    .file_id = r.sf.id,
+                    .loc = {
+                        .start = while_tok.loc.start,
+                        .end = r.pos_in_file,
+                    }
+                };
+
                 break;
             }
             case TOK('}'): {

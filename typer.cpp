@@ -344,7 +344,9 @@ bool validate_fn_type(Context& ctx, AST_Fn* fn) {
         // we must check if the parameters are valid AST_Types
         MUST (validate_type(ctx, &fntype->type));
     }
-    MUST (validate_type(ctx, &fntype->returntype));
+
+    if (fntype->returntype)
+        MUST (validate_type(ctx, &fntype->returntype));
     
     fntype = make_function_type_unique(fntype);
     fn->type = fntype;
@@ -729,27 +731,26 @@ bool typecheck(Context& ctx, AST_Node* node) {
             AST_Return *ret = (AST_Return*)node;
             AST_Type *rettype = ((AST_FnType*)ctx.fn->type)->returntype;
 
-            if (rettype) {
-                if (!ret->value) {
-                    // TODO ERROR
-                    ctx.error({
-                        .code = ERR_INVALID_RETURN,
-                    });
-                    return false;
-                }
-                if (!implicit_cast(ctx, &ret->value, rettype)) {
-                    // TODO ERROR
-                    ctx.error({
-                        .code = ERR_INVALID_RETURN,
-                    });
-                    return false;
-                }
+            if (rettype && !ret->value) {
+                ctx.error({
+                    .code = ERR_RETURN_TYPE_MISSING,
+                    .nodes = {
+                        ret,
+                        ctx.fn,
+                    }
+                });
+                return false;
             }
-            else if (ret->value) {
+            if ((rettype && !implicit_cast(ctx, &ret->value, rettype))
+                || (!rettype && ret->value))
+            {
                 // TODO ERROR
                 ctx.error({
-                    .code = ERR_INVALID_RETURN,
-                    .nodes = { ret->value, }
+                    .code = ERR_RETURN_TYPE_INVALID,
+                    .nodes = {
+                        ret,
+                        ctx.fn,
+                    }
                 });
                 return false;
             }

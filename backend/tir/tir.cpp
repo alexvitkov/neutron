@@ -430,7 +430,7 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
 
 void TIR_Context::compile_all() {
 
-    // RUn through the global variables and assign them TIR_Values*
+    // Run through the global variables and assign them TIR_Values*
     for(auto& decl : global.declarations) {
         switch (decl.value->nodetype) {
             case AST_VAR: {
@@ -467,7 +467,7 @@ void TIR_Context::compile_all() {
                 break;
             }
 
-            // We already ran through them in the previous loop
+            // We already ran through the variables in the previous loop
             case AST_VAR:
                 continue;
 
