@@ -179,12 +179,8 @@ bool is_valid_lvalue(AST_Node* expr) {
 bool resolve_unresolved_references(AST_Node** nodeptr);
 
 bool resolve_unresolved_references(AST_Block* block) {
-    for (const auto& decl : block->ctx.declarations) {
-        if (decl.value->nodetype == AST_VAR) {
-            AST_Var* var = (AST_Var*)decl.value;
-            MUST (resolve_unresolved_references((AST_Node**)&var->initial_value));
-        }
-    }
+    for (const auto& decl : block->ctx.declarations)
+        MUST (resolve_unresolved_references((AST_Node**)&decl.value));
 
     for (auto& stmt : block->statements)
         MUST (resolve_unresolved_references(&stmt));
@@ -207,19 +203,15 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
                 });
                 return false;
             }
+
             *nodeptr = resolved;
             return true;
-
         }
 
-        /*
         case AST_VAR: {
-            AST_Var* var = (AST_Var*)node;
-            MUST (resolve_unresolved_references((AST_Node**)&var->initial_value));
-            MUST (resolve_unresolved_references((AST_Node**)&var->type));
+            AST_Var* var = (AST_Var*)node; MUST (resolve_unresolved_references((AST_Node**)&var->initial_value)); MUST (resolve_unresolved_references((AST_Node**)&var->type));
             break;
         }
-        */
 
         case AST_CAST: {
             AST_Cast* cast = (AST_Cast*)node;
@@ -720,7 +712,17 @@ bool typecheck(Context& ctx, AST_Node* node) {
 
                 MUST (validate_type(ctx, &var->initial_value->type));
 
-                MUST (implicit_cast(ctx, &var->initial_value, var->type));
+                if (!implicit_cast(ctx, &var->initial_value, var->type)) {
+                    ctx.error({
+                        .code = ERR_INVALID_INITIAL_VALUE,
+                        .nodes = {
+                            var,
+                            var->initial_value,
+                        },
+                    });
+                    return false;
+                }
+
                 return true;
             }
 
@@ -744,7 +746,6 @@ bool typecheck(Context& ctx, AST_Node* node) {
             if ((rettype && !implicit_cast(ctx, &ret->value, rettype))
                 || (!rettype && ret->value))
             {
-                // TODO ERROR
                 ctx.error({
                     .code = ERR_RETURN_TYPE_INVALID,
                     .nodes = {

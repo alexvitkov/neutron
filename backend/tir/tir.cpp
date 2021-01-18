@@ -51,7 +51,7 @@ std::ostream& operator<< (std::ostream& o, TIR_Value& val) {
             o << "$" << val.offset;
             break;
         case TVS_GLOBAL:
-            o << "#" << val.offset;
+            o << "@" << val.offset;
     }
     return o;
 }
@@ -145,8 +145,19 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst);
 TIR_Value* store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
     switch (dst->nodetype) {
         case AST_VAR: {
-            TIR_Value* dstval = fn.resolve(dst);
-            return compile_node(fn, src, dstval);
+            AST_Var* var = (AST_Var*)dst;
+
+            if (var->is_global) {
+                TIR_Value* ptrloc = fn.resolve(var);
+                TIR_Value* srcloc = compile_node(fn, src, nullptr);
+                fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
+                return ptrloc;
+            }
+            else {
+                TIR_Value* varloc = fn.resolve(var);
+                return compile_node(fn, src, varloc);
+            }
+
         }
         case AST_DEREFERENCE: {
             AST_Dereference* deref = (AST_Dereference*)dst;
@@ -213,17 +224,25 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
 }
 
 
-
 TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
     switch (node->nodetype) {
         case AST_VAR: {
-            TIR_Value* val = fn.resolve((AST_Var*)node);
+            AST_Var* var = (AST_Var*)node;
+            TIR_Value* val = fn.resolve(var);
             assert(val);
 
-            if (dst && dst != val)
-                fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
-            else
-                dst = val;
+            if (var->is_global) {
+                fn.emit({
+                    .opcode = TOPC_LOAD,
+                    .un = { .dst = dst, .src = val }
+                });
+            }
+            else {
+                if (dst && dst != val)
+                    fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
+                else
+                    dst = val;
+            }
 
             return val;
         }
@@ -430,14 +449,14 @@ TIR_Value* compile_node(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
 
 void TIR_Context::compile_all() {
 
-    // Run through the global variables and assign them TIR_Values*
+    // Run through the global variables and assign them TIR_Values* and initial values
     for(auto& decl : global.declarations) {
         switch (decl.value->nodetype) {
             case AST_VAR: {
                 TIR_Value& val = values.push({
                     .valuespace = TVS_GLOBAL,
                     .offset = values.size,
-                    .type = ((AST_Var*)decl.value)->type,
+                    .type = get_pointer_type(((AST_Var*)decl.value)->type),
                 });
                 valmap[(AST_Value*)decl.value] = &val;
                 break;

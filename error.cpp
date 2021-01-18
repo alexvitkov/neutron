@@ -182,12 +182,26 @@ void print_err(Context& global, Error& err) {
         }
 
         case ERR_INVALID_ASSIGNMENT: {
-            AST_Value* src = (AST_Value*)*err.node_ptrs[0];
-            AST_Value* dst = (AST_Value*)*err.node_ptrs[1];
+            AST_Value* dst = (AST_Value*)*err.node_ptrs[0];
+            AST_Value* src = (AST_Value*)*err.node_ptrs[1];
 
             std::cout << "Cannot assign " 
-                << red << dst << dim << " (of type " << dst->type << ')' << resetstyle << " to "
-                << red << src << dim << " (of type " << src->type << ')' << resetstyle << ":\n";
+                << red << src << dim << " (of type " << src->type << ')' << resetstyle << " to "
+                << red << dst << dim << " (of type " << dst->type << ')' << resetstyle << ":\n";
+
+            arr<AST_Node*> nodes = { err.nodes[0] };
+
+            print_code_segment(global, nullptr, &nodes, nullptr);
+            break;
+        }
+
+        case ERR_INVALID_INITIAL_VALUE: {
+            AST_Var* var = (AST_Var*)err.nodes[0];
+            AST_Value* src = (AST_Value*)err.nodes[1];
+
+            std::cout << "Cannot assign " 
+                << red << src << dim << " (of type " << src->type << ')' << resetstyle << " to "
+                << red << var->name << dim << " (of type " << var->type << ')' << resetstyle << ":\n";
 
             arr<AST_Node*> nodes = { err.nodes[0] };
 

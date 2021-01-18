@@ -120,7 +120,8 @@ llvm::Value* LLVM_Context::translate_value(TIR_Value* val, TIR_Block* block, llv
         }
 
         case TVS_GLOBAL: {
-            return translated_globals[val];
+            llvm::Value* ptr_val = translated_globals[val];
+            return ptr_val;
         }
 
         case TVS_ARGUMENT: {
@@ -337,28 +338,62 @@ void insert_entry_boilerplate(LLVM_Context& c, Function* l_main) {
 void LLVM_Context::compile_all() {
     Function* l_main;
 
-    for (auto& x : t_c.valmap) {
-        AST_Value* ast = x.key;
-        TIR_Value* tirv = x.value;
+    // TODO this has to go
+    // LLVM should only read the TIR, there's no sane reason for it to touch the AST values
+    // The reason we do this right now is because TIR values are shit and have to be redone
+    // Initialize the global variables
+    for (auto& kvp : t_c.valmap) {
+        AST_Value* ast_value = kvp.key;
+        TIR_Value* tir_value = kvp.value;
 
-        assert (ast->nodetype == AST_VAR);
-        AST_Var* var = (AST_Var*)ast;
+        assert (ast_value->nodetype == AST_VAR);
 
-        assert(var->initial_value && var->initial_value->nodetype == AST_STRING_LITERAL);
+        switch (ast_value->nodetype) {
+            case AST_VAR: {
+                AST_Var* var = (AST_Var*)ast_value;
 
-        AST_StringLiteral* str = (AST_StringLiteral*)var->initial_value;
+                if (var->initial_value) {
+                    switch (var->initial_value->nodetype) {
+                        case AST_STRING_LITERAL: {
+                            AST_StringLiteral* str = (AST_StringLiteral*)var->initial_value;
 
-        llvm::Constant* l_val = llvm::ConstantDataArray::getString(lc, str->str, true);
+                            llvm::Constant* l_val = llvm::ConstantDataArray::getString(lc, str->str, true);
 
-        auto l_var = new llvm::GlobalVariable(
-                mod,
-                l_val->getType(), 
-                true, 
-                GlobalValue::WeakAnyLinkage,
-                l_val,
-                "");
+                            auto l_var = new llvm::GlobalVariable(
+                                    mod,
+                                    l_val->getType(), 
+                                    true, 
+                                    GlobalValue::WeakAnyLinkage,
+                                    l_val,
+                                    "");
 
-        translated_globals[tirv] = l_var;
+                            translated_globals[tir_value] = l_var;
+                            break;
+                        }
+                        default:
+                            assert(!"Not supported");
+                    }
+                }
+                else {
+                    llvm::Type* l_type = translate_type(var->type);
+
+
+                    auto l_var = new llvm::GlobalVariable(
+                            mod,
+                            l_type,
+                            false, 
+                            GlobalValue::WeakAnyLinkage,
+                            llvm::Constant::getNullValue(l_type),
+                            "");
+                    translated_globals[tir_value] = l_var;
+                }
+
+                break;
+            }
+            default:
+                assert(!"Not implemented");
+        }
+
     }
 
 

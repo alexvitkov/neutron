@@ -1044,6 +1044,8 @@ bool parse_let(Context& ctx, TokenReader& r) {
         MUST (var->initial_value = (AST_Value*)parse_expr(ctx, r));
     };
 
+    var->is_global = ctx.global == &ctx;
+
     MUST (ctx.declare({ nameToken.name }, var));
 
     MUST (r.expect(TOK(';')).type);

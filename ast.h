@@ -146,8 +146,10 @@ struct AST_Var : AST_Value {
     // If the variable is a function argument, this is its index
     i64 argindex;
 
+    bool is_global;
+
     inline AST_Var(const char* name, i64 argindex)
-        : AST_Value(AST_VAR, nullptr), name(name), argindex(argindex), initial_value(nullptr) {};
+        : AST_Value(AST_VAR, nullptr), name(name), argindex(argindex), initial_value(nullptr), is_global(false) {};
 };
 
 struct AST_Number : AST_Value {
