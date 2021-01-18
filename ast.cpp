@@ -6,6 +6,7 @@
 int indent = 0;
 
 AST_Number::AST_Number(u64 floorabs) : AST_Value(AST_NUMBER, nullptr), floorabs(floorabs) {
+
     if (floorabs < 0xFF)
         type = &t_u8;
     else if (floorabs < 0xFFFF)
@@ -14,6 +15,31 @@ AST_Number::AST_Number(u64 floorabs) : AST_Value(AST_NUMBER, nullptr), floorabs(
         type = &t_u32;
     else
         type = &t_u64;
+
+}
+
+bool AST_Number::fits_in(AST_PrimitiveType* numtype) {
+
+    switch (numtype->kind) {
+        case PRIMITIVE_UNSIGNED: {
+            switch (numtype->size) {
+                case 1: return floorabs < 0xFF;
+                case 2: return floorabs < 0xFFFF;
+                case 4: return floorabs < 0xFFFFFFFF;
+                case 8: return floorabs < 0xFFFFFFFFFFFFFFFF;
+            }
+        }
+        case PRIMITIVE_SIGNED: {
+            switch (numtype->size) {
+                case 1: return floorabs < 0x80;
+                case 2: return floorabs < 0x8000;
+                case 4: return floorabs < 0x80000000;
+                case 8: return floorabs < 0x8000000000000000;
+            }
+        }
+    }
+    
+    return false;
 }
 
 AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_LITERAL, &t_string_literal) {

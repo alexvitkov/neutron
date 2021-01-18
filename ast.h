@@ -156,6 +156,8 @@ struct AST_Number : AST_Value {
     u64 floorabs;
 
     AST_Number(u64 floorabs);
+
+    bool fits_in(AST_PrimitiveType* numtype);
 };
 
 struct AST_If : AST_Node {

@@ -310,7 +310,7 @@ bool tokenize(Context& global, SourceFile &s) {
             
             s.pushToken(
                 { .type = TOK_STRING_LITERAL, .name = contents },
-                { .start = word_start, .end = i + 1 });
+                { .start = word_start - 1, .end = i + 1 });
         }
 
         else if (c == '/' && i < s.length - 1 && s.buffer[i + 1] == '/') {
@@ -616,6 +616,7 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         MUST (type);
 
         temp_fn_type->param_types.push((AST_Type*)type);
+        fn->argument_names.push(nameToken.name);
         
         TokenType p = r.peek().type;
 

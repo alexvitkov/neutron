@@ -115,20 +115,27 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
         AST_PrimitiveType* l = (AST_PrimitiveType*)dstt;
         AST_PrimitiveType* r = (AST_PrimitiveType*)type;
 
-        // We allow very conservative implicit casting
-        // bool -> u8 -> u16 -> u32 -> u64
-        //    \     \       \      \
-        //     i8 -> i16 -> i32 -> i64
-        if (l == &t_bool
-                || (l->kind == r->kind && l->size < r->size)
-                || (l->kind == PRIMITIVE_UNSIGNED && r->kind == PRIMITIVE_SIGNED && l->size < r->size))
-        {
-            if ((*dst)->nodetype == AST_NUMBER) {
-                ((AST_Number*)(*dst))->type = type;
+        if ((*dst)->nodetype == AST_NUMBER) {
+            AST_Number* num = (AST_Number*)*dst;
+            if (num->fits_in((AST_PrimitiveType*)type)) {
+                num->type = type;
+                return true;
             } else {
-                *dst = ctx.alloc<AST_Cast>(r, *dst);
+                return false;
             }
-            return true;
+        }
+        else {
+            // We allow very conservative implicit casting
+            // bool -> u8 -> u16 -> u32 -> u64
+            //    \     \       \      \
+            //     i8 -> i16 -> i32 -> i64
+            if (l == &t_bool
+                    || (l->kind == r->kind && l->size < r->size)
+                    || (l->kind == PRIMITIVE_UNSIGNED && r->kind == PRIMITIVE_SIGNED && l->size < r->size))
+            {
+                *dst = ctx.alloc<AST_Cast>(r, *dst);
+                return true;
+            }
         }
     }
 
@@ -149,8 +156,9 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
                 string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
                 string_static_var->type = string_array_type;
                 string_static_var->initial_value = str;
+                string_static_var->is_global = true;
 
-                ctx.global->declare({ .string_literal = str }, string_static_var);
+                MUST (ctx.global->declare({ .string_literal = str }, string_static_var));
             }
 
             *dst =  ctx.alloc<AST_Cast>(get_pointer_type(&t_i8), string_static_var);
@@ -176,18 +184,18 @@ bool is_valid_lvalue(AST_Node* expr) {
     }
 }
 
-bool resolve_unresolved_references(AST_Node** nodeptr);
+bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr);
 
-bool resolve_unresolved_references(AST_Block* block) {
+bool resolve_unresolved_references(GlobalContext& global, AST_Block* block) {
     for (const auto& decl : block->ctx.declarations)
-        MUST (resolve_unresolved_references((AST_Node**)&decl.value));
+        MUST (resolve_unresolved_references(global, (AST_Node**)&decl.value));
 
     for (auto& stmt : block->statements)
-        MUST (resolve_unresolved_references(&stmt));
+        MUST (resolve_unresolved_references(global, &stmt));
     return true;
 }
 
-bool resolve_unresolved_references(AST_Node** nodeptr) {
+bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr) {
     AST_Node* node = *nodeptr;
     if (!node)
         return true;
@@ -209,30 +217,41 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
         }
 
         case AST_VAR: {
-            AST_Var* var = (AST_Var*)node; MUST (resolve_unresolved_references((AST_Node**)&var->initial_value)); MUST (resolve_unresolved_references((AST_Node**)&var->type));
+            AST_Var* var = (AST_Var*)node; MUST (resolve_unresolved_references(global, (AST_Node**)&var->initial_value)); 
+            MUST (resolve_unresolved_references(global, (AST_Node**)&var->type));
             break;
         }
 
         case AST_CAST: {
             AST_Cast* cast = (AST_Cast*)node;
-            MUST (resolve_unresolved_references((AST_Node**)&cast->inner));
-            MUST (resolve_unresolved_references((AST_Node**)&cast->type));
+            MUST (resolve_unresolved_references(global, (AST_Node**)&cast->inner));
+            MUST (resolve_unresolved_references(global, (AST_Node**)&cast->type));
             break;
         }
 
         case AST_FN_CALL: {
             AST_FnCall* fncall = (AST_FnCall*)node;
-            MUST (resolve_unresolved_references((AST_Node**)&fncall->fn));
+            MUST (resolve_unresolved_references(global, (AST_Node**)&fncall->fn));
             for (auto& arg : fncall->args)
-                MUST (resolve_unresolved_references((AST_Node**)&arg));
+                MUST (resolve_unresolved_references(global, (AST_Node**)&arg));
             break;
         }
 
         case AST_FN: {
             AST_Fn* fn = (AST_Fn*)node;
-            for (auto& param_type : ((AST_FnType*)(fn->type))->param_types)
-                MUST (resolve_unresolved_references((AST_Node**)&param_type));
-            MUST (resolve_unresolved_references(&fn->block));
+            AST_FnType* fntype = (AST_FnType*)fn->type;
+
+            for (auto& param_type : fntype->param_types)
+                MUST (resolve_unresolved_references(global, (AST_Node**)&param_type));
+
+            for (u32 i = 0; i < fn->argument_names.size; i++) {
+                AST_Var* argvar = global.alloc<AST_Var>(fn->argument_names[i], i);
+                argvar->type = fntype->param_types[i];
+
+                MUST (fn->block.ctx.declare({ .name = argvar->name }, argvar));
+            }
+
+            MUST (resolve_unresolved_references(global, &fn->block));
             break;
         }
 
@@ -240,58 +259,58 @@ bool resolve_unresolved_references(AST_Node** nodeptr) {
         case AST_BINARY_OP: 
         {
             AST_BinaryOp* op = (AST_BinaryOp*)node;
-            MUST (resolve_unresolved_references((AST_Node**)&op->lhs));
-            MUST (resolve_unresolved_references((AST_Node**)&op->rhs));
+            MUST (resolve_unresolved_references(global, (AST_Node**)&op->lhs));
+            MUST (resolve_unresolved_references(global, (AST_Node**)&op->rhs));
             break;
         }
 
         case AST_DEREFERENCE: {
             AST_Dereference* deref = (AST_Dereference*)node;
-            MUST (resolve_unresolved_references((AST_Node**)&deref->ptr));
+            MUST (resolve_unresolved_references(global, (AST_Node**)&deref->ptr));
             return true;
         }
 
         case AST_RETURN: {
             AST_Return* ret = (AST_Return*)node;
-            MUST (resolve_unresolved_references((AST_Node**)&ret->value));
+            MUST (resolve_unresolved_references(global, (AST_Node**)&ret->value));
             break;
         }
 
         case AST_IF: {
             AST_If* ifs = (AST_If*)node;
-            MUST (resolve_unresolved_references(&ifs->then_block));
-            MUST (resolve_unresolved_references(&ifs->condition));
+            MUST (resolve_unresolved_references(global, &ifs->then_block));
+            MUST (resolve_unresolved_references(global, &ifs->condition));
             break;
         }
 
         case AST_WHILE: {
             AST_While* whiles = (AST_While*)node;
-            MUST (resolve_unresolved_references(&whiles->block));
-            MUST (resolve_unresolved_references(&whiles->condition));
+            MUST (resolve_unresolved_references(global, &whiles->block));
+            MUST (resolve_unresolved_references(global, &whiles->condition));
             break;
         }
 
         case AST_BLOCK: {
-            MUST (resolve_unresolved_references((AST_Block*)node));
+            MUST (resolve_unresolved_references(global, (AST_Block*)node));
             break;
         }
         case AST_STRUCT: {
             AST_Struct* str = (AST_Struct*)node;
             for (auto& mem : str->members)
-                MUST (resolve_unresolved_references((AST_Node**)&mem.type));
+                MUST (resolve_unresolved_references(global, (AST_Node**)&mem.type));
             break;
         }
 
         case AST_MEMBER_ACCESS: {
             AST_MemberAccess* access = (AST_MemberAccess*)node;
-            MUST (resolve_unresolved_references((AST_Node**)&access->lhs));
+            MUST (resolve_unresolved_references(global, (AST_Node**)&access->lhs));
             break;
         }
 
         case AST_POINTER_TYPE: {
             AST_PointerType* pt = (AST_PointerType*)node;
             if (pt->pointed_type->nodetype == AST_UNRESOLVED_ID) {
-                MUST (resolve_unresolved_references((AST_Node**)&pt->pointed_type));
+                MUST (resolve_unresolved_references(global, (AST_Node**)&pt->pointed_type));
 
                 *nodeptr = get_pointer_type(pt->pointed_type);
                 // TODO ALLOCATION free the temp pointer type here
@@ -334,11 +353,13 @@ bool validate_fn_type(Context& ctx, AST_Fn* fn) {
     
     for (auto& p : fntype->param_types) {
         // we must check if the parameters are valid AST_Types
-        MUST (validate_type(ctx, &fntype->type));
+        MUST (validate_type(ctx, &p));
     }
 
-    if (fntype->returntype)
-        MUST (validate_type(ctx, &fntype->returntype));
+    if (!fntype->returntype)
+        fntype->returntype = &t_void;
+
+    MUST (validate_type(ctx, &fntype->returntype));
     
     fntype = make_function_type_unique(fntype);
     fn->type = fntype;
@@ -460,8 +481,10 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 return nullptr;
             }
 
-            if (implicit_cast(ctx, &bin->rhs, lhst))
-                return (bin->type = lhst);
+            if (implicit_cast(ctx, &bin->rhs, lhst)) {
+                bin->type = lhst;
+                return bin->type;
+            }
 
             ctx.error({ 
                 .code = ERR_INVALID_ASSIGNMENT, 
@@ -474,8 +497,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 }
             });
 
-            bin->type = lhst;
-            return lhst;
+            return nullptr;;
         }
 
         case AST_BINARY_OP: {
@@ -733,7 +755,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
             AST_Return *ret = (AST_Return*)node;
             AST_Type *rettype = ((AST_FnType*)ctx.fn->type)->returntype;
 
-            if (rettype && !ret->value) {
+            if (rettype != &t_void && !ret->value) {
                 ctx.error({
                     .code = ERR_RETURN_TYPE_MISSING,
                     .nodes = {
@@ -743,8 +765,8 @@ bool typecheck(Context& ctx, AST_Node* node) {
                 });
                 return false;
             }
-            if ((rettype && !implicit_cast(ctx, &ret->value, rettype))
-                || (!rettype && ret->value))
+            if ((rettype != &t_void && !implicit_cast(ctx, &ret->value, rettype))
+                || (rettype == &t_void && ret->value))
             {
                 ctx.error({
                     .code = ERR_RETURN_TYPE_INVALID,
@@ -783,16 +805,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
 
 bool typecheck_all(GlobalContext& global) {
     for (auto& decl : global.declarations)
-        MUST (resolve_unresolved_references(&decl.value));
-
-
-    // First resolve the function types, we need their signatures for everything else
-    for (auto& decl : global.declarations) {
-        if (decl.value->nodetype == AST_FN)
-            MUST (validate_fn_type(global, (AST_Fn*)decl.value));
-    }
-
-    global.temp_allocator.free_all();
+        MUST (resolve_unresolved_references(global, &decl.value));
 
     // During typechecking we can declare more stuff
     // so it's not safe to iterate over global.declarations as it may relocate
@@ -801,6 +814,18 @@ bool typecheck_all(GlobalContext& global) {
     arr<AST_Node*> declarations_copy;
     for (auto& decl : global.declarations)
         declarations_copy.push(decl.value);
+
+    // First resolve the function types, we need their signatures for everything else
+    for (auto& decl : declarations_copy) {
+        if (decl->nodetype == AST_FN) {
+            MUST (validate_fn_type(global, (AST_Fn*)decl));
+        }
+        else if (decl->nodetype == AST_VAR) {
+            MUST (typecheck(global, decl));
+        }
+    }
+
+    global.temp_allocator.free_all();
 
     for (auto& decl : declarations_copy)
         MUST (typecheck(global, decl));

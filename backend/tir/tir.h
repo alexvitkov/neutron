@@ -62,6 +62,11 @@ struct TIR_Instruction {
             TIR_Value* cond;
             TIR_Block *then_block, *else_block;
         } jmpif;
+
+        struct {
+            TIR_Value *dst, *base;
+            arr_ref<TIR_Value*> offsets;
+        } gep;
     };
 };
 
@@ -111,7 +116,6 @@ struct TIR_Function {
     TIR_Value* alloc_val(TIR_Value val);
     void free_temp(TIR_Value* val);
     void emit(TIR_Instruction instr);
-    TIR_Value* resolve(AST_Value* node);
 
     void print();
 };

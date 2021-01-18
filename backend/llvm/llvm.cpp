@@ -220,19 +220,15 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
             }
             case TOPC_PTR_OFFSET: {
                 llvm::Value *lhs = translate_value(instr.bin.lhs, block, l_fn);
-                llvm::Value *rhs = translate_value(instr.bin.rhs, block, l_fn);
 
                 llvm::Value* gep;
 
-                if (instr.bin.lhs->type->nodetype == AST_ARRAY_TYPE) {
-                    llvm::Value* vals[2];
-                    vals[0] = Constant::getNullValue(Type::getInt32Ty(lc));
-                    vals[1] = rhs;
-                    gep = builder.CreateGEP(lhs, vals);
-                }
-                else {
-                    gep = builder.CreateGEP(lhs, rhs);
-                }
+                arr<llvm::Value*> vals;
+
+                for (TIR_Value* v : instr.gep.offsets)
+                    vals.push(translate_value(v, block, l_fn));
+
+                gep = builder.CreateGEP(lhs, llvm::ArrayRef<llvm::Value*>(vals.buffer, vals.size));
 
                 set_value(instr.bin.dst, gep, l_bb);
                 break;
