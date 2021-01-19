@@ -310,7 +310,7 @@ bool tokenize(Context& global, SourceFile &s) {
             
             s.pushToken(
                 { .type = TOK_STRING_LITERAL, .name = contents },
-                { .start = word_start - 1, .end = i + 1 });
+                { .start = word_start, .end = i + 1 });
         }
 
         else if (c == '/' && i < s.length - 1 && s.buffer[i + 1] == '/') {
@@ -837,6 +837,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                         }
                     };
 
+                    r.ctx.global->definition_locations[fncall] = loc;
                     s.output.push({ fncall, loc });
                 }
                 

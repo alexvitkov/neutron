@@ -25,6 +25,7 @@ enum TIR_OpCode : u8 {
     TOPC_JMPIF,
     TOPC_JMP,
     TOPC_PTR_OFFSET,
+    TOPC_BITCAST,
 };
 
 struct TIR_Value {

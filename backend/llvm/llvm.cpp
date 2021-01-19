@@ -233,6 +233,13 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 set_value(instr.bin.dst, gep, l_bb);
                 break;
             }
+            case TOPC_BITCAST: {
+                llvm::Type* l_dest_type = translate_type(instr.un.dst->type);
+                llvm::Value* l_src = translate_value(instr.un.src, block, l_fn);
+                llvm::Value* val = builder.CreateBitCast(l_src, l_dest_type);
+                set_value(instr.bin.dst, val, l_bb);
+                break;
+            }
             default:
                 assert(!"Not implemented");
         }

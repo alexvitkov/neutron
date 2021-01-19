@@ -396,7 +396,6 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 AST_Fn *fn = (AST_Fn*)fncall->fn;
                 AST_FnType *fntype = (AST_FnType*)fn->type;
 
-
                 u64 num_args = fncall->args.size;
                 u64 num_params = fntype->param_types.size;
 
@@ -428,27 +427,31 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 fncall->type = fntype->returntype;
                 return fntype->returntype;
             }
+            else {
+                
+                MUST (validate_type(ctx, (AST_Type**)(&fncall->fn)));
 
-            // If the user is trying to 'call' a type then that's a cast.
-            // Here the node is patched up from a AST_FnCall to a AST_Cast
-            else if (fncall->fn->nodetype & AST_TYPE_BIT) {
-
+                // If the user is trying to 'call' a type then that's a cast.
+                // Here the node is patched up from a AST_FnCall to a AST_Cast
+                
                 // There  must be exactly one 'argument' to the function call -
                 // the value the user is trying to cast
-
+                
                 if (fncall->args.size != 1) {
                     // TODO ERROR
                     ctx.error({ .code = ERR_BAD_FN_CALL });
+                    return nullptr;
                 }
                 
                 AST_Cast* cast = (AST_Cast*)fncall;
-
-                cast->type = (AST_Type*)fncall->fn;
+                
                 cast->nodetype = AST_CAST;
+                cast->type = (AST_Type*)fncall->fn;
                 cast->inner = fncall->args[0];
-
+                
                 MUST (validate_type(ctx, &cast->type));
-
+                MUST (gettype(ctx, cast->inner));
+                
                 // Right now we only support pointer->pointer casts
                 if ((cast->type->nodetype == AST_POINTER_TYPE || cast->type->nodetype == AST_ARRAY_TYPE)
                     && (cast->inner->type->nodetype == AST_POINTER_TYPE || cast->inner->type->nodetype == AST_ARRAY_TYPE))
@@ -459,14 +462,9 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 {
                     // TODO ERROR
                     ctx.error({ .code = ERR_INVALID_CAST });
+                    return nullptr;;
                 }
-
-                return cast->type;
             }
-            else {
-                assert(!"Invalid node");
-            }
-
         }
 
         case AST_ASSIGNMENT: {

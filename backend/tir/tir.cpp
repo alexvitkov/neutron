@@ -58,8 +58,11 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
         case TOPC_MOV:
             o << *instr.un.dst << " <- " << *instr.un.src << std::endl;
             break;
+        case TOPC_BITCAST:
+            o << *instr.un.dst << " <- bitcast " << *instr.un.src << std::endl;
+            break;
         case TOPC_LOAD:
-            o << *instr.un.dst << " <- load " << *instr.un.src << std::endl;
+            o << *instr.un.dst << " <-- load " << *instr.un.src << std::endl;
             break;
         case TOPC_STORE:
             // o << *instr.un.dst << " <- store " << *instr.un.src << std::endl;
@@ -468,7 +471,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         case AST_CAST: {
             AST_Cast* cast = (AST_Cast*)node;
 
-            if (cast->inner->type->nodetype == AST_ARRAY_TYPE) {
+            if (cast->inner->type->nodetype == AST_ARRAY_TYPE && cast->type->nodetype == AST_POINTER_TYPE) {
 
                 TIR_Value* var_location = get_array_ptr(fn, cast->inner);
 
@@ -490,7 +493,26 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                 });
                 return dst;
             }
-            assert(!"Cast not supported");
+            else if (cast->inner->type->nodetype == AST_POINTER_TYPE && cast->type->nodetype == AST_POINTER_TYPE) {
+
+                TIR_Value* src = compile_node_rvalue(fn, cast->inner, nullptr);
+
+                if (!dst)
+                    dst = fn.alloc_temp(cast->type);
+
+                fn.emit({
+                    .opcode = TOPC_BITCAST,
+                    .un = {
+                        .dst = dst,
+                        .src = src,
+                    }
+                });
+                
+                return dst;
+            }
+            else {
+                assert(!"Cast not supported");
+            }
         }
 
         default:

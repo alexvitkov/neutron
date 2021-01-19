@@ -61,6 +61,7 @@ int main(int argc, const char** argv) {
         }
         std::cout.flush();
     }
+    // return 0;
 
     if (debug_output) {
         std::cout << red << "\n------- LLVM IR -------\n" << resetstyle;
