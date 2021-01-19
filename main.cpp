@@ -69,7 +69,7 @@ int main(int argc, const char** argv) {
     }
     fflush(stdout);
 
-    LLVM_Context lllvmcon(t_c);
+    T2L_Context lllvmcon(t_c);
     lllvmcon.compile_all();
 
     const char* object_filename = lllvmcon.output_object();

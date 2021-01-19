@@ -27,7 +27,10 @@ struct map {
     u32 numbins; 
     u32 numfreebins;
 
-    map(u32 numbins = 8) { 
+    map() : map(8) {
+    }
+
+    map(u32 numbins) { 
         alloc_bins(numbins); 
     }
     ~map() { 

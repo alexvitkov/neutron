@@ -13,20 +13,25 @@ enum TIR_ValueSpace : u8 {
     TVS_VALUE,
 };
 
+#define TOPC_MODIFIES_DST_BIT 0x80
+
 enum TIR_OpCode : u8 {
-    TOPC_ADD,
-    TOPC_SUB,
-    TOPC_EQ,
-    TOPC_LT,
-    TOPC_RET,
-    TOPC_MOV,
-    TOPC_CALL,
-    TOPC_LOAD,
-    TOPC_STORE,
-    TOPC_JMPIF,
-    TOPC_JMP,
-    TOPC_PTR_OFFSET,
-    TOPC_BITCAST,
+    TOPC_NONE       = 0x00,
+
+    TOPC_ADD        = 0x00 | TOPC_MODIFIES_DST_BIT,
+    TOPC_SUB        = 0x01 | TOPC_MODIFIES_DST_BIT,
+    TOPC_EQ         = 0x02 | TOPC_MODIFIES_DST_BIT,
+    TOPC_LT         = 0x03 | TOPC_MODIFIES_DST_BIT,
+    TOPC_MOV        = 0x04 | TOPC_MODIFIES_DST_BIT,
+    TOPC_CALL       = 0x05 | TOPC_MODIFIES_DST_BIT,
+    TOPC_PTR_OFFSET = 0x06 | TOPC_MODIFIES_DST_BIT,
+    TOPC_BITCAST    = 0x07 | TOPC_MODIFIES_DST_BIT,
+
+    TOPC_JMPIF      = 0x01,
+    TOPC_JMP        = 0x02,
+    TOPC_RET        = 0x03,
+    TOPC_LOAD       = 0x04,
+    TOPC_STORE      = 0x05,
 };
 
 struct TIR_Value {
@@ -42,6 +47,13 @@ struct TIR_Instruction {
     union {
         struct { char _; } none;
 
+        // VOLATILE
+        // All union members with a TIR_Value* destination MUST have it as the first field in the struct
+        //
+        // That way if we know the opcode if the instruction has TOPC_MODIFIES_DST_BIT set,
+        // then we can just use the union .dst, regardless of whether the instruction a unary/binary/call/whatever
+        TIR_Value *dst;
+
         struct {
             TIR_Value *dst, *lhs, *rhs;
         } bin;
@@ -51,17 +63,17 @@ struct TIR_Instruction {
         } un;
 
         struct {
-            TIR_Value* dst;
-            AST_Fn* fn;
+            TIR_Value *dst;
+            AST_Fn *fn;
             arr_ref<TIR_Value*> args;
         } call;
 
         struct {
-            TIR_Block* next_block;
+            TIR_Block *next_block;
         } jmp;
 
         struct {
-            TIR_Value* cond;
+            TIR_Value *cond;
             TIR_Block *then_block, *else_block;
         } jmpif;
 
@@ -70,6 +82,7 @@ struct TIR_Instruction {
             arr_ref<TIR_Value*> offsets;
         } gep;
     };
+
 };
 
 struct TIR_Block {

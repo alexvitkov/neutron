@@ -21,41 +21,72 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm-c/TargetMachine.h>
 
-struct LLVM_Context {
-    TIR_Context& t_c;
+struct T2L_Context;
+struct T2L_FunctionContext;
+struct T2L_BlockContext;
+
+struct T2L_Context {
+    TIR_Context& tir_context;
 
     llvm::LLVMContext lc;
     llvm::Module mod;
 
     map<AST_Type*, llvm::Type*> translated_types;
-
-    // map<TIR_Value*, arr<llvm::Value*>> values;
-    map<AST_Value*, llvm::Value*> definitions;
-    map<TIR_Block*, llvm::BasicBlock*> blocks;
-
-    struct Tuple {
-        llvm::Value* val;
-        llvm::BasicBlock* block;
-    };
-    map<TIR_Value*, map<llvm::BasicBlock*, llvm::Value*>> _values;
-
     map<TIR_Value*, llvm::Value*> translated_globals;
-
-    llvm::Value* retval;
+    map<AST_Fn*, T2L_FunctionContext*> global_functions;
 
     llvm::IRBuilder<> builder;
 
-    LLVM_Context(TIR_Context& t_c);
+    T2L_Context(TIR_Context& t_c);
     void compile_all();
     const char* output_object();
 
-    void compile_fn_header(TIR_Function* fn);
-    void compile_fn(TIR_Function* fn);
-    void compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Block* block);
+    llvm::Type* get_llvm_type(AST_Type* type);
+};
 
-    llvm::Value* translate_value(TIR_Value* val, TIR_Block* block, llvm::Function* l_fn);
-    llvm::Type* translate_type(AST_Type* type);
-    void set_value(TIR_Value* value, llvm::Value* l_value, llvm::BasicBlock* l_bb);
+struct T2L_FunctionContext {
+    T2L_Context    *t2l_context;
+    TIR_Function   *tir_fn;
+    llvm::Function *llvm_fn;
+
+    arr<T2L_BlockContext*> blocks;
+
+    map<TIR_Block*, T2L_BlockContext*> block_translation;
+
+    void compile_header();
+    void compile();
+
+    llvm::Value* retval;
+};
+
+struct T2L_BlockContext {
+    T2L_FunctionContext* fn;
+    bool compiled;
+
+    TIR_Block *tir_block;
+    llvm::BasicBlock *llvm_block;
+
+    map<TIR_Value*, llvm::Value*> modified_values;
+    map<TIR_Value*, TIR_Instruction*> values_to_modify;
+
+    struct Promise {
+        llvm::PHINode *phi;
+        llvm::BasicBlock *llvm_block;
+    };
+    map<TIR_Value*, arr<llvm::PHINode*>> promises;
+
+    void set_value(TIR_Instruction* tir_instr, llvm::Value* l_val);
+    llvm::Value* get_value(TIR_Value* t_val);
+
+
+    struct ParentBlockValue {
+        T2L_BlockContext *source, *promise;
+        llvm::Value *value;
+    };
+    llvm::Value* get_value_graph_recurse(TIR_Value* tir_val, bool ask_parents);
+
+    void prepass();
+    void compile();
 };
 
 #endif // guard

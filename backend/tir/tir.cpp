@@ -405,8 +405,9 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             AST_BinaryOp* assign = (AST_BinaryOp*)node;
             TIR_Value* tv = store(fn, assign->lhs, assign->rhs);
 
-            if (!dst)
-                dst = fn.alloc_temp(assign->type);
+            if (!dst) {
+                return tv;
+            }
 
             fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = tv } });
             return dst;
@@ -496,6 +497,8 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             cond_block->previous_blocks.push_unique(loop_block);
 
             continuation->previous_blocks.push_unique(cond_block);
+
+            loop_block->previous_blocks.push_unique(cond_block);
 
             fn.blocks.push(cond_block);
             fn.blocks.push(loop_block);
