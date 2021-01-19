@@ -123,6 +123,8 @@ struct AST_PrimitiveType : AST_Type {
         : AST_Type(AST_PRIMITIVE_TYPE), kind(kind), size(size), name(name) {}
 };
 
+// VOLATILE
+// If you add stuff to this, you MUST update map_hash and map_equals for (defined in typer.cpp)
 struct AST_FnType : AST_Type {
     AST_Type* returntype;
     arr<AST_Type*> param_types;
@@ -223,6 +225,9 @@ struct AST_MemberAccess : AST_Value {
 // Right now AST_PointerType and AST_Dereference have the same
 // size and layout. The typechecker depends on that.
 // If that has to change, update the validate_type function
+//
+// DOUBLE VOLATILE!
+// If you add stuff to this, you MUST update map_hash and map_equals (defined in typer.cpp)
 struct AST_PointerType : AST_Type {
     AST_Type* pointed_type;
     inline AST_PointerType(AST_Type* pointed_type) 

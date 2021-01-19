@@ -45,3 +45,4 @@ while,  KW_WHILE
 &=,     OP_BITANDASSIGN
 ^=,     OP_BITXORASSIGN
 |=,     OP_BITORASSIGN
+...,    OP_VARARGS

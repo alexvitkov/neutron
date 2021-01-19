@@ -16,6 +16,7 @@ T2L_Context::T2L_Context(TIR_Context& tirc) : tir_context(tirc), mod("ntrmod", l
     translated_types.insert(&t_f32,  Type::getFloatTy(lc));
     translated_types.insert(&t_f64,  Type::getFloatTy(lc));
     translated_types.insert(&t_void, Type::getVoidTy(lc));
+    translated_types.insert(&t_any8, IntegerType::get(lc, 64));
 }
 
 llvm::Type* T2L_Context::get_llvm_type(AST_Type* type) {

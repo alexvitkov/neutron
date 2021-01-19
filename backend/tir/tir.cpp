@@ -356,7 +356,13 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             arr<TIR_Value*> args;
 
             for (int i = 0; i < fncall->args.size; i++) {
-                AST_Type* param_type = callee_type->param_types[i];
+
+                AST_Type* param_type = &t_any8;
+                if (i < callee_type->param_types.size)
+                    callee_type->param_types[i];
+
+
+
                 TIR_Value*  arg_dst = fn.alloc_temp(param_type);
 
                 TIR_Value* arg = compile_node_rvalue(fn, fncall->args[i], arg_dst);
@@ -548,7 +554,9 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                 });
                 return dst;
             }
-            else if (cast->inner->type->nodetype == AST_POINTER_TYPE && cast->type->nodetype == AST_POINTER_TYPE) {
+
+            else if ((cast->inner->type->nodetype == AST_POINTER_TYPE && cast->type->nodetype == AST_POINTER_TYPE)
+                    || cast->type == &t_any8) {
 
                 TIR_Value* src = compile_node_rvalue(fn, cast->inner, nullptr);
 

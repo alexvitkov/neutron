@@ -607,6 +607,13 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
 
     // Parse the function arguments
     while (r.peek().type != TOK_CLOSEBRACKET) {
+
+        if (r.peek().type == OP_VARARGS) {
+            r.pop();
+            temp_fn_type->is_variadic = true;
+            break;
+        }
+
         SmallToken nameToken = r.expect(TOK_ID);
         MUST (nameToken.type);
 
@@ -630,7 +637,7 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         }
     }
 
-    r.pop(); // Discard the closing bracket
+    MUST (r.expect(TOK(')')).type);
 
     // Parse the return type
     if (r.peek().type == TOK(':')) {

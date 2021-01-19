@@ -18,6 +18,10 @@ AST_PrimitiveType t_type           (PRIMITIVE_UNIQUE,  0, "type");
 AST_PrimitiveType t_void           (PRIMITIVE_UNIQUE,  0, "void");
 AST_PrimitiveType t_string_literal (PRIMITIVE_UNIQUE,  0, "string_literal");
 
+// This is a special type that anything with size <= 8 can implicitly cast to
+// variadic arguments are assumed to be of type any8
+AST_PrimitiveType t_any8 (PRIMITIVE_UNIQUE, 8, "any8");
+
 
 // TODO This should be a hashset if someone ever makes one
 //
@@ -82,6 +86,7 @@ AST_ArrayType* get_array_type(AST_Type* base_type, u64 size) {
 bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     MUST (lhs->returntype == rhs->returntype);
     MUST (lhs->param_types.size == rhs->param_types.size);
+    MUST (lhs->is_variadic == rhs->is_variadic);
 
     for (int i = 0; i < lhs->param_types.size; i++)
         MUST (lhs->param_types[i] == rhs->param_types[i]);
@@ -111,7 +116,10 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
     if (dstt == type) 
         return true;
 
-    if (dstt->nodetype == AST_PRIMITIVE_TYPE && type->nodetype == AST_PRIMITIVE_TYPE) {
+    if (dstt->nodetype == AST_PRIMITIVE_TYPE 
+            && type->nodetype == AST_PRIMITIVE_TYPE
+            && ((AST_PrimitiveType*)type)->kind != PRIMITIVE_UNIQUE)
+    {
         AST_PrimitiveType* l = (AST_PrimitiveType*)dstt;
         AST_PrimitiveType* r = (AST_PrimitiveType*)type;
 
@@ -141,7 +149,7 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
 
     else if (dstt == &t_string_literal) {
 
-        if (type == get_pointer_type(&t_i8)) {
+        if (type == get_pointer_type(&t_i8) || type == &t_any8) {
 
             AST_StringLiteral* str = (AST_StringLiteral*)*dst;
 
@@ -166,6 +174,10 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
         }
 
         return false;
+    }
+
+    else if (type == &t_any8) {
+        return true;
     }
 
     return false;
@@ -364,9 +376,6 @@ bool validate_fn_type(Context& ctx, AST_Fn* fn) {
     fntype = make_function_type_unique(fntype);
     fn->type = fntype;
     
-    // TODO TODO TODO TODO VARIADIC
-    if (!strcmp(fn->name, "printf"))
-        ((AST_FnType*)fn->type)->is_variadic = true;
     return fn->type;
 }
 
@@ -399,16 +408,17 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 u64 num_args = fncall->args.size;
                 u64 num_params = fntype->param_types.size;
 
-                if (num_args != num_params || (fntype->is_variadic && num_args < num_params)) {
+                if ((!fntype->is_variadic && num_args != num_params) || (fntype->is_variadic && num_args < num_params)) {
                     // TODO ERROR
                     ctx.error({ .code = ERR_BAD_FN_CALL });
                     return nullptr;
                 }
 
+                for (int i = 0; i < num_args; i++) {
 
-                for (int i = 0; i < fncall->args.size; i++) {
+                    AST_Type* param_type = i < num_params ? fntype->param_types[i] : &t_any8;
 
-                    if (!implicit_cast(ctx, &fncall->args[i], fntype->param_types[i])) {
+                    if (!implicit_cast(ctx, &fncall->args[i], param_type)) {
                         ctx.error({
                             .code = ERR_BAD_FN_CALL,
                             .node_ptrs = { 
@@ -416,7 +426,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                             },
                             .args = {{  
                                 .arg_name = fn->argument_names[i],
-                                .arg_type_ptr = (AST_Node**)&fntype->param_types[i],
+                                .arg_type_ptr = (AST_Node**)&param_type,
                                 .arg_index = (u64)i
                             }}
                         });

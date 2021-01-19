@@ -35,7 +35,7 @@
 #line 7 "/home/alex/src/neutron/keywords.gperf"
 struct tok { const char* name; TokenType type; };
 
-#define TOTAL_KEYWORDS 39
+#define TOTAL_KEYWORDS 40
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 6
 #define MIN_HASH_VALUE 2
@@ -58,8 +58,8 @@ Perfect_Hash::hash (const char *str, size_t len)
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
-      93, 93, 93,  7, 93, 93, 93, 35, 40, 93,
-      93, 93, 56, 35, 93, 30, 93, 51, 93, 30,
+      93, 93, 93, 12, 93, 93, 93, 35, 40, 93,
+      93, 93,  7, 35, 93, 30, 30, 51, 93, 30,
       93, 15, 93, 93,  0, 93, 55, 93, 93, 93,
       10,  5,  0, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
@@ -114,14 +114,15 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
       {"==",     OP_DOUBLEEQUALS},
 #line 16 "/home/alex/src/neutron/keywords.gperf"
       {"i64",    KW_I64},
-#line 37 "/home/alex/src/neutron/keywords.gperf"
-      {"!=",     OP_NOTEQUALS},
+#line 40 "/home/alex/src/neutron/keywords.gperf"
+      {"*=",     OP_MULASSIGN},
       {""}, {""},
 #line 32 "/home/alex/src/neutron/keywords.gperf"
       {"<=",     OP_LESSEREQUALS},
 #line 19 "/home/alex/src/neutron/keywords.gperf"
       {"f64",    KW_F64},
-      {""},
+#line 37 "/home/alex/src/neutron/keywords.gperf"
+      {"!=",     OP_NOTEQUALS},
 #line 25 "/home/alex/src/neutron/keywords.gperf"
       {"false",  KW_FALSE},
       {""},
@@ -167,8 +168,8 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
       {""}, {""}, {""},
 #line 29 "/home/alex/src/neutron/keywords.gperf"
       {"--",     OP_MINUSMINUS},
-#line 40 "/home/alex/src/neutron/keywords.gperf"
-      {"*=",     OP_MULASSIGN},
+#line 48 "/home/alex/src/neutron/keywords.gperf"
+      {"...",    OP_VARARGS},
       {""}, {""}, {""},
 #line 13 "/home/alex/src/neutron/keywords.gperf"
       {"i8",     KW_I8},

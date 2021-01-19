@@ -63,6 +63,7 @@ enum TokenType : u8 {
     OP_BITANDASSIGN,
     OP_BITXORASSIGN,
     OP_BITORASSIGN,
+    OP_VARARGS,
 
 
     // VOLATILE 
@@ -102,6 +103,7 @@ enum TokenType : u8 {
     OP_ADD_PTR_INT,
     OP_SUB_PTR_INT,
     OP_SUB_PTR_PTR,
+
 };
 
 struct AST_Node;
