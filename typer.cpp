@@ -564,14 +564,8 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 bin->type = lhst->nodetype == AST_POINTER_TYPE ? lhst : rhst;
                 return bin->type;
 
-Error:
-                ctx.error({
-                    .code = ERR_INVALID_ASSIGNMENT,
-                    .nodes = { bin->lhs, bin->rhs }
-                });
                 return nullptr;
             }
-
 
             // Handle regular human arithmetic between numbers
             else {
@@ -582,9 +576,10 @@ Error:
                     return (bin->type = rhst);
             }
 
+Error:
             ctx.error({
-                .code = ERR_INVALID_ASSIGNMENT,
-                .nodes = { lhst, rhst }
+                .code = ERR_BAD_BINARY_OP,
+                .nodes = { bin->lhs, bin->rhs }
             });
             return nullptr;
         }
@@ -782,6 +777,13 @@ bool typecheck(Context& ctx, AST_Node* node) {
             AST_If* ifs = (AST_If*)node;
             MUST (typecheck(ctx, ifs->condition));
             MUST (typecheck(ctx, &ifs->then_block));
+            return true;
+        }
+
+        case AST_WHILE: {
+            AST_While* whiles = (AST_While*)node;
+            MUST (typecheck(ctx, whiles->condition));
+            MUST (typecheck(ctx, &whiles->block));
             return true;
         }
 

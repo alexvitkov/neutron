@@ -115,7 +115,7 @@ void print(std::ostream& o, AST_Node* node, bool decl) {
         case AST_ADDRESS_OF:     o << (AST_AddressOf*)node; break;
         case AST_UNRESOLVED_ID:  o << (AST_UnresolvedId*)node; break;
         case AST_STRING_LITERAL: o << (AST_StringLiteral*)node; break;
-        default:                 o << "NOPRINT[" << node->nodetype << ']'; break;
+        default:                 o << "NOPRINT[" << (int)node->nodetype << ']'; break;
     }
 }
 
@@ -196,8 +196,15 @@ void print(std::ostream& o, AST_BinaryOp* node, bool brackets = false) {
         case OP_BITANDASSIGN: o << "&="; break;
         case OP_BITXORASSIGN: o << "^="; break;
         case OP_BITORASSIGN: o << "|="; break;
-        default:
-            o << (char)node->op;
+        case OP_ADD_PTR_INT: o << "+"; break;
+        case OP_SUB_PTR_INT: o << "-"; break;
+        case OP_SUB_PTR_PTR: o << "-"; break;
+        default: {
+            if (node->op < 128)
+                o << (char)node->op;
+            else
+                o << "TOK(" << (int)node->op << ")";
+        }
     }
 
     o << ' ';
@@ -297,7 +304,11 @@ std::ostream& operator<< (std::ostream& o, AST_MemberAccess* node) {
 }
 
 std::ostream& operator<< (std::ostream& o, AST_Dereference* node) {
-    o << node->ptr << '*';
+    if (node->ptr->nodetype == AST_BINARY_OP || ALWAYS_BRACKETS) {
+        o << '(' << node->ptr << ")*";
+    } else {
+        o << node->ptr << '*';
+    }
     return o;
 }
 

@@ -41,6 +41,19 @@ int get_line(SourceFile& sf, LocationInFile loc) {
     return sf.line_start.size - 1;
 }
 
+struct ERR_OfType {
+    AST_Value* val;
+};
+
+std::ostream& operator<< (std::ostream& o, ERR_OfType rhs) {
+    o << red << rhs.val << dim << " (of type " << rhs.val->type << ')' << resetstyle;
+    return o; 
+}
+
+ERR_OfType oftype(AST_Node* node) {
+    return ERR_OfType { (AST_Value*)node };
+}
+
 void print_code_segment(Context& global, arr<Token>* tokens, arr<AST_Node*>* nodes, arr<AST_Node**>* node_ptrs) {
     // Group the tokens by file
     map<SourceFile*, arr<Location>> grouped;
@@ -172,8 +185,7 @@ void print_err(Context& global, Error& err) {
             th(arg.arg_index + 1);
             std::cout << " argument to be of type " 
                 << red << *arg.arg_type_ptr << resetstyle 
-                << " but instead got "
-                << red << src << dim << " (of type " << src->type << ')' << resetstyle << ":\n";
+                << " but instead got " << oftype(src) << ":\n";
 
             print_code_segment(global, nullptr, nullptr, &err.node_ptrs);
 
@@ -181,13 +193,12 @@ void print_err(Context& global, Error& err) {
             
         }
 
+        // TODO ERR_INVALID_ASSIGNMENT and ERR_INVALID_INITIAL_VALUE can be merged
         case ERR_INVALID_ASSIGNMENT: {
             AST_Value* dst = (AST_Value*)*err.node_ptrs[0];
             AST_Value* src = (AST_Value*)*err.node_ptrs[1];
 
-            std::cout << "Cannot assign " 
-                << red << src << dim << " (of type " << src->type << ')' << resetstyle << " to "
-                << red << dst << dim << " (of type " << dst->type << ')' << resetstyle << ":\n";
+            std::cout << "Cannot assign " << oftype(src) << " to " << oftype(dst) << ":\n";
 
             arr<AST_Node*> nodes = { err.nodes[0] };
 
@@ -199,9 +210,7 @@ void print_err(Context& global, Error& err) {
             AST_Var* var = (AST_Var*)err.nodes[0];
             AST_Value* src = (AST_Value*)err.nodes[1];
 
-            std::cout << "Cannot assign " 
-                << red << src << dim << " (of type " << src->type << ')' << resetstyle << " to "
-                << red << var->name << dim << " (of type " << var->type << ')' << resetstyle << ":\n";
+            std::cout << "Cannot assign " << oftype(src) << " to " << oftype(var) << ":\n";
 
             arr<AST_Node*> nodes = { err.nodes[0] };
 
@@ -260,6 +269,11 @@ void print_err(Context& global, Error& err) {
             arr<AST_Node*> nodes_to_print = { ret };
             print_code_segment(global, nullptr, &nodes_to_print, nullptr);
             break;
+        }
+
+        case ERR_BAD_BINARY_OP: {
+            std::cout << "Cannot do a binary operation on " << oftype(err.nodes[0]) << " and " << oftype(err.nodes[1]) << ":\n";
+            print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
         }
 
         default: {

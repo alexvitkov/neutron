@@ -17,6 +17,7 @@ enum TIR_OpCode : u8 {
     TOPC_ADD,
     TOPC_SUB,
     TOPC_EQ,
+    TOPC_LT,
     TOPC_RET,
     TOPC_MOV,
     TOPC_CALL,

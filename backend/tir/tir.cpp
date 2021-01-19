@@ -77,6 +77,9 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
         case TOPC_EQ:
             o << *instr.bin.dst << " <- " << *instr.bin.lhs << " == " << *instr.bin.rhs << std::endl;
             break;
+        case TOPC_LT:
+            o << *instr.bin.dst << " <- " << *instr.bin.lhs << " < " << *instr.bin.rhs << std::endl;
+            break;
         case TOPC_PTR_OFFSET: {
             o << *instr.gep.dst << " <- " << *instr.gep.base; //<< "[" << *instr.bin.rhs << "]&" << std::endl;
             for (TIR_Value* v : instr.gep.offsets) {
@@ -312,6 +315,10 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                     opcode = TOPC_EQ; 
                     break;
                 }
+                case '<': {
+                    opcode = TOPC_LT; 
+                    break;
+                }
                 case OP_ADD_PTR_INT: {
                     opcode = TOPC_PTR_OFFSET;
                     break;
@@ -422,8 +429,8 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         }
 
         case AST_IF: {
-            TIR_Block* current_block = fn.writepoint;
             AST_If* ifs = (AST_If*)node;
+            TIR_Block* original_block = fn.writepoint;
 
             TIR_Value* cond = compile_node_rvalue(fn, ifs->condition, nullptr);
 
@@ -433,7 +440,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
 
             compile_block(fn, then_block, &ifs->then_block, continuation);
 
-            fn.writepoint = current_block;
+            fn.writepoint = original_block;
             fn.emit({
                 .opcode = TOPC_JMPIF, 
                 .jmpif = {
@@ -442,8 +449,8 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                     .else_block = continuation,
                 }
             });
-            then_block->previous_blocks.push_unique(fn.writepoint);
-            continuation->previous_blocks.push_unique(fn.writepoint);
+            then_block->previous_blocks.push_unique(original_block);
+            continuation->previous_blocks.push_unique(original_block);
 
             fn.blocks.push(then_block);
             fn.blocks.push(continuation);
@@ -452,6 +459,51 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             break;
         }
 
+        case AST_WHILE: {
+            AST_While* whiles = (AST_While*)node;
+            TIR_Block* original_block = fn.writepoint;
+
+            // TODO ALLOCATION
+            TIR_Block* cond_block = new TIR_Block();
+            TIR_Block* loop_block = new TIR_Block();
+            TIR_Block* continuation = new TIR_Block();
+
+            // The current block leads into the condition block, unconditionally.
+            fn.emit({
+                .opcode = TOPC_JMP, 
+                .jmp = { .next_block = cond_block, }
+            });
+
+            // Compile the condition into the condition block
+            fn.writepoint = cond_block;
+            TIR_Value* cond = compile_node_rvalue(fn, whiles->condition, nullptr);
+
+            // If the condition is false, skip the loop body and jump to the continuation
+            // If the condition is true, jump to the loop body
+            fn.emit({
+                .opcode = TOPC_JMPIF, 
+                .jmpif = {
+                    .cond = cond,
+                    .then_block = loop_block,
+                    .else_block = continuation,
+                }
+            });
+
+            // The while loop block always jups back to the condition block
+            compile_block(fn, loop_block, &whiles->block, cond_block);
+
+            cond_block->previous_blocks.push_unique(original_block);
+            cond_block->previous_blocks.push_unique(loop_block);
+
+            continuation->previous_blocks.push_unique(cond_block);
+
+            fn.blocks.push(cond_block);
+            fn.blocks.push(loop_block);
+            fn.blocks.push(continuation);
+
+            fn.writepoint = continuation;
+            break;
+        }
         case AST_STRING_LITERAL: {
             AST_StringLiteral* str = (AST_StringLiteral*)node;
 

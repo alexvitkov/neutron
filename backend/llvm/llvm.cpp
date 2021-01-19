@@ -160,6 +160,12 @@ void LLVM_Context::compile_block(TIR_Function* fn, llvm::Function* l_fn, TIR_Blo
                 set_value(instr.bin.dst, builder.CreateICmpEQ(lhs, rhs), l_bb);
                 break;
             }
+            case TOPC_LT: {
+                llvm::Value *lhs = translate_value(instr.bin.lhs, block, l_fn);
+                llvm::Value *rhs = translate_value(instr.bin.rhs, block, l_fn);
+                set_value(instr.bin.dst, builder.CreateICmpULT(lhs, rhs), l_bb);
+                break;
+            }
             case TOPC_RET: {
                 llvm::Value *retval = translate_value(&fn->retval, block, l_fn);
                 builder.CreateRet(retval);
