@@ -19,6 +19,12 @@ void link(const char* object_filename);
 
 int main(int argc, const char** argv) {
     init_utils();
+    arr<wchar_t*> path = read_path();
+
+    arr<wchar_t*> files;
+    util_read_dir(path[0], files);
+
+    return 0;
 
     if (!parse_args(argc, argv)) {
         return 1;

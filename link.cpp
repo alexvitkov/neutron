@@ -1,36 +1,16 @@
 #include "common.h"
 #include "util.h"
 #include "cmdargs.h"
-#include <dirent.h>
-
 
 bool link_nix(const char* object_filename) {
     bool has_ld = false;
     bool has_lld = false;
     
-    const char* path = env("PATH");
+    // const wchar_* path = env(L"PATH");
 
-    arr<const char*> path_entries;
+   
 
-    int pathl = strlen(path);
-    int start = 0;
-
-    for (int i = 0; i < pathl; i++) {
-        if (path[i] == ':') {
-            int length = i - start;
-            char* buf = (char*)malloc(length + 1);
-            memcpy(buf,  path + start, length);
-            path_entries.push(buf);
-
-            start = i + 1;
-        }
-    }
-
-    int length = pathl - start;
-    char* buf = (char*)malloc(length + 1);
-    memcpy(buf,  path + start, length);
-    path_entries.push(buf);
-
+    /*
     for (const char* dirname : path_entries) {
         DIR* dir;
         dirent *file;
@@ -49,6 +29,7 @@ bool link_nix(const char* object_filename) {
             }
         }
     }
+    */
 
     const char* linker;
     if (has_lld) {

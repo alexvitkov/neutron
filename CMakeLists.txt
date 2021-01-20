@@ -13,7 +13,7 @@ else()
     message(WARNING "gperf not found, keywords.gperf.gen.h won't be generated if you modify the keywords.gperf file")
 endif()
 
-add_executable(neutron
+set(NEUTRON_SOURCE_FILES
 	main.cpp
     link.cpp
 	ast.h ast.cpp
@@ -25,14 +25,31 @@ add_executable(neutron
 	typer.h typer.cpp
     backend/tir/tir.h backend/tir/tir.cpp
 	backend/llvm/llvm.h backend/llvm/llvm.cpp
-	util.h util.cpp
-	${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h
-)
+	util.h util_common.cpp
+	${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h)
 
-set_property(
-    TARGET neutron 
-    PROPERTY CXX_STANDARD 14
-)
+if(WIN32)
+	set(NEUTRON_PLATFORM_SPECIFIC_FILES
+		util_windows.cpp)
+else()
+	set(NEUTRON_PLATFORM_SPECIFIC_FILES
+		util_posix.cpp)
+endif()
+
+add_executable(neutron
+	${NEUTRON_SOURCE_FILES} ${NEUTRON_PLATFORM_SPECIFIC_FILES})
+
+# TODO this is ridiculous
+# 
+# MSVC requires C++20 for designated initializers which are used all around the codebase
+# This is fine because they are in fact a C++20 feature, 
+# but the some LLVM headers don't compile under C++20 on GCC, and GCC supports designated initializers
+# as an extension even in older standards, so for compilers other than MSVC we set the standard to C++14
+if(MSVC)
+	set_property(TARGET neutron PROPERTY CXX_STANDARD 20)
+else()
+	set_property(TARGET neutron PROPERTY CXX_STANDARD 14)
+endif()
 
 
 # LLVM_CONFIG_PATH must be a valid executable

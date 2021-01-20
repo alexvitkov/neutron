@@ -141,7 +141,7 @@ struct NumberData {
 };
 
 struct SmallToken {
-    TokenType type;
+    enum TokenType type;
     
     union {
         const char* name;
