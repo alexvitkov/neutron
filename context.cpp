@@ -5,7 +5,11 @@
 Context::Context(Context* parent)
     : parent(parent), 
       global(parent ? parent->global : (GlobalContext*)this), 
-      fn(parent ? parent->fn : nullptr) { }
+      fn(parent ? parent->fn : nullptr) 
+{ 
+    if (parent)
+        parent->children.push(this);
+}
 
 u32 map_hash(DeclarationKey key) {
     u32 hash = 0;

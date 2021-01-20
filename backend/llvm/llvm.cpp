@@ -167,6 +167,10 @@ llvm::Value* T2L_BlockContext::get_value(TIR_Value* tir_val) {
             return fn->llvm_fn->arg_begin() + tir_val->offset;
         }
 
+        case TVS_STACK: {
+            return fn->stack_pointers[tir_val];
+        }
+
         default:
             assert(!"Not implemented");
     }
@@ -325,6 +329,58 @@ void T2L_FunctionContext::compile() {
         blocks.push(t2l_block);
         block_translation[tir_block] = t2l_block;
     }
+
+    if (blocks.size > 0) {
+        // Allocate all the variables that MUST be on the stack
+        auto& builder = t2l_context->builder;
+        builder.SetInsertPoint(blocks[0]->llvm_block);
+
+        arr<Context*> rem = { &ast_fn->block.ctx };
+
+        for (int i = 0; i < tir_fn->values.size; i++) {
+
+            TIR_Value& val_ref = tir_fn->values[i];
+
+            if (val_ref.valuespace == TVS_STACK) {
+
+                AST_PointerType *val_ptr_type = (AST_PointerType*)val_ref.type;
+
+                AST_Type *inner_type = val_ptr_type->pointed_type;
+                llvm::Type* llvm_type = t2l_context->get_llvm_type(inner_type);
+
+                llvm::Value* llvm_var_pointer = builder.CreateAlloca(llvm_type);
+                stack_pointers[&val_ref] = llvm_var_pointer;
+            }
+        }
+    }
+
+
+
+    // We can't use an iterator here because we add elements to the array during the loop
+    /*
+    for (u32 index = 0; index < rem.size; index ++) {
+        Context* current = rem[index];
+
+        for (auto decl : current->declarations) {
+            if (decl.value->nodetype == AST_VAR) {
+                AST_Var* var = (AST_Var*)decl.value;
+
+                if (var->always_on_stack) {
+                    llvm::Type* llvm_type = t2l_context->get_llvm_type(var->type);
+
+                    llvm::Value* llvm_var_pointer = builder.CreateAlloca(llvm_type);
+                    blocks[0]->modified_values[var] = llvm_var_pointer;
+                }
+            }
+
+            for (auto child : current->children)
+                rem.push(child);
+        }
+    }
+    */
+
+
+
 
     for (T2L_BlockContext* block : blocks)
         block->prepass();

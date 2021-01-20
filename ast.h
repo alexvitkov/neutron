@@ -150,8 +150,16 @@ struct AST_Var : AST_Value {
 
     bool is_global;
 
+    // If anywhere we take the address of this variable it must explicitly be stored on the stack
+    bool always_on_stack;
+
     inline AST_Var(const char* name, i64 argindex)
-        : AST_Value(AST_VAR, nullptr), name(name), argindex(argindex), initial_value(nullptr), is_global(false) {};
+        : AST_Value(AST_VAR, nullptr), 
+          name(name), 
+          argindex(argindex), 
+          initial_value(nullptr), 
+          is_global(false),
+          always_on_stack(false) {};
 };
 
 struct AST_Number : AST_Value {

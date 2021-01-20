@@ -11,6 +11,7 @@ enum TIR_ValueSpace : u8 {
     TVS_RET_VALUE,
     TVS_TEMP,
     TVS_VALUE,
+    TVS_STACK,
 };
 
 #define TOPC_MODIFIES_DST_BIT 0x80
@@ -117,6 +118,8 @@ struct TIR_Function {
     TIR_Value retval = { .valuespace = TVS_RET_VALUE };
     TIR_Block* writepoint;
     u64 temp_offset = 0;
+    u64 stack_offset = 0;
+
     map<AST_Value*, TIR_Value*> _valmap;
 
     // Blocks are stored in the order they need to be compiled in
@@ -128,6 +131,7 @@ struct TIR_Function {
     TIR_Function(TIR_Context& c, AST_Fn* fn) : ast_fn(fn), c(c) {};
 
     TIR_Value* alloc_temp(AST_Type* type);
+    TIR_Value* alloc_stack(AST_Type* type);
     TIR_Value* alloc_val(TIR_Value val);
     void free_temp(TIR_Value* val);
     void emit(TIR_Instruction instr);

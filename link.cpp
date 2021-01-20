@@ -41,6 +41,7 @@ bool link_nix(const char* object_filename) {
 
         while ((file = readdir(dir)) != 0) {
             const char* fname = file->d_name;
+
             if (!strcmp(fname, "ld")) {
                 has_ld = true;
             } else if (!strcmp(fname, "ld.lld")) {
@@ -60,7 +61,6 @@ bool link_nix(const char* object_filename) {
         fprintf(stderr, "%s\n", "no linker found in path. searched for 'ld.lld' and 'ld'");
         return false;
     }
-
 
     arr<const char*> linker_args = { linker, object_filename, "-o", output_file, "-lc", "-L", "/lib", "--dynamic-linker=/lib/ld-linux-x86-64.so.2" };
 

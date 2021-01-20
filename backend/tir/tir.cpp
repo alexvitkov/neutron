@@ -16,6 +16,14 @@ TIR_Value* TIR_Function::alloc_temp(AST_Type* type) {
     });
 }
 
+TIR_Value* TIR_Function::alloc_stack(AST_Type* type) {
+    return &values.push({
+        .valuespace = TVS_STACK,
+        .offset = temp_offset++,
+        .type = type,
+    });
+}
+
 TIR_Value* TIR_Function::alloc_val(TIR_Value val) {
     return &values.push(val);
 }
@@ -40,6 +48,9 @@ std::ostream& operator<< (std::ostream& o, TIR_Value& val) {
             break;
         case TVS_TEMP:
             o << "$" << val.offset;
+            break;
+        case TVS_STACK:
+            o << "stack" << val.offset;
             break;
         case TVS_GLOBAL:
             o << "@" << val.offset;
@@ -149,8 +160,9 @@ TIR_Value* store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
         case AST_VAR: {
             AST_Var* var = (AST_Var*)dst;
 
-            if (var->is_global) {
-                TIR_Value* ptrloc = fn.c.valmap[var];
+            if (var->is_global || var->always_on_stack) {
+                TIR_Value* ptrloc = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
+
                 TIR_Value* srcloc = compile_node_rvalue(fn, src, nullptr);
                 fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
                 return ptrloc;
@@ -182,14 +194,11 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
     for (auto& kvp : ast_block->ctx.declarations) {
         AST_Node* decl = kvp.value;
 
-        // TODO RETURNTYPE
-        if (!strcmp(kvp.key.name, "returntype"))
-            continue;
-
         switch (decl->nodetype) {
             case AST_VAR: {
                 AST_Var* vardecl = (AST_Var*)decl;
                 TIR_Value* val;
+
 
                 if (vardecl->argindex >= 0) {
                     val = fn.alloc_val({
@@ -197,7 +206,11 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
                         .offset = (u64)vardecl->argindex,
                         .type = vardecl->type
                     });
-                } else {
+                } 
+                else if (vardecl->always_on_stack) {
+                    val = fn.alloc_stack(get_pointer_type(vardecl->type));
+                } 
+                else {
                     val = fn.alloc_temp(vardecl->type);
                 }
 
@@ -252,8 +265,8 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
 
-            if (var->is_global) {
-                TIR_Value* ptrloc = fn.c.valmap[var];
+            if (var->is_global || var->always_on_stack) {
+                TIR_Value* ptrloc = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
                 assert(ptrloc);
 
                 if (!dst)
@@ -408,7 +421,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         }
 
         case AST_ASSIGNMENT: {
-            AST_BinaryOp* assign = (AST_BinaryOp*)node;
+            AST_BinaryOp *assign = (AST_BinaryOp*)node;
             TIR_Value* tv = store(fn, assign->lhs, assign->rhs);
 
             if (!dst) {
@@ -420,7 +433,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         }
 
         case AST_DEREFERENCE: {
-            AST_Dereference* deref = (AST_Dereference*)node;
+            AST_Dereference *deref = (AST_Dereference*)node;
 
             TIR_Value* ptrloc = fn.alloc_temp(deref->ptr->type);
             compile_node_rvalue(fn, deref->ptr, ptrloc);
@@ -433,6 +446,19 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                 .un = { .dst = dst, .src = ptrloc }
             });
             return dst;
+        }
+
+        case AST_ADDRESS_OF: {
+            AST_AddressOf *addrof = (AST_AddressOf*)node;
+
+            switch (addrof->inner->nodetype) {
+                case AST_VAR: {
+                    AST_Var* var = (AST_Var*)addrof->inner;
+                    return var->is_global ? fn.c.valmap[var] : fn._valmap[var];
+                }
+                default:
+                    assert(!"Not implemented");
+            }
         }
 
         case AST_IF: {
@@ -513,6 +539,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             fn.writepoint = continuation;
             break;
         }
+
         case AST_STRING_LITERAL: {
             AST_StringLiteral* str = (AST_StringLiteral*)node;
 
@@ -598,7 +625,8 @@ void TIR_Context::compile_all() {
                 });
                 valmap[(AST_Value*)decl.value] = &val;
                 break;
-            } }
+            } 
+        }
     }
 
     for(auto& decl : global.declarations) {

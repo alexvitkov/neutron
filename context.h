@@ -34,6 +34,7 @@ struct Context {
     Context* parent;
 
     AST_Fn* fn; // the function that this context is a part of
+    arr<Context*> children;
 
     Context(Context* parent);
     Context(Context&) = delete;
@@ -45,6 +46,11 @@ struct Context {
 
     template <typename T, typename ... Ts>
     T* alloc(Ts &&...args);
+
+    struct RecursiveDefinitionsIterator {
+        i64 index = 0;
+        arr<Context*> remaining;
+    };
 
     // In the temp allocator we store:
     //    1. AST_UnresolvedIds

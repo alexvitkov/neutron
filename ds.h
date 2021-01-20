@@ -318,15 +318,15 @@ struct bucketed_arr {
     }
 
     T operator[](u32 i) const {
-        u32 bucket = i % BUCKET_SIZE;
-        u32 index = i / BUCKET_SIZE;
+        u32 bucket = i / BUCKET_SIZE;
+        u32 index = i % BUCKET_SIZE;
 
         return buckets[bucket][index];
     }
 
     T& operator[](u32 i) {
-        u32 bucket = i % BUCKET_SIZE;
-        u32 index = i / BUCKET_SIZE;
+        u32 bucket = i / BUCKET_SIZE;
+        u32 index = i % BUCKET_SIZE;
 
         return buckets[bucket][index];
     }

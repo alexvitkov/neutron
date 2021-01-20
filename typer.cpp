@@ -282,6 +282,12 @@ bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr) {
             return true;
         }
 
+        case AST_ADDRESS_OF: {
+            AST_AddressOf* addrof = (AST_AddressOf*)node;
+            MUST (resolve_unresolved_references(global, (AST_Node**)&addrof->inner));
+            return true;
+        }
+
         case AST_RETURN: {
             AST_Return* ret = (AST_Return*)node;
             MUST (resolve_unresolved_references(global, (AST_Node**)&ret->value));
@@ -640,6 +646,10 @@ Error:
             MUST (inner_type);
 
             addrof->type = get_pointer_type(inner_type);
+
+            if (addrof->inner->nodetype == AST_VAR) {
+                ((AST_Var*)addrof->inner)->always_on_stack = true;
+            }
             return addrof->type;
         }
 

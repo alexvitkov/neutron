@@ -52,6 +52,7 @@ struct T2L_FunctionContext {
     arr<T2L_BlockContext*> blocks;
 
     map<TIR_Block*, T2L_BlockContext*> block_translation;
+    map<TIR_Value*, llvm::Value*> stack_pointers;
 
     void compile_header();
     void compile();

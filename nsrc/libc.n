@@ -1,0 +1,9 @@
+
+
+fn printf(str: i8*, ...);
+
+fn scanf(str: i8*, ...): i32;
+
+fn malloc(size: u64): u8*;
+
+fn free(ptr: u8*): u8*;
