@@ -101,7 +101,7 @@ bool parse_args(int argc, const char** argv) {
 
     // If there's no output file we're assuming the user wants an executable with the default name
     if (!output_file) {
-        output_file = TARGET_WINDOWS ? "main.exe" : "a.out";
+        output_file = target == TARGET_WINDOWS ? "main.exe" : "a.out";
         output_type = OUTPUT_LINKED_EXECUTABLE;
     } else {
 
