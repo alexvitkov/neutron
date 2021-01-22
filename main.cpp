@@ -2,6 +2,7 @@
 #include "ast.h"
 #include "cmdargs.h"
 #include "error.h"
+#include "linker.h"
 #include "util.h"
 #include "backend/tir/tir.h"
 #include "backend/llvm/llvm.h"
@@ -19,12 +20,6 @@ void link(const char* object_filename);
 
 int main(int argc, const char** argv) {
     init_utils();
-    arr<wchar_t*> path = read_path();
-
-    arr<wchar_t*> files;
-    util_read_dir(path[0], files);
-
-    return 0;
 
     if (!parse_args(argc, argv)) {
         return 1;
@@ -81,7 +76,16 @@ int main(int argc, const char** argv) {
     const char* object_filename = lllvmcon.output_object();
 
     if (output_type == OUTPUT_LINKED_EXECUTABLE) {
-        link(object_filename);
+        // link(object_filename);
+        if (has_msvc_linker) {
+            std::string of = object_filename;
+            std::wstring object_filename_w(of.begin(), of.end());
+
+            std::string ouf = output_file;
+            std::wstring output_filename_w(ouf.begin(), ouf.end());
+
+            link(msvc_linker, object_filename_w, output_filename_w);
+        }
     }
 
     return 0;

@@ -15,7 +15,7 @@ endif()
 
 set(NEUTRON_SOURCE_FILES
 	main.cpp
-    link.cpp
+    linker.h link.cpp
 	ast.h ast.cpp
 	context.h context.cpp
 	ds.h ds.cpp
@@ -30,14 +30,29 @@ set(NEUTRON_SOURCE_FILES
 
 if(WIN32)
 	set(NEUTRON_PLATFORM_SPECIFIC_FILES
-		util_windows.cpp)
+		util_windows.cpp
+	)
+	
 else()
 	set(NEUTRON_PLATFORM_SPECIFIC_FILES
-		util_posix.cpp)
+		util_posix.cpp
+	)
 endif()
 
 add_executable(neutron
 	${NEUTRON_SOURCE_FILES} ${NEUTRON_PLATFORM_SPECIFIC_FILES})
+
+if(WIN32)
+	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+		target_link_libraries(neutron 
+			${CMAKE_SOURCE_DIR}/support/Microsoft.VisualStudio.Setup.Configuration.Native/v141/x64/Microsoft.VisualStudio.Setup.Configuration.Native.lib)
+	else()
+		target_link_libraries(neutron 
+			${CMAKE_SOURCE_DIR}/support/Microsoft.VisualStudio.Setup.Configuration.Native/v141/x86/Microsoft.VisualStudio.Setup.Configuration.Native.lib)
+	endif()
+	target_include_directories(neutron PUBLIC
+		${CMAKE_SOURCE_DIR}/support/Microsoft.VisualStudio.Setup.Configuration.Native/include)
+endif()
 
 # TODO this is ridiculous
 # 

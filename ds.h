@@ -203,7 +203,7 @@ struct arr {
     arr(std::initializer_list<T> init) : arr(init.size()) {
         u32 i = 0;
         for (const auto& v : init) {
-            buffer[i] = v;
+            new (&buffer[i]) T(v);
             i++;
         }
         size = i;
@@ -271,7 +271,10 @@ struct arr {
     T& push(T value) {
         if (size >= capacity)
             realloc();
-        buffer[size++] = std::move(value);
+
+        T* ptr = &buffer[size++];
+        new (ptr) T(value);
+
         return buffer[size - 1];
     }
 
@@ -294,7 +297,6 @@ struct arr {
 
     T* begin() { return buffer; }
     T* end()   { return buffer + size; }
-
 };
 
 
