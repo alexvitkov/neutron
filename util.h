@@ -22,7 +22,7 @@ std::ostream& operator<<(std::ostream&, Dim& r);
 void init_utils();
 int exec(const char* programname, arr<const char*>& args);
 
-wchar_t* env(const wchar_t* var);
+wchar_t* env(const char* var);
 
 // You should free all the entries of read_path when done
 arr<wchar_t*> read_path();
