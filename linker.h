@@ -18,10 +18,21 @@ struct MSVCLinker {
 		windows_sdk_version;
 };
 
-bool link(MSVCLinker& linker, const std::wstring& object_name, const std::wstring& output_path) ;
 
+
+// MSVC linker is either the GNU ld or LLVM ld.lld
+struct LDLinker {
+    std::wstring path;
+};
+
+bool link(LDLinker& linker, const std::wstring& object_name, const std::wstring& output_path);
+bool link(MSVCLinker& linker, const std::wstring& object_name, const std::wstring& output_path);
 
 extern bool has_msvc_linker;
 extern MSVCLinker msvc_linker;
+
+extern bool has_gnu_ld;
+extern bool has_lld;
+extern LDLinker gnu_ld, lld;
 
 #endif // guard

@@ -35,8 +35,6 @@ arr<VisualStudioInstall> visual_studio_installs;
 
 
 bool find_msvc_linker() {
-    has_msvc_linker = false;
-
     ISetupConfigurationPtr setupCfg;
     IEnumSetupInstancesPtr enumInstances;
 

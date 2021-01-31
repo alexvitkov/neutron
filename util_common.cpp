@@ -1,7 +1,7 @@
 #include "util.h"
 
 arr<wchar_t*> read_path() {
-    wchar_t* path = env(L"PATH");
+    wchar_t* path = env("PATH");
 
     arr<wchar_t*> path_entries;
 

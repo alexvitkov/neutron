@@ -15,7 +15,7 @@ endif()
 
 set(NEUTRON_SOURCE_FILES
 	main.cpp
-    linker.h link.cpp
+    linker.h linker.cpp
 	ast.h ast.cpp
 	context.h context.cpp
 	ds.h ds.cpp
@@ -32,7 +32,6 @@ if(WIN32)
 	set(NEUTRON_PLATFORM_SPECIFIC_FILES
 		util_windows.cpp
 	)
-	
 else()
 	set(NEUTRON_PLATFORM_SPECIFIC_FILES
 		util_posix.cpp

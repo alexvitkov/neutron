@@ -243,13 +243,17 @@ struct arr {
         size = other.size;
         capacity = other.capacity;
         buffer = (T*)malloc(sizeof(T) * capacity);
-        memcpy(buffer, other.buffer, sizeof(T) * size);
+
+        for (u32 i = 0; i < size; i++)
+            new (&buffer[i]) T (other.buffer[i]);
     }
 
     void realloc() {
         capacity *= 2;
         T* new_buffer = (T*)malloc(sizeof(T) * capacity);
-        memcpy(new_buffer, buffer, sizeof(T) * size);
+        // memcpy(new_buffer, buffer, sizeof(T) * size);
+        for (u32 i = 0; i < size; i++)
+            new (&new_buffer[i]) T (std::move(buffer[i]));
         free(buffer);
         buffer = new_buffer;
     }

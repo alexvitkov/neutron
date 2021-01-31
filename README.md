@@ -1,46 +1,79 @@
 Курсов проект по Реализация на езици за програмиране на Александър Витков 
 
+## features / roadmap
+crossed out entries are in the roadmap, the rest just about works
+- primitive types
+	- unsigned integers
+	- ~~signed integers, floats~~
+	- math:
+		- operator +, -, *
+		- ~~every other operator~~
+- variables
+	- local variables
+	    - ~~pointers to variables on the stack~~
+	- global variables
+	    - pointers to global variables
+- functions
+	- variadic functions
+		- extern variadic functions
+		- ~~declaring variadic functions~~
+	- extern functions
+	- ~~overloading~~
+- pointers
+	- pointer math
+		- pointer + integer, pointer[integer]
+		- ~~pointer - pointer~~
+- casts
+	- implicit casting
+		- u8 -> u16 -> u32 -> u64
+		- u8 -> i16, u16 -> u32, u32 -> i64
+	- explicit casting
+		- casting pointer type A* to pointer type B*
+		- ~~downcasting (u32 -> u16)~~
+- ~~structs~~
+- compiler metafeatures
+    - spitting .o files
+	- linking a callable binary
+		- windows with msvc linker on x64, target windows x64
+			- link against windows SDK's libc (windows 10 SDK needed)
+			- ~~link directly against kernel32.dll~~
+		- linux with GNU linker/LLD, target x64 glibc linux
+		- ~~any other platform~~
 
-## Building neutron
-You need CMake for building both neutron and LLVM.
+
+## Building
+The build system is CMake and a LLVM build is needed. You need to provide the path to the **llvm-config[.exe]** binary via **-DLLVM_CONFIG_PATH=...** in the command line. llvm-config usually lives in llvm-root-dir/bin
 ```
 git clone https://github.com/alexvitkov/neutron
-cd neutron
-mkdir build
-cd build
+mkdir neutron/build
+cd    neutron/build
+
 cmake -DLLVM_CONFIG_PATH=C:\LLVM\bin\llvm-config.exe ..
 cmake --build .
 ```
-**Note the -DLLVM_CONFIG_PATH=...**
-You need to provide the path to `llvm-config` which lives in the 'bin' directory of the LLVM build.
 
+## LLVM
 
-## Precompiled LLVM binaries
-Precompiled LLVM binaries are provided for Windows 10 x64. 
-
-The only target this LLVM build supports is X86 and .pdb files are removed to reduce size.
+### Precompiled LLVM binaries
+Precompiled LLVM binaries are provided for Windows 10 x64. The only target this build supports is X86.
 
 https://drive.google.com/file/d/13MR7SfBGOgTd3C6sdp9iWaL_lQ6T_S7D/view?usp=sharing (1.4G)
 
 
-## Compiling LLVM from source on Windows
-You will need MSVC. The easiest way to get it is to install Visual Studio, and from the Visual Studio Installer select the 'Desktop Development with C++' workload.
-
-Download and extract https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/llvm-11.0.0.src.tar.xz
-Enter the 'llvm-11.0.0.src' directory and create a 'build' subdirectory.
-
-### Using Visual Studio / MSBuild
+### Compiling LLVM from on Windows
+You will need MSVC. Download and extract https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/llvm-11.0.0.src.tar.xz and create a 'build' subdirectory
+#### Using Visual Studio / MSBuild
 From inside the 'build' directory initialize the CMake project:
 ```
 cmake -DLLVM_TARGETS=X86 ..
 ```
 This will generate a Visual Studio solution for building LLVM.
 
-### Using Ninja
-You will have to source one of the `vcvarsall` batch files that come with MSVC in order to initialize the compiler environment variables needed for MSVC. 
-If you installed MSVC via Visual Studio, search in your Start Menu for `x64 Native Tools Command Prompt for Visual Studio 2019`. It will open a cmd prompt, from which you can navigate to the LLVM 'build' subdirectory you created earlier.
+#### Using Ninja
+You will have to source one of the `vcvarsall` batch files that come with MSVC to initialize the environment variables needed for MSVC. 
+Search Start Menu for `x64 Native Tools Command Prompt`. It will open a cmd prompt, from which you can navigate to the LLVM 'build' subdirectory.
 
-If you want to use clang for the build, set the following environment variables:
+If you want to use clang instead of MSVC for the build, set the following. You still need MSVC for the linker & libraries:
 ```
 set  CC=C:\Program Files\LLVM\bin\clang-cl.exe
 set CXX=C:\Program Files\LLVM\bin\clang-cl.exe
@@ -51,16 +84,15 @@ cmake -DLLVM_TARGETS=X86 -G Ninja ..
 cmake --build .
 ```
 
-## Compiling LLVM from source on *nix
-This is assuming Ninja is installed. If you want to use a Makefile instead, omit the `-G Ninja` from the cmake command, but the official documentation recommends using Ninja for building LLVM.
+### Compiling LLVM from source on *nix
 ```bash
 wget https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/llvm-11.0.0.src.tar.xz
 tar xf llvm-11.0.0.src.tar.xz
 cd llvm-11.0.0.src
 mkdir build
-cd build
+cd    build
 ```
-If you want to build LLVM with clang instead of GCC, set the CC and CXX environment variables:
+If you want to use clang instead of GCC, set CC and CXX:
 ```
 export  CC=$(which clang)
 export CXX=$(which clang++)
@@ -70,16 +102,6 @@ Then build:
 cmake -DLLVM_TARGETS=X86 -G Ninja ..
 cmake --build .
 ```
-
-
-##  Installing LLVM from a Linux package manager
-| Distro | Command to install LLVM | LLVM Version |
-|--|--|--|
-| Arch | `pacman -S llvm` | 11.0 |
-| Debian | `apt-get install llvm` | stable - 7.0.0, testing - 11.0 |
-| Fedora 32 | `yum install llvm` | 10.0 |
-
-
 
 
 
