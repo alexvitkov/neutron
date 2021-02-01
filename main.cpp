@@ -45,7 +45,7 @@ int main(int argc, const char** argv) {
 
         for (const auto& decl : global.declarations) {
             print(wcout, decl.value, true);
-            std::cout << '\n';
+            wcout << '\n';
 
         }
     }
@@ -60,7 +60,7 @@ int main(int argc, const char** argv) {
         for (auto& kvp : t_c.fns) {
             kvp.value->print();
         }
-        std::cout.flush();
+        wcout.flush();
     }
     // return 0;
 

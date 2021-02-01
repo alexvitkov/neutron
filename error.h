@@ -41,7 +41,7 @@ enum ErrorSeverity {
 
 struct ArgumentErr {
     const char* arg_name;
-    AST_Node** arg_type_ptr;
+    AST_Node* arg_type;
     u64 arg_index;
 };
 

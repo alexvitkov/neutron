@@ -223,8 +223,14 @@ void T2L_BlockContext::compile() {
                 break;
             }
             case TOPC_RET: {
-                llvm::Value *retval = get_value(&fn->tir_fn->retval);
-                builder.CreateRet(retval);
+                // TODO t_void
+                if (((AST_FnType*)fn->tir_fn->ast_fn->type)->returntype != &t_void) {
+                    llvm::Value *retval = get_value(&fn->tir_fn->retval);
+                    builder.CreateRet(retval);
+                }
+                else {
+                    builder.CreateRetVoid();
+                }
                 break;
             }
             case TOPC_CALL: {

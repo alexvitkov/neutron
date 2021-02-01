@@ -9,10 +9,9 @@ crossed out entries are in the roadmap, the rest just about works
 		- operator +, -, *
 		- ~~every other operator~~
 - variables
-	- local variables
-	    - ~~pointers to variables on the stack~~
-	- global variables
-	    - pointers to global variables
+	- local
+	- global
+    - pointers to variables
 - functions
 	- variadic functions
 		- extern variadic functions

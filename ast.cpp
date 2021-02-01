@@ -121,6 +121,7 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
 }
 
 std::wostream& operator<< (std::wostream& o, AST_Node* node) {
+    // o.flush();
     print(o, node, false);
     return o;
 }

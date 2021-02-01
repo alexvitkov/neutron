@@ -275,6 +275,7 @@ void print(std::wostream& o, AST_Var* node, bool decl);
 void print(std::wostream& o, AST_Struct* node, bool decl);
 void print(std::wostream& o, AST_BinaryOp* node, bool brackets);
 
+std::wostream& operator<<(std::wostream& o, AST_Node* node);
 std::wostream& operator<<(std::wostream& o, AST_PrimitiveType* node);
 std::wostream& operator<<(std::wostream& o, AST_Return* node);
 std::wostream& operator<<(std::wostream& o, AST_Cast* node);

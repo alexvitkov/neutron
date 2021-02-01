@@ -432,7 +432,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                             },
                             .args = {{  
                                 .arg_name = fn->argument_names[i],
-                                .arg_type_ptr = (AST_Node**)&param_type,
+                                .arg_type= param_type,
                                 .arg_index = (u64)i
                             }}
                         });

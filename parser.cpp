@@ -283,33 +283,54 @@ bool tokenize(Context& global, SourceFile &s) {
 			}
 		}
 
+        arr<char> string_literals;
+
         if (c == '"') {
             word_start = i + 1;
 
             u64 string_start_line = line;
             // Look for the matching "
-            do {
+            while (true) {
                 i++;
-                if (s.buffer[i] == '\n') {
-                    NOT_IMPLEMENTED("Multiline string");
+                if (i == s.length) {
+                    NOT_IMPLEMENTED("TODO ERROR");
                 }
-            } while (s.buffer[i] != '"' && i < s.length);
 
-            u64 length = i - word_start;
+                switch (s.buffer[i]) {
+                    case '\\': {
+                        i++;
+                        if (i == s.length) NOT_IMPLEMENTED("TODO ERROR");
+                        
+                        switch (s.buffer[i]) {
+                            case 'a':  string_literals.push('\a'); break;
+                            case 'b':  string_literals.push('\b'); break;
+                            case 'f':  string_literals.push('\f'); break;
+                            case 'n':  string_literals.push('\n'); break;
+                            case 'r':  string_literals.push('\r'); break;
+                            case 't':  string_literals.push('\t'); break;
+                            case 'v':  string_literals.push('\v'); break;
+                            default:
+                                string_literals.push(s.buffer[i]);
+                                break;
+                        }
 
-            // Unexpected EOF
-            // TODO ERROR
-            if (i == s.length) {
-                unexpected_token(global, {}, TOK('"'));
-                return false;
-            }
+                        break;
+                    }
+                    case '"': {
+                        goto Done;
+                    }
+                    default: {
+                        string_literals.push(s.buffer[i]);
+                        break;
+                    }
+                }
+            } while (true);
 
-            char* contents = (char*)malloc(length + 1);
-            memcpy(contents, s.buffer + word_start, length);
-            contents[length] = 0;
-            
+Done:
+            // TODO remove this
+            string_literals.push(0);
             s.pushToken(
-                { .type = TOK_STRING_LITERAL, .name = contents },
+                { .type = TOK_STRING_LITERAL, .name = string_literals.release().buffer },
                 { .start = word_start, .end = i + 1 });
         }
 
@@ -1096,7 +1117,6 @@ AST_Struct* parse_struct(Context& ctx, TokenReader& r, bool decl) {
 
     return st;
 }
-
 
 bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error) {
     switch (r.peek().type) {

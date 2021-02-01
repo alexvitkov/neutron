@@ -2,6 +2,7 @@
 #include "context.h"
 #include "ast.h"
 #include <algorithm>
+#include <iomanip>
 
 
 enum VirtualTokens {
@@ -12,23 +13,20 @@ void print_line(Context& global, SourceFile& sf, i64 line, arr<Location>& red_to
     if (line < 0 || line > sf.line_start.size)
         return;
 
-    wcout << dim;
-    printf(" %*ld │ ", 5, line + 1);
-    wcout << resetstyle;
+    wcout << dim << std::setw(6) << line + 1 << L" │ " << resetstyle;
 
     u64 line_start = sf.line_start[(u32)line];
 
     for (u64 i = line_start; i < sf.length && sf.buffer[i] != '\n'; i++) {
 
         for (Location& loc : red_tokens) {
-            if (loc.file_id == sf.id && loc.loc.start == i) {
+            if (loc.file_id == sf.id && loc.loc.start == i)
                 wcout << red;
-            }
             if (loc.file_id ==sf.id && loc.loc.end == i)
                 wcout << resetstyle;
         }
 
-        putc(sf.buffer[i], stdout);
+        wcout << sf.buffer[i];
     }
     wcout << resetstyle << '\n';
 }
@@ -184,7 +182,7 @@ void print_err(Context& global, Error& err) {
             wcout << "Expected the ";
             th(arg.arg_index + 1);
             wcout << " argument to be of type " 
-                << red << *arg.arg_type_ptr << resetstyle 
+                << red << arg.arg_type << resetstyle 
                 << " but instead got " << oftype(src) << ":\n";
 
             print_code_segment(global, nullptr, nullptr, &err.node_ptrs);
@@ -277,7 +275,7 @@ void print_err(Context& global, Error& err) {
         }
 
         default: {
-            printf("Error %d.\n", err.code);
+            wcout << "Error " << err.code << std::endl;
             print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
         }
 

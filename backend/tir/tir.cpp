@@ -140,14 +140,14 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
 void TIR_Function::print() {
 
     if (ast_fn->is_extern) {
-        std::cout << "extern fn " << ast_fn->name << "...\n";
+        wcout << "extern fn " << ast_fn->name << "...\n";
         return;
     }
 
-    std::cout << "fn " << ast_fn->name << ":\n";
+    wcout << "fn " << ast_fn->name << ":\n";
 
     for (TIR_Block* block : blocks) {
-        std::cout << "  block" << block->id << ":\n";
+        wcout << "  block" << block->id << ":\n";
         for (auto& instr : block->instructions)
             wcout << instr;
     }
@@ -396,7 +396,9 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
 
         case AST_RETURN: {
             AST_Return* ret = (AST_Return*)node;
-            TIR_Value* retval = compile_node_rvalue(fn, ret->value, &fn.retval);
+
+            if (ret->value)
+                TIR_Value* retval = compile_node_rvalue(fn, ret->value, &fn.retval);
 
             fn.emit({ .opcode = TOPC_RET, .none = {} });
             break;
