@@ -113,5 +113,6 @@ T* Context::alloc_temp(Ts &&...args) {
 
 Location location_of(Context& ctx, AST_Node** node);
 bool parse_all(Context& global);
+bool parse_source_file(Context& global, SourceFile& sf);
 
 #endif // guard

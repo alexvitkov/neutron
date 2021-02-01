@@ -1,4 +1,5 @@
 *.o
+main.exe
 .cache
 ntr
 a.out

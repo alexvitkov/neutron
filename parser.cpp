@@ -1141,15 +1141,15 @@ bool parse_top_level(Context& ctx, TokenReader r) {
     return true;
 }
 
-bool parse_all(Context& global) {
-    for (SourceFile& sf : sources) {
-        MUST (tokenize(global, sf));
-        TokenReader r { .sf = sf, .ctx = global };
-    }
-    for (SourceFile& sf : sources) {
-        TokenReader r { .sf = sf, .ctx = global };
-        MUST (parse_top_level(global, r));
-    }
+bool parse_source_file(Context& global, SourceFile& sf) {
+    TokenReader r { .sf = sf, .ctx = global };
+    MUST (tokenize(global, sf));
+    MUST (parse_top_level(global, r));
+    return true;
+}
 
+bool parse_all(Context& global) {
+    for (SourceFile& sf : sources)
+        MUST (parse_source_file(global, sf));
     return true;
 }

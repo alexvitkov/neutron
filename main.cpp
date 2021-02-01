@@ -41,10 +41,10 @@ int main(int argc, const char** argv) {
 
     // Print the source code
     if (debug_output) {
-        std::cout << red << "--------- AST ---------\n" << resetstyle;
+        wcout << red << "--------- AST ---------\n" << resetstyle;
 
         for (const auto& decl : global.declarations) {
-            print(std::cout, decl.value, true);
+            print(wcout, decl.value, true);
             std::cout << '\n';
 
         }
@@ -55,7 +55,7 @@ int main(int argc, const char** argv) {
 
     // Print the TIR
     if (debug_output) {
-        std::cout << red << "\n--------- TIR ---------\n" << resetstyle;
+        wcout << red << "\n--------- TIR ---------\n" << resetstyle;
 
         for (auto& kvp : t_c.fns) {
             kvp.value->print();
@@ -65,7 +65,7 @@ int main(int argc, const char** argv) {
     // return 0;
 
     if (debug_output) {
-        std::cout << red << "\n------- LLVM IR -------\n" << resetstyle;
+        wcout << red << "\n------- LLVM IR -------\n" << resetstyle;
         // The LLVM IR is pritned by the compile_all function
     }
     fflush(stdout);

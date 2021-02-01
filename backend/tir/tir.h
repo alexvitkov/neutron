@@ -139,7 +139,7 @@ struct TIR_Function {
     void print();
 };
 
-std::ostream& operator<< (std::ostream& o, TIR_Value& loc);
-std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr);
+std::wostream& operator<< (std::wostream& o, TIR_Value& loc);
+std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr);
 
 #endif // guard

@@ -14,36 +14,37 @@ else()
 endif()
 
 set(NEUTRON_SOURCE_FILES
-	main.cpp
-    linker.h linker.cpp
-	ast.h ast.cpp
-	context.h context.cpp
-	ds.h ds.cpp
-	error.h error.cpp
-	parser.cpp
-	cmdargs.h cmdargs.cpp
-	typer.h typer.cpp
-    backend/tir/tir.h backend/tir/tir.cpp
+    linker.h    linker.cpp
+	ast.h       ast.cpp
+	context.h   context.cpp
+	ds.h        ds.cpp
+	error.h     error.cpp
+	            parser.cpp
+	cmdargs.h   cmdargs.cpp
+	typer.h     typer.cpp
+    backend/tir/tir.h   backend/tir/tir.cpp
 	backend/llvm/llvm.h backend/llvm/llvm.cpp
-	util.h util_common.cpp
+	util.h              util_common.cpp
 	${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h)
 
 if(WIN32)
 	set(NEUTRON_PLATFORM_SPECIFIC_FILES
-		util_windows.cpp
-	)
+		util_windows.cpp)
 else()
 	set(NEUTRON_PLATFORM_SPECIFIC_FILES
-		util_posix.cpp
-	)
+		util_posix.cpp)
 endif()
 
 add_executable(neutron
-	${NEUTRON_SOURCE_FILES} ${NEUTRON_PLATFORM_SPECIFIC_FILES})
+	main.cpp ${NEUTRON_SOURCE_FILES} ${NEUTRON_PLATFORM_SPECIFIC_FILES})
 
+add_executable(test
+	test.cpp ${NEUTRON_SOURCE_FILES} ${NEUTRON_PLATFORM_SPECIFIC_FILES})
+
+# Link against the thing that finds Visual Studio on Windows hosts
 if(WIN32)
 	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		target_link_libraries(neutron 
+		target_link_libraries(neutron
 			${CMAKE_SOURCE_DIR}/support/Microsoft.VisualStudio.Setup.Configuration.Native/v141/x64/Microsoft.VisualStudio.Setup.Configuration.Native.lib)
 	else()
 		target_link_libraries(neutron 
@@ -61,8 +62,10 @@ endif()
 # as an extension even in older standards, so for compilers other than MSVC we set the standard to C++14
 if(MSVC)
 	set_property(TARGET neutron PROPERTY CXX_STANDARD 20)
+	set_property(TARGET test    PROPERTY CXX_STANDARD 20)
 else()
 	set_property(TARGET neutron PROPERTY CXX_STANDARD 14)
+	set_property(TARGET test    PROPERTY CXX_STANDARD 14)
 endif()
 
 
@@ -83,6 +86,7 @@ execute_process(
 )
 separate_arguments(LLVM_LIBS_SPLIT NATIVE_COMMAND ${LLVM_LIBS})
 target_link_libraries(neutron ${LLVM_LIBS_SPLIT})
+target_link_libraries(test    ${LLVM_LIBS_SPLIT})
 
 
 # Get the LLVM include directories

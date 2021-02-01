@@ -48,7 +48,7 @@ AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_L
     str = stringToken.name;
 }
 
-std::ostream& operator<< (std::ostream& o, arr<NamedType>& tl) {
+std::wostream& operator<< (std::wostream& o, arr<NamedType>& tl) {
     for (const auto& entry : tl) {
         o << entry.name << ": " << entry.type << ", ";
     }
@@ -57,12 +57,12 @@ std::ostream& operator<< (std::ostream& o, arr<NamedType>& tl) {
     return o;
 }
 
-void indent_line(std::ostream& o) {
+void indent_line(std::wostream& o) {
     for (int i = 0; i < indent; i++)
         o << "    ";
 }
 
-std::ostream& operator<< (std::ostream& o, AST_Block* bl) {
+std::wostream& operator<< (std::wostream& o, AST_Block* bl) {
     indent ++;
     o << "{ \n";
 
@@ -95,7 +95,7 @@ std::ostream& operator<< (std::ostream& o, AST_Block* bl) {
     return o;
 }
 
-void print(std::ostream& o, AST_Node* node, bool decl) {
+void print(std::wostream& o, AST_Node* node, bool decl) {
     switch (node->nodetype) {
         case AST_FN:             print(o, (AST_Fn*)node, decl); break;
         case AST_BINARY_OP:      print(o, (AST_BinaryOp*)node, false); break;
@@ -120,12 +120,12 @@ void print(std::ostream& o, AST_Node* node, bool decl) {
     }
 }
 
-std::ostream& operator<< (std::ostream& o, AST_Node* node) {
+std::wostream& operator<< (std::wostream& o, AST_Node* node) {
     print(o, node, false);
     return o;
 }
 
-void print(std::ostream& o, AST_Fn* fn, bool decl) {
+void print(std::wostream& o, AST_Fn* fn, bool decl) {
     if (decl) {
         o << "fn ";
         if (fn->name)
@@ -160,13 +160,13 @@ void print(std::ostream& o, AST_Fn* fn, bool decl) {
     }
 }
 
-std::ostream& operator<< (std::ostream& o, AST_PrimitiveType* node) {
+std::wostream& operator<< (std::wostream& o, AST_PrimitiveType* node) {
     o << node->name;
     return o;
 }
 
 
-void print(std::ostream& o, AST_BinaryOp* node, bool brackets = false) {
+void print(std::wostream& o, AST_BinaryOp* node, bool brackets = false) {
     if (ALWAYS_BRACKETS || brackets)
         o << '(';
 
@@ -217,7 +217,7 @@ void print(std::ostream& o, AST_BinaryOp* node, bool brackets = false) {
         o << ')';
 }
 
-void print(std::ostream& o, AST_Var* node, bool decl) {
+void print(std::wostream& o, AST_Var* node, bool decl) {
     if (decl) {
         o << "let " << (node->name ? node->name : "_") << ": " << node->type;
         if (node->initial_value) {
@@ -233,7 +233,7 @@ void print(std::ostream& o, AST_Var* node, bool decl) {
     }
 }
 
-void print(std::ostream& o, AST_Struct* node, bool decl) {
+void print(std::wostream& o, AST_Struct* node, bool decl) {
     if (decl) {
         AST_Struct* str = (AST_Struct*)node;
         o << "struct ";
@@ -246,7 +246,7 @@ void print(std::ostream& o, AST_Struct* node, bool decl) {
     }
 }
 
-std::ostream& operator<< (std::ostream& o, AST_Return* node) {
+std::wostream& operator<< (std::wostream& o, AST_Return* node) {
     if (node->value) {
         o << "return " << node->value;
     } else {
@@ -255,27 +255,27 @@ std::ostream& operator<< (std::ostream& o, AST_Return* node) {
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_Cast* node) {
+std::wostream& operator<< (std::wostream& o, AST_Cast* node) {
     o << node->type << '(' << node->inner << ')';
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_Number* node) {
+std::wostream& operator<< (std::wostream& o, AST_Number* node) {
     o << node->floorabs;
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_If* node) {
+std::wostream& operator<< (std::wostream& o, AST_If* node) {
     o << "if " << node->condition << " " << &node->then_block;
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_While* node) {
+std::wostream& operator<< (std::wostream& o, AST_While* node) {
     o << "while " << node->condition << " " << &node->block;
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_FnCall* node) {
+std::wostream& operator<< (std::wostream& o, AST_FnCall* node) {
     o << node->fn << "(";
 
     for (AST_Value*& a : node->args) {
@@ -287,24 +287,24 @@ std::ostream& operator<< (std::ostream& o, AST_FnCall* node) {
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_PointerType* node) {
+std::wostream& operator<< (std::wostream& o, AST_PointerType* node) {
     o << node->pointed_type << '*';
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_ArrayType* node) {
+std::wostream& operator<< (std::wostream& o, AST_ArrayType* node) {
     o << node->base_type << '[' << node->array_length << ']';
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_MemberAccess* node) {
+std::wostream& operator<< (std::wostream& o, AST_MemberAccess* node) {
     if (ALWAYS_BRACKETS) o << '(';
     o << node->lhs << '.' << node->member_name;
     if (ALWAYS_BRACKETS) o << ')';
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_Dereference* node) {
+std::wostream& operator<< (std::wostream& o, AST_Dereference* node) {
     if (node->ptr->nodetype == AST_BINARY_OP || ALWAYS_BRACKETS) {
         o << '(' << node->ptr << ")*";
     } else {
@@ -313,17 +313,17 @@ std::ostream& operator<< (std::ostream& o, AST_Dereference* node) {
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_AddressOf* node) {
+std::wostream& operator<< (std::wostream& o, AST_AddressOf* node) {
     o << node->inner << '&';
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_UnresolvedId* node) {
+std::wostream& operator<< (std::wostream& o, AST_UnresolvedId* node) {
     o << node->name;
     return o;
 }
 
-std::ostream& operator<< (std::ostream& o, AST_StringLiteral* node) {
+std::wostream& operator<< (std::wostream& o, AST_StringLiteral* node) {
     o << '"' << node->str << '"';
     return o;
 }

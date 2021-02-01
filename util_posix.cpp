@@ -35,18 +35,18 @@ void init_utils() {
 }
 
 
-std::ostream& operator<<(std::ostream& o, Red& r) {
+std::wostream& operator<<(std::wostream& o, Red& r) {
     o << "\e[0m";
     o << "\e[31;1m";
     return o;
 }
 
-std::ostream& operator<<(std::ostream& o, ResetStyle& r) {
+std::wostream& operator<<(std::wostream& o, ResetStyle& r) {
     o << "\e[0m";
     return o;
 }
 
-std::ostream& operator<<(std::ostream& o, Dim& r) {
+std::wostream& operator<<(std::wostream& o, Dim& r) {
     o << "\e[0m";
     o << "\e[2m";
     return o;

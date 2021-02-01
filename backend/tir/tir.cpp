@@ -28,7 +28,7 @@ TIR_Value* TIR_Function::alloc_val(TIR_Value val) {
     return &values.push(val);
 }
 
-std::ostream& operator<< (std::ostream& o, TIR_Value& val) {
+std::wostream& operator<< (std::wostream& o, TIR_Value& val) {
     o << dim;
     print(o, val.type, false);
     o << resetstyle << ' ';
@@ -63,7 +63,7 @@ TIR_Block::TIR_Block() {
     id = next_id++;
 }
 
-std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
+std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
     o << "    ";
     switch (instr.opcode) {
         case TOPC_MOV:
@@ -149,7 +149,7 @@ void TIR_Function::print() {
     for (TIR_Block* block : blocks) {
         std::cout << "  block" << block->id << ":\n";
         for (auto& instr : block->instructions)
-            std::cout << instr;
+            wcout << instr;
     }
 }
 

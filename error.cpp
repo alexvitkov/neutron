@@ -12,9 +12,9 @@ void print_line(Context& global, SourceFile& sf, i64 line, arr<Location>& red_to
     if (line < 0 || line > sf.line_start.size)
         return;
 
-    std::cout << dim;
-    printf(" %*d │ ", 5, line + 1);
-    std::cout << resetstyle;
+    wcout << dim;
+    printf(" %*ld │ ", 5, line + 1);
+    wcout << resetstyle;
 
     u64 line_start = sf.line_start[(u32)line];
 
@@ -22,15 +22,15 @@ void print_line(Context& global, SourceFile& sf, i64 line, arr<Location>& red_to
 
         for (Location& loc : red_tokens) {
             if (loc.file_id == sf.id && loc.loc.start == i) {
-                std::cout << red;
+                wcout << red;
             }
             if (loc.file_id ==sf.id && loc.loc.end == i)
-                std::cout << resetstyle;
+                wcout << resetstyle;
         }
 
         putc(sf.buffer[i], stdout);
     }
-    std::cout << resetstyle << '\n';
+    wcout << resetstyle << '\n';
 }
 
 int get_line(SourceFile& sf, LocationInFile loc) {
@@ -45,7 +45,7 @@ struct ERR_OfType {
     AST_Value* val;
 };
 
-std::ostream& operator<< (std::ostream& o, ERR_OfType rhs) {
+std::wostream& operator<< (std::wostream& o, ERR_OfType rhs) {
     o << red << rhs.val << dim << " (of type " << rhs.val->type << ')' << resetstyle;
     return o; 
 }
@@ -99,7 +99,7 @@ void print_code_segment(Context& global, arr<Token>* tokens, arr<AST_Node*>* nod
     }
 
     for (auto& kvp : grouped) {
-        printf("%s:\n", kvp.key->filename);
+        std::wcout << kvp.key->filename << ":\n";
         arr<Location>& toks = kvp.value;
 
         arr<u64> lines;
@@ -119,7 +119,7 @@ void print_code_segment(Context& global, arr<Token>* tokens, arr<AST_Node*>* nod
             u64 end = std::min(l + 3, (u64)kvp.key->line_start.size);
 
             if (start != last && last != 0) {
-                std::cout << dim << "...\n" << resetstyle;
+                wcout << dim << "...\n" << resetstyle;
             }
 
             for (u64 i = start; i < end; i++)
@@ -150,28 +150,28 @@ void th(u64 n) {
     };
 
     if (n < 10) {
-        std::cout << first_10[n];
+        wcout << first_10[n];
         return;
     } 
     else {
-        std::cout << n;
+        wcout << n;
 
         switch (n % 10) {
-            case 1:  std::cout << "st"; break;
-            case 2:  std::cout << "nd"; break;
-            case 3:  std::cout << "rd"; break;
-            default: std::cout << "th"; break;
+            case 1:  wcout << "st"; break;
+            case 2:  wcout << "nd"; break;
+            case 3:  wcout << "rd"; break;
+            default: wcout << "th"; break;
         }
     }
 }
 
 void print_err(Context& global, Error& err) {
-    std::cout << "Fatal: ";
+    wcout << "Fatal: ";
 
     switch (err.code) {
 
         case ERR_ALREADY_DEFINED: {
-            std::cout << red << err.tokens[0].name << resetstyle << " is defined multiple times:\n";
+            wcout << red << err.tokens[0].name << resetstyle << " is defined multiple times:\n";
             print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
             break;
         }
@@ -181,9 +181,9 @@ void print_err(Context& global, Error& err) {
 
             auto arg = err.args[0];
 
-            std::cout << "Expected the ";
+            wcout << "Expected the ";
             th(arg.arg_index + 1);
-            std::cout << " argument to be of type " 
+            wcout << " argument to be of type " 
                 << red << *arg.arg_type_ptr << resetstyle 
                 << " but instead got " << oftype(src) << ":\n";
 
@@ -198,7 +198,7 @@ void print_err(Context& global, Error& err) {
             AST_Value* dst = (AST_Value*)*err.node_ptrs[0];
             AST_Value* src = (AST_Value*)*err.node_ptrs[1];
 
-            std::cout << "Cannot assign " << oftype(src) << " to " << oftype(dst) << ":\n";
+            wcout << "Cannot assign " << oftype(src) << " to " << oftype(dst) << ":\n";
 
             arr<AST_Node*> nodes = { err.nodes[0] };
 
@@ -210,7 +210,7 @@ void print_err(Context& global, Error& err) {
             AST_Var* var = (AST_Var*)err.nodes[0];
             AST_Value* src = (AST_Value*)err.nodes[1];
 
-            std::cout << "Cannot assign " << oftype(src) << " to " << oftype(var) << ":\n";
+            wcout << "Cannot assign " << oftype(src) << " to " << oftype(var) << ":\n";
 
             arr<AST_Node*> nodes = { err.nodes[0] };
 
@@ -222,8 +222,8 @@ void print_err(Context& global, Error& err) {
             Token actual = err.tokens[0];
             Token expected = err.tokens[1];
 
-            std::cout << "Unexpected "         << red << actual.type << resetstyle
-                      << " while looking for " << red << expected.type << resetstyle << ":\n";
+            wcout << "Unexpected "         << red << actual.type << resetstyle
+                  << " while looking for " << red << expected.type << resetstyle << ":\n";
 
             arr<Token> toks = { actual };
             print_code_segment(global, &toks, nullptr, nullptr);
@@ -233,9 +233,9 @@ void print_err(Context& global, Error& err) {
         }
 
         case ERR_NOT_DEFINED: {
-            std::cout << red;
-            print(std::cout, err.nodes[0], false);
-            std::cout << resetstyle << " is not defined.\n";
+            wcout << red;
+            print(wcout, err.nodes[0], false);
+            wcout << resetstyle << " is not defined.\n";
             print_code_segment(global, nullptr, &err.nodes, nullptr);
             break;
         }
@@ -244,7 +244,7 @@ void print_err(Context& global, Error& err) {
             AST_Return* ret = (AST_Return*)err.nodes[0];
             AST_Fn* fn = (AST_Fn*)err.nodes[1];
             AST_FnType* fntype = (AST_FnType*)fn->type;
-            std::cout << "Missing return value - expected a value of type " 
+            wcout << "Missing return value - expected a value of type " 
                 << red << fntype->returntype << resetstyle << ":\n";
 
             arr<AST_Node*> nodes_to_print = { ret };
@@ -257,14 +257,14 @@ void print_err(Context& global, Error& err) {
             AST_Fn* fn = (AST_Fn*)err.nodes[1];
             AST_FnType* fntype = (AST_FnType*)fn->type;
 
-            std::cout << "Cannot return " 
-                << red << ret->value << dim << " (of type " << ret->value->type << ')' << resetstyle 
-                << ", the function's return type is ";
+            wcout << "Cannot return " 
+                  << red << ret->value << dim << " (of type " << ret->value->type << ')' << resetstyle 
+                  << ", the function's return type is ";
 
             if (fntype->returntype)
-                std::cout << fntype->returntype << ":\n";
+                wcout << fntype->returntype << ":\n";
             else
-                std::cout << "void:\n";
+                wcout << "void:\n";
 
             arr<AST_Node*> nodes_to_print = { ret };
             print_code_segment(global, nullptr, &nodes_to_print, nullptr);
@@ -272,7 +272,7 @@ void print_err(Context& global, Error& err) {
         }
 
         case ERR_BAD_BINARY_OP: {
-            std::cout << "Cannot do a binary operation on " << oftype(err.nodes[0]) << " and " << oftype(err.nodes[1]) << ":\n";
+            wcout << "Cannot do a binary operation on " << oftype(err.nodes[0]) << " and " << oftype(err.nodes[1]) << ":\n";
             print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
         }
 

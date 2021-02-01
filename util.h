@@ -8,6 +8,8 @@
 #include <string>
 #include <locale>
 
+using std::wcout;
+
 #ifdef _MSC_VER
 #   define UNREACHABLE __assume(false)
 #else
@@ -28,9 +30,9 @@ extern Dim dim;
 
 extern const char PATH_SEPARATOR;
 
-std::ostream& operator<<(std::ostream&, Red& r);
-std::ostream& operator<<(std::ostream&, ResetStyle& r);
-std::ostream& operator<<(std::ostream&, Dim& r);
+std::wostream& operator<<(std::wostream&, Red& r);
+std::wostream& operator<<(std::wostream&, ResetStyle& r);
+std::wostream& operator<<(std::wostream&, Dim& r);
 
 void init_utils();
 int exec(std::wstring& programname, arr<std::wstring>& args);

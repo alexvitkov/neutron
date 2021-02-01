@@ -1,3 +1,4 @@
+#include "util.h"
 #include "cmdargs.h"
 
 bool debug_output = false;
@@ -12,25 +13,31 @@ Target target = TARGET_UNIX;
 #endif
 
 
-int add_source(const char* filename) {
+bool add_source(std::wstring& filename, u32* out) {
 	FILE* f;
 	SourceFile sf;
 
-	if (!(f = fopen(filename, "rb"))) {
-		return -1;
+    // TODO ENCODING
+    // this should use native apis
+    std::string filename_utf8 = wstring_to_utf8(filename);
+
+    // TODO ERROR
+	if (!(f = fopen(filename_utf8.c_str(), "rb"))) {
+		return false;
 	}
 
 	fseek(f, 0, SEEK_END);
 	sf.length = ftell(f);
 	rewind(f);
 
+    // TODO ERROR
 	if (!(sf.buffer = (char*)malloc(sf.length))) {
 		fclose(f);
-		return -1;
+		return false;
 	}
 	if (fread(sf.buffer, 1, sf.length, f) < sf.length) {
 		fclose(f);
-		return -1;
+		return false;
 	}
 	fclose(f);
 	
@@ -38,7 +45,9 @@ int add_source(const char* filename) {
     sf.filename = filename;
 
 	sources.push(std::move(sf));
-	return sf.id;
+    if (out)
+        *out = sf.id;
+	return true;
 }
 
 
@@ -92,7 +101,9 @@ bool parse_args(int argc, const char** argv) {
         } 
 
         // If the arg hasn't been parsed as a command line flag, it's a input file
-        if (add_source(a) < 0) {
+        // TODO ENCODING - this is wrong on windows
+        std::wstring filename = utf8_to_wstring(a);
+        if (!add_source(filename, nullptr)) {
             fprintf(stderr, "failed to read source '%s'\n", a);
             return false;
         }

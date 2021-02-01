@@ -10,7 +10,7 @@ struct SourceFile {
 	u64 length;
 
 	char *buffer;
-    const char* filename;
+    std::wstring filename;
 
     // line_start[100] is the character at which the 100th line starts
     arr<u64> line_start;
@@ -39,6 +39,7 @@ extern const char* output_file;
 extern Target target;
 extern bool debug_output;
 
+bool add_source(std::wstring& filename, u32* out);
 bool parse_args(int argc, const char** argv);
 
 #endif // guard

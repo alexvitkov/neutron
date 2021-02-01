@@ -1,0 +1,10 @@
+fn foo1()      {}
+fn foo2(): u16 {}
+fn foo3();
+fn foo4(): u16;
+
+fn foo5(x: u16);
+fn foo6(x: u16, y: u32);
+
+fn foo7(...);
+fn foo8(x: u16, ...);

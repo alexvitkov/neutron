@@ -269,26 +269,26 @@ struct AST_StringLiteral : AST_Value {
 
 std::ostream& operator<< (std::ostream& o, AST_Node* node);
 
-void print(std::ostream& o, AST_Node* node, bool decl);
-void print(std::ostream& o, AST_Fn* node, bool decl);
-void print(std::ostream& o, AST_Var* node, bool decl);
-void print(std::ostream& o, AST_Struct* node, bool decl);
-void print(std::ostream& o, AST_BinaryOp* node, bool brackets);
+void print(std::wostream& o, AST_Node* node, bool decl);
+void print(std::wostream& o, AST_Fn* node, bool decl);
+void print(std::wostream& o, AST_Var* node, bool decl);
+void print(std::wostream& o, AST_Struct* node, bool decl);
+void print(std::wostream& o, AST_BinaryOp* node, bool brackets);
 
-std::ostream& operator<<(std::ostream& o, AST_PrimitiveType* node);
-std::ostream& operator<<(std::ostream& o, AST_Return* node);
-std::ostream& operator<<(std::ostream& o, AST_Cast* node);
-std::ostream& operator<<(std::ostream& o, AST_Number* node);
-std::ostream& operator<<(std::ostream& o, AST_If* node);
-std::ostream& operator<<(std::ostream& o, AST_While* node);
-std::ostream& operator<<(std::ostream& o, AST_Block* bl);
-std::ostream& operator<<(std::ostream& o, AST_FnCall* node);
-std::ostream& operator<<(std::ostream& o, AST_MemberAccess* node);
-std::ostream& operator<<(std::ostream& o, AST_PointerType* node);
-std::ostream& operator<<(std::ostream& o, AST_ArrayType* node);
-std::ostream& operator<<(std::ostream& o, AST_Dereference* node);
-std::ostream& operator<<(std::ostream& o, AST_AddressOf* node);
-std::ostream& operator<<(std::ostream& o, AST_UnresolvedId* node);
-std::ostream& operator<<(std::ostream& o, AST_StringLiteral* node);
+std::wostream& operator<<(std::wostream& o, AST_PrimitiveType* node);
+std::wostream& operator<<(std::wostream& o, AST_Return* node);
+std::wostream& operator<<(std::wostream& o, AST_Cast* node);
+std::wostream& operator<<(std::wostream& o, AST_Number* node);
+std::wostream& operator<<(std::wostream& o, AST_If* node);
+std::wostream& operator<<(std::wostream& o, AST_While* node);
+std::wostream& operator<<(std::wostream& o, AST_Block* bl);
+std::wostream& operator<<(std::wostream& o, AST_FnCall* node);
+std::wostream& operator<<(std::wostream& o, AST_MemberAccess* node);
+std::wostream& operator<<(std::wostream& o, AST_PointerType* node);
+std::wostream& operator<<(std::wostream& o, AST_ArrayType* node);
+std::wostream& operator<<(std::wostream& o, AST_Dereference* node);
+std::wostream& operator<<(std::wostream& o, AST_AddressOf* node);
+std::wostream& operator<<(std::wostream& o, AST_UnresolvedId* node);
+std::wostream& operator<<(std::wostream& o, AST_StringLiteral* node);
 
 #endif // guard
