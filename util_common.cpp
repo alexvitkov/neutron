@@ -1,20 +1,19 @@
 #include "util.h"
 
-arr<wchar_t*> read_path() {
-    wchar_t* path = env("PATH");
+arr<std::wstring> read_path() {
+    std::wstring path;
 
-    arr<wchar_t*> path_entries;
+    if (!env("PATH", path))
+        assert(!"ALALLALA");
+
+    arr<std::wstring> path_entries;
 
     u64 start = 0;
     for (u64 i = 0 ;; i++) {
         if (path[i] == PATH_SEPARATOR || path[i] == '\0') {
             u64 length = i - start;
-            if (length > 0) {
-                wchar_t* buf = (wchar_t*)malloc(sizeof(wchar_t) * (length + 1));
-                wcsncpy(buf, path + start, length);
-                buf[length] = 0;
-                path_entries.push(buf);
-            }
+            if (length > 0) 
+                path_entries.push(path.substr(start, length));
 
             if (path[i] == '\0')
                 break;
@@ -22,7 +21,15 @@ arr<wchar_t*> read_path() {
         }
     }
 
-    free(path);
-
     return path_entries;
+}
+
+std::wstring utf8_to_wstring (const char* utf8_str) {
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
+    return myconv.from_bytes(utf8_str);
+}
+
+std::string wstring_to_utf8 (const std::wstring& str) {
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
+    return myconv.to_bytes(str);
 }

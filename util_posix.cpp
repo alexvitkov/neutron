@@ -14,24 +14,20 @@ ResetStyle resetstyle;
 const char PATH_SEPARATOR = ':';
 
 void init_utils() {
-    arr<wchar_t*> path = read_path();
-    for (wchar_t* entry : path) {
+    arr<std::wstring> path = read_path();
+    for (std::wstring& entry : path) {
 
         arr<std::wstring> files;
 
         if (util_read_dir(entry, files, true)) {
             for (std::wstring& f : files) {
                 if (f == L"ld") {
-                    std::wostringstream s;
-                    s << entry << "/ld";
                     has_gnu_ld = true;
-                    gnu_ld.path = s.str();
+                    gnu_ld.path = entry + L"/ld";
                 }
                 if (f == L"ld.lld") {
-                    std::wostringstream s;
-                    s << entry << "/ld.lld";
                     has_lld = true;
-                    lld.path = s.str();
+                    gnu_ld.path = entry + L"/ld.lld";
                 }
             }
         }
@@ -97,39 +93,24 @@ int exec(std::wstring& programname, arr<std::wstring>& args) {
     }
 }
 
-wchar_t* env(const char* var) {
-    // TODO ENCODING
+bool env(const char* var, std::wstring& out) {
+    // ENCODING - we're assuming the result of getenv is either UTF-8 or ASCII
     char* str_ch = getenv(var);
-    long len = strlen(str_ch);
+    MUST(str_ch);
 
-    wchar_t* str = (wchar_t*)malloc(sizeof(wchar_t) * (len + 1));
-    long i;
-    for (i = 0; i < len; i++) {
-        str[i] = str_ch[i];
-    }
-    str[i] = 0;
-
-    return str;
+    out = utf8_to_wstring(str_ch);
+    return true;
 }
 
-bool util_read_dir(const wchar_t* dirname, arr<std::wstring>& out, bool only_executable, const wchar_t* match) {
-
-    char dirname_c[1000];
-    int i;
-    for (i = 0; dirname[i]; i++) {
-        if (dirname[i] > 127)
-            assert(!"Unknown encoding");
-        dirname_c[i] = dirname[i];
-    }
-    dirname_c[i] = 0;
+bool util_read_dir(std::wstring& dirname, arr<std::wstring>& out, bool only_executable, const wchar_t* match) {
+    std::string dirname_utf8 = wstring_to_utf8(dirname);
     
     if (match) {
         assert(!"match is only supported on Windows");
     }
 
-    DIR *dir = opendir(dirname_c);
-    if (!dir)
-        return false;
+    DIR *dir = opendir(dirname_utf8.c_str());
+    MUST(dir);
 
     dirent* e;
     while ((e = readdir(dir))) {
@@ -138,10 +119,8 @@ bool util_read_dir(const wchar_t* dirname, arr<std::wstring>& out, bool only_exe
         if (!strcmp(".", e->d_name) || !strcmp("..", e->d_name))
             continue;
 
-        // TODO ENCODING
-        std::wstring fnamew(e->d_name, e->d_name + length);
-        std::wstring cool = fnamew;
-        out.push(cool);
+        // ENCODING - we're assuming d_name is either UTF-8 or ASCII
+        out.push(utf8_to_wstring(e->d_name));
     }
 
     closedir(dir);

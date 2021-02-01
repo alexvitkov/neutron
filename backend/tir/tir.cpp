@@ -132,7 +132,7 @@ std::ostream& operator<< (std::ostream& o, TIR_Instruction& instr) {
         }
 
         default:
-            assert(!"Not implemented");
+            NOT_IMPLEMENTED();
     }
     return o;
 }
@@ -221,7 +221,7 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
                 break;
             }
             default:
-                assert(!"Not implemented");
+                NOT_IMPLEMENTED();
         }
     }
 
@@ -248,13 +248,13 @@ TIR_Value* get_array_ptr(TIR_Function& fn, AST_Value* arr) {
                 return fn.c.valmap[var];
             }
             else {
-                assert(!"Not implemented");
+                NOT_IMPLEMENTED();
             }
 
             break;
         }
         default:
-            assert(!"Not implemented");
+            NOT_IMPLEMENTED();
     }
 
     return nullptr;
@@ -328,7 +328,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                     opcode = TOPC_EQ; 
                     break;
                 }
-                case '<': {
+                case OP_LESSTHAN: {
                     opcode = TOPC_LT; 
                     break;
                 }
@@ -337,7 +337,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                     break;
                 }
                 default:
-                    assert(!"Not implemented");
+                    NOT_IMPLEMENTED();
             }
 
             if (!dst)
@@ -457,7 +457,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                     return var->is_global ? fn.c.valmap[var] : fn._valmap[var];
                 }
                 default:
-                    assert(!"Not implemented");
+                    NOT_IMPLEMENTED();
             }
         }
 
@@ -606,7 +606,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         }
 
         default:
-            assert(!"Not implemented");
+            NOT_IMPLEMENTED();
     }
 
     return nullptr;
@@ -625,7 +625,11 @@ void TIR_Context::compile_all() {
                 });
                 valmap[(AST_Value*)decl.value] = &val;
                 break;
-            } 
+            }
+
+            default: {
+                continue;
+            }
         }
     }
 
@@ -656,7 +660,7 @@ void TIR_Context::compile_all() {
                 continue;
 
             default:
-                assert(!"Not implemented");
+                NOT_IMPLEMENTED();
         }
     }
 }

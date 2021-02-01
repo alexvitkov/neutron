@@ -31,6 +31,12 @@ enum TokenType : u8 {
     TOK_ADD = '+',
     TOK_SUBTRACT = '-',
 
+    OP_GREATERTHAN = '>',
+    OP_LESSTHAN = '<',
+
+    TOK_COLON = ':',
+    TOK_SEMICOLON = ';',
+
     TOK_AMPERSAND = '&',
     TOK_OPENSQUARE = '[',
     TOK_CLOSESQUARE = ']',

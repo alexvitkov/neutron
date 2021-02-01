@@ -37,9 +37,10 @@ bool AST_Number::fits_in(AST_PrimitiveType* numtype) {
                 case 8: return floorabs < 0x8000000000000000;
             }
         }
+        default:
+            return false;
     }
     
-    return false;
 }
 
 AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_LITERAL, &t_string_literal) {

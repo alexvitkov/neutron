@@ -209,7 +209,7 @@ NumberData* parse_number(Context& ctx, char* start, char* end) {
 
     if (acc_index) {
         data->is_float = true;
-        assert(!"Not implemented");
+        NOT_IMPLEMENTED();
         //data->f64_data = (double)data0] / (double)acc_index[1];
     }
     else {
@@ -291,7 +291,7 @@ bool tokenize(Context& global, SourceFile &s) {
             do {
                 i++;
                 if (s.buffer[i] == '\n') {
-                    assert(!"Multiline string Not implemented");
+                    NOT_IMPLEMENTED("Multiline string");
                 }
             } while (s.buffer[i] != '"' && i < s.length);
 
@@ -788,6 +788,8 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                             ctx.global->literals.insert(t.name, (AST_StringLiteral*)val);
                         }
                         break;
+                    default:
+                        UNREACHABLE;
                 }
 
                 Location loc = {

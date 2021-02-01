@@ -70,7 +70,7 @@ llvm::Type* T2L_Context::get_llvm_type(AST_Type* type) {
         }
 
         default:
-            assert(!"Not implemented");
+            NOT_IMPLEMENTED();
     }
 }
 
@@ -172,7 +172,7 @@ llvm::Value* T2L_BlockContext::get_value(TIR_Value* tir_val) {
         }
 
         default:
-            assert(!"Not implemented");
+            NOT_IMPLEMENTED();
     }
 }
 
@@ -303,7 +303,7 @@ void T2L_BlockContext::compile() {
                 break;
             }
             default:
-                assert(!"Not implemented");
+                NOT_IMPLEMENTED();
         }
     }
     compiled = true;
@@ -497,10 +497,13 @@ void T2L_Context::compile_all() {
 
                 break;
             }
-            case AST_FN:
+
+            case AST_FN: {
                 continue;
+            }
+
             default:
-                assert(!"Not implemented");
+                NOT_IMPLEMENTED();
         }
 
     }

@@ -347,7 +347,7 @@ bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr) {
 
 
         default:
-            assert(!"Not implemented");
+            NOT_IMPLEMENTED();
     }
     return true;
 }
@@ -399,7 +399,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
         }
 
         case AST_FN: {
-            assert(!"Not supported");
+            NOT_IMPLEMENTED();
         }
 
         case AST_FN_CALL: {
@@ -814,13 +814,17 @@ bool typecheck(Context& ctx, AST_Node* node) {
             //}
             return true;
         }
+
+        default: {
+            if (node->nodetype & AST_VALUE_BIT) {
+                return gettype(ctx, (AST_Value*)node);
+            }
+            NOT_IMPLEMENTED();
+        }
+
     }
 
-    if (node->nodetype & AST_VALUE_BIT) {
-        return gettype(ctx, (AST_Value*)node);
-    }
 
-    assert(!"Not implemented");
 }
 
 bool typecheck_all(GlobalContext& global) {
