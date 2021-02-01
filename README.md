@@ -55,7 +55,14 @@ Precompiled LLVM binaries are provided for Windows 10 x64. The only target this 
 
 <https://drive.google.com/file/d/13MR7SfBGOgTd3C6sdp9iWaL_lQ6T_S7D/view?usp=sharing> (1.4G)
 
-On Linux you can probably get away with whatever LLVM your distro's package manager gives you, I've only tested with 11.0.0, but older recent-ish versions should be OK.
+On Linux you can probably get away with whatever LLVM your distro's package manager gives you.
+I've only tested LLVM 11.0.0 but older recent-ish versions should be OK.
+If you're using the package manager's LLVM, then llvm-config should be in your $PATH,
+this should get you going:
+```Bash
+cmake -DLLVM_CONFIG_PATH=$(which llvm-config) ..
+```
+
 
 ## Command line flags
 -   -d - print debug information (AST, our IR, LLVM IR)
