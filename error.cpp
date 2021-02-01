@@ -8,7 +8,7 @@ enum VirtualTokens {
     VIRT_MISSING_TYPE_SPECIFIER = 2,
 };
 
-void print_line(Context& global, SourceFile& sf, int line, arr<Location>& red_tokens) {
+void print_line(Context& global, SourceFile& sf, i64 line, arr<Location>& red_tokens) {
     if (line < 0 || line > sf.line_start.size)
         return;
 
@@ -16,7 +16,7 @@ void print_line(Context& global, SourceFile& sf, int line, arr<Location>& red_to
     printf(" %*d │ ", 5, line + 1);
     std::cout << resetstyle;
 
-    u64 line_start = sf.line_start[line];
+    u64 line_start = sf.line_start[(u32)line];
 
     for (u64 i = line_start; i < sf.length && sf.buffer[i] != '\n'; i++) {
 
@@ -34,7 +34,7 @@ void print_line(Context& global, SourceFile& sf, int line, arr<Location>& red_to
 }
 
 int get_line(SourceFile& sf, LocationInFile loc) {
-    for (int i = 0; i < sf.line_start.size; i++) {
+    for (u32 i = 0; i < sf.line_start.size; i++) {
         if (loc.start < sf.line_start[i])
             return i - 1;
     }
@@ -123,7 +123,7 @@ void print_code_segment(Context& global, arr<Token>* tokens, arr<AST_Node*>* nod
             }
 
             for (u64 i = start; i < end; i++)
-                print_line(global, *kvp.key, i, toks);
+                print_line(global, *kvp.key, (i64)i, toks);
             last = end;
         }
     }

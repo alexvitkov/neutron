@@ -76,11 +76,10 @@ bool find_msvc_linker() {
 
 
     // Find MSVC inside the Visual Studio directory
-    std::wostringstream msvc_base_path;
-    msvc_base_path << msvc_linker.visual_studio_base_path << "\\VC\\Tools\\MSVC";
+    std::wstring msvc_base_path = msvc_linker.visual_studio_base_path + L"\\VC\\Tools\\MSVC";
 
     arr<std::wstring> msvc_versions;
-    if (!util_read_dir(msvc_base_path.str().c_str(), msvc_versions)) {
+    if (!util_read_dir(msvc_base_path, msvc_versions)) {
         fprintf(stderr, "WARNING: Could not MSVC inside the Visual Studio directory. Cannot link a .exe file.\n");
         return false;
     }
@@ -89,27 +88,14 @@ bool find_msvc_linker() {
     std::sort(msvc_versions.begin(), msvc_versions.end());
 
     msvc_linker.msvc_version = msvc_versions.last();
-    msvc_base_path << "\\" << msvc_linker.msvc_version;
-
-    msvc_linker.msvc_base_path = msvc_base_path.str();
-
-
-
-
-
-    std::wostringstream link_exe_path;
-    link_exe_path << visual_studio_installs[0].path << "\\VC\\Tools\\MSVC";
-    std::wstring msvc_path = link_exe_path.str();
+    msvc_linker.msvc_base_path = msvc_base_path + L"\\" + msvc_linker.msvc_version;
 
     // TODO we're just assuming the file exists
     bool host_x64 = true, target_x64 = true;
-    link_exe_path << L"\\" << msvc_versions.last() << L"\\bin\\Host" << (host_x64 ? L"x64" : L"x86") << L"\\" << (target_x64 ? L"x64" : L"x86") << "\\link.exe";
-    
-    msvc_linker.link_exe_path = link_exe_path.str();
-    
-
-
-
+    msvc_linker.link_exe_path 
+        = msvc_linker.msvc_base_path + L"\\bin\\Host" 
+        + (host_x64 ? L"x64\\" : L"x86\\") 
+        + (target_x64 ? L"x64\\link.exe" : L"x86\\link.exe");    
 
     DWORD type;
     LSTATUS status;
@@ -133,10 +119,9 @@ bool find_msvc_linker() {
 
 
     arr<std::wstring> windows_kit_versions;
-    std::wostringstream windows_kit_path;
-    windows_kit_path << msvc_linker.windows_sdk_base_path << "\\bin";
+    std::wstring windows_kit_path = msvc_linker.windows_sdk_base_path + L"\\bin";
 
-    if (!util_read_dir(windows_kit_path.str().c_str(), windows_kit_versions, false, L"10.*")) {
+    if (!util_read_dir(windows_kit_path, windows_kit_versions, false, L"10.*")) {
         // TODO ERROR
         fprintf(stderr, "WARNING: Could not find a Windows 10 SDK. Cannot link a .exe file\n");
         return false;
@@ -222,44 +207,46 @@ int exec(std::wstring& programname, arr<std::wstring>& args) {
     return exitCode;
 }
 
-wchar_t* env(const wchar_t* var) {
+bool env(const char* var, std::wstring& out) {
     // TODO BUFFER long variables are problematic
-    const int buf_size = 1024;
-    wchar_t* buf = (wchar_t*)malloc(sizeof(wchar_t*) * buf_size);
+    const int buf_size = 2048;
+    wchar_t buf[buf_size];
 
-    DWORD length = GetEnvironmentVariableW(var, buf, buf_size);
+    std::wstring var_w = utf8_to_wstring(var);
+    
+    DWORD length = GetEnvironmentVariableW(var_w.c_str(), buf, buf_size);
 
     if (length) {
         buf[length] = 0;
-        return buf;
+        out = buf;
+        return true;
     }
     else {
-        free(buf);
-        return nullptr;
+        return false;
     }
 }
 
-bool util_read_dir(const wchar_t* dirname, arr<std::wstring>& out, bool only_executable, const wchar_t* match) {
+bool util_read_dir(std::wstring& dirname, arr<std::wstring>& out, bool only_executable, const wchar_t* match) {
     WIN32_FIND_DATAW data;
     
     // TODO BUFFER
-    wchar_t sPath[2048];
+    std::wostringstream sPath;
+    sPath << dirname << L"\\";
 
     if (match) {
-
-        swprintf(sPath, L"%s\\%s", dirname, match);
-    } else if (only_executable)
-        swprintf(sPath, L"%s\\*.exe", dirname);
-    else
-        swprintf(sPath, L"%s\\*.*", dirname);
-    
-    HANDLE f = FindFirstFileW(sPath, &data);
+        sPath << match;
+    } else if (only_executable) {
+        sPath << "*.exe";
+    } else {
+        sPath << "*.*";
+    }
+    HANDLE f = FindFirstFileW(sPath.str().c_str(), &data);
 
     if (f == INVALID_HANDLE_VALUE) {
         return false;
     }
 
-    do  {
+    do {
         std::wstring filename = data.cFileName;
         if (filename != L"." && filename != L"..")
             out.push(std::move(filename));

@@ -134,7 +134,7 @@ void print(std::ostream& o, AST_Fn* fn, bool decl) {
         o << '(';
 
         AST_FnType* fntype = (AST_FnType*)fn->type;
-        for (int i = 0; i < fn->argument_names.size; i++)
+        for (u32 i = 0; i < fn->argument_names.size; i++)
             o << fn->argument_names[i] << ": " << fntype->param_types[i] << ", ";
 
         // Delete the last comma
@@ -191,7 +191,7 @@ void print(std::ostream& o, AST_BinaryOp* node, bool brackets = false) {
         case OP_SUBASSIGN: o << "-="; break;
         case OP_MULASSIGN: o << "*="; break;
         case OP_DIVASSIGN: o << "/="; break;
-        case OP_MODASSIGN: o << "\%="; break;
+        case OP_MODASSIGN: o << "%="; break;
         case OP_SHIFTLEFTASSIGN: o << "<<="; break;
         case OP_SHIFTRIGHTASSIGN: o << ">>="; break;
         case OP_BITANDASSIGN: o << "&="; break;

@@ -134,7 +134,7 @@ struct LocationInFile {
 };
 
 struct Location {
-    u64 file_id;
+    u32 file_id;
     LocationInFile loc;
 };
 
@@ -156,7 +156,7 @@ struct SmallToken {
 };
 
 struct Token : SmallToken {
-    u64 file_id;
+    u32 file_id;
 
     // The first token in the file has ID 0, second has ID 1, etc...
     u64 id;

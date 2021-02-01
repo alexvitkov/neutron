@@ -25,6 +25,7 @@ arr<std::wstring> read_path() {
 }
 
 std::wstring utf8_to_wstring (const char* utf8_str) {
+    // TODO those are deprecated in C++17
     std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
     return myconv.from_bytes(utf8_str);
 }

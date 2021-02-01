@@ -5,7 +5,7 @@
 #include "ds.h"
 
 struct SourceFile {
-	u64 id;
+	u32 id;
 
 	u64 length;
 
@@ -13,7 +13,7 @@ struct SourceFile {
     const char* filename;
 
     // line_start[100] is the character at which the 100th line starts
-    arr<u32> line_start;
+    arr<u64> line_start;
 
 	arr<SmallToken> _tokens;
     arr<LocationInFile> _token_locations;

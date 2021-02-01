@@ -237,7 +237,7 @@ void T2L_BlockContext::compile() {
 
                 llvm::Value** args = (llvm::Value**)malloc(sizeof(llvm::Value*) * argc);
 
-                for (int i = 0; i < instr.call.args.size; i++) {
+                for (u32 i = 0; i < instr.call.args.size; i++) {
                     llvm::Value* l_arg = get_value(instr.call.args[i]);
                     assert(l_arg);
                     args[i] = l_arg;
@@ -337,7 +337,7 @@ void T2L_FunctionContext::compile() {
 
         arr<Context*> rem = { &ast_fn->block.ctx };
 
-        for (int i = 0; i < tir_fn->values.size; i++) {
+        for (u32 i = 0; i < tir_fn->values.size; i++) {
 
             TIR_Value& val_ref = tir_fn->values[i];
 

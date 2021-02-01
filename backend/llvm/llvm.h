@@ -7,6 +7,11 @@
 #include "../../cmdargs.h"
 #include "../tir/tir.h"
 
+// Visual Studio goes insane with llvm warnings.
+#ifdef _MSC_VER
+#pragma warning(push, 0)
+#endif
+
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -20,6 +25,10 @@
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm-c/TargetMachine.h>
+
+#ifdef _MSC_VER
+#pragma warning(pop, 0)
+#endif
 
 struct T2L_Context;
 struct T2L_FunctionContext;

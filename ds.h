@@ -200,7 +200,7 @@ struct arr {
     arr(u32 capacity = 8) 
         : capacity(capacity), size(0), buffer((T*)malloc(sizeof(T) * capacity)) { }
 
-    arr(std::initializer_list<T> init) : arr(init.size()) {
+    arr(std::initializer_list<T> init) : arr((u32)init.size()) {
         u32 i = 0;
         for (const auto& v : init) {
             new (&buffer[i]) T(v);
@@ -265,7 +265,7 @@ struct arr {
     }
 
     T& push_unique(T value) {
-        for (int i = 0; i < size; i++) {
+        for (u32 i = 0; i < size; i++) {
             if (buffer[i] == value)
                 return buffer[i];
         }

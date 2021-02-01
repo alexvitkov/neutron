@@ -14,6 +14,8 @@
 #   define UNREACHABLE __builtin_unreachable()
 #endif
 
+#define DIE(msg) { assert(!(msg)); UNREACHABLE; }
+
 #define NOT_IMPLEMENTED(...) assert(!(__VA_ARGS__ " not implemented"));
 
 struct Red { char _; };

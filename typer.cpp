@@ -88,7 +88,7 @@ bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     MUST (lhs->param_types.size == rhs->param_types.size);
     MUST (lhs->is_variadic == rhs->is_variadic);
 
-    for (int i = 0; i < lhs->param_types.size; i++)
+    for (u32 i = 0; i < lhs->param_types.size; i++)
         MUST (lhs->param_types[i] == rhs->param_types[i]);
 
     return true;
@@ -610,7 +610,7 @@ Error:
                 return nullptr;
             }
 
-            for (int i = 0; i < s->members.size; i++) {
+            for (u32 i = 0; i < s->members.size; i++) {
                 auto& member = s->members[i];
                 if (!strcmp(member.name, ma->member_name)) {
                     ma->index = i;
@@ -654,9 +654,10 @@ Error:
         }
 
         default:
-            printf("gettype is not supported/implemented for nodetype %d\n", node->nodetype);
-            assert(0);
+            NOT_IMPLEMENTED();
     }
+
+    UNREACHABLE;
 }
 
 // Types are parsed by the parse_expr function

@@ -368,13 +368,11 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
 
             arr<TIR_Value*> args;
 
-            for (int i = 0; i < fncall->args.size; i++) {
+            for (u32 i = 0; i < fncall->args.size; i++) {
 
                 AST_Type* param_type = &t_any8;
                 if (i < callee_type->param_types.size)
                     callee_type->param_types[i];
-
-
 
                 TIR_Value*  arg_dst = fn.alloc_temp(param_type);
 

@@ -171,7 +171,7 @@ Location location_of(Context& ctx, AST_Node** node) {
     } else if (ctx.global->definition_locations.find(*node, &loc)) {
         return loc;
     } 
-    assert(!"AST_Node doesn't have a location");
+    DIE("The AST_Node doesn't have a location");
 }
 
 struct TokenReader;
@@ -295,7 +295,7 @@ bool tokenize(Context& global, SourceFile &s) {
                 }
             } while (s.buffer[i] != '"' && i < s.length);
 
-            long length = i - word_start;
+            u64 length = i - word_start;
 
             // Unexpected EOF
             // TODO ERROR
@@ -371,7 +371,7 @@ bool tokenize(Context& global, SourceFile &s) {
 
         if (c == '\n') {
             line++;
-            s.line_start.push(i + 1);
+            s.line_start.push((u32)(i + 1));
             line_start = i + 1;
         }
 	}
@@ -834,7 +834,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                     }
                     r.pop(); // discard the closing bracket
 
-                    for (int i = 0; i < arg_locs.size; i++) {
+                    for (u32 i = 0; i < arg_locs.size; i++) {
                         ctx.global->reference_locations[(AST_Node**)&fncall->args[i]] = arg_locs[i];
                     }
 
@@ -1142,12 +1142,12 @@ bool parse_top_level(Context& ctx, TokenReader r) {
 }
 
 bool parse_all(Context& global) {
-    for (int i = 0; i < sources.size; i++) {
-        MUST (tokenize(global, sources[i]));
-        TokenReader r { .sf = sources[i], .ctx = global };
+    for (SourceFile& sf : sources) {
+        MUST (tokenize(global, sf));
+        TokenReader r { .sf = sf, .ctx = global };
     }
-    for (int i = 0; i < sources.size; i++) {
-        TokenReader r { .sf = sources[i], .ctx = global };
+    for (SourceFile& sf : sources) {
+        TokenReader r { .sf = sf, .ctx = global };
         MUST (parse_top_level(global, r));
     }
 
