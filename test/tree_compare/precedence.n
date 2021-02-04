@@ -1,0 +1,16 @@
+
+fn mul_add_1() { 3 +  2 * 4; }
+fn mul_add_2() { 3 + (2 * 4); }
+
+fn add_mul_1() {  3 * 2 + 4; }
+fn add_mul_2() { (3 * 2) + 4; }
+
+fn add_left_assoc_1() {  1 + 2  + 3; }
+fn add_left_assoc_2() { (1 + 2) + 3; }
+
+fn mul_left_assoc_1() {  1 * 2  * 3; }
+fn mul_left_assoc_2() { (1 * 2) * 3; }
+
+fn assign_right_assoc_1() { x = (y = z); }
+fn assign_right_assoc_2() { x =  y = z ; }
+

@@ -266,6 +266,9 @@ struct AST_StringLiteral : AST_Value {
     AST_StringLiteral(Token stringToken);
 };
 
+// Used only for testing purposes, to test if two things
+// that should parse down to the same AST, do in fact do that
+bool postparse_tree_compare(AST_Node *lhs, AST_Node *rhs);
 
 std::ostream& operator<< (std::ostream& o, AST_Node* node);
 

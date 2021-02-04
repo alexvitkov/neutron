@@ -328,3 +328,61 @@ std::wostream& operator<< (std::wostream& o, AST_StringLiteral* node) {
     o << '"' << node->str << '"';
     return o;
 }
+
+bool postparse_tree_compare(AST_Node *lhs, AST_Node *rhs) {
+    if (lhs->nodetype != rhs->nodetype) {
+        return false;
+    }
+
+    switch (lhs->nodetype) {
+        case AST_FN: {
+            AST_Fn *fn1 = (AST_Fn*)lhs;
+            AST_Fn *fn2 = (AST_Fn*)rhs;
+
+            return postparse_tree_compare(&fn1->block, &fn2->block);
+        }
+
+        case AST_BLOCK: {
+            AST_Block *bl1 = (AST_Block*)lhs;
+            AST_Block *bl2 = (AST_Block*)rhs;
+
+            MUST (bl1->statements.size == bl2->statements.size);
+
+            for (u32 i = 0; i < bl1->statements.size; i++)
+                MUST (postparse_tree_compare(bl1->statements[i], bl2->statements[i]));
+
+            return true;
+        }
+
+        case AST_ASSIGNMENT:
+        case AST_BINARY_OP: 
+        {
+            AST_BinaryOp *op1 = (AST_BinaryOp*)lhs;
+            AST_BinaryOp *op2 = (AST_BinaryOp*)rhs;
+
+            MUST(op1->op == op2->op);
+            MUST(postparse_tree_compare(op1->lhs, op2->lhs));
+            MUST(postparse_tree_compare(op1->rhs, op2->rhs));
+
+            return true;
+        }
+
+        case AST_NUMBER: {
+            AST_Number *num1 = (AST_Number*)lhs;
+            AST_Number *num2 = (AST_Number*)rhs;
+
+            return num1->floorabs == num2->floorabs;
+        }
+
+        case AST_UNRESOLVED_ID: {
+            AST_UnresolvedId *id1 = (AST_UnresolvedId*)lhs;
+            AST_UnresolvedId *id2 = (AST_UnresolvedId*)rhs;
+
+            return !strcmp(id1->name, id2->name);
+        }
+
+        default: {
+            NOT_IMPLEMENTED();
+        }
+    }
+}
