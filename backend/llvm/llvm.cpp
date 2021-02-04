@@ -62,13 +62,28 @@ llvm::Type* T2L_Context::get_llvm_type(AST_Type* type) {
         }
 
         case AST_ARRAY_TYPE: {
-            AST_ArrayType* at = (AST_ArrayType*)type;
+            AST_ArrayType *at = (AST_ArrayType*)type;
             llvm::Type* l_base_type = get_llvm_type(at->base_type);
 
-            llvm::ArrayType* l_at = llvm::ArrayType::get(l_base_type, at->array_length);
+            llvm::ArrayType *llvm_array_type = llvm::ArrayType::get(l_base_type, at->array_length);
 
-            translated_types.insert(type, l_at);
-            return l_at;
+            translated_types.insert(type, llvm_array_type);
+            return llvm_array_type;
+        }
+
+        case AST_STRUCT: {
+            AST_Struct *st = (AST_Struct*)type;
+            arr<llvm::Type*> elements;
+
+            for (auto& member : st->members) {
+                elements.push(get_llvm_type(member.type));
+            }
+
+            llvm::ArrayRef<llvm::Type*> ref(elements.begin(), elements.end());
+
+            llvm::StructType *llvm_struct = llvm::StructType::create(lc, ref);
+            translated_types.insert(type, llvm_struct);
+            return llvm_struct;
         }
 
         default:

@@ -1093,20 +1093,20 @@ bool parse_let(Context& ctx, TokenReader& r) {
     return true;
 }
 
-AST_Struct* parse_struct(Context& ctx, TokenReader& r, bool decl) {
+AST_Struct *parse_struct(Context& ctx, TokenReader& r, bool decl) {
+    AST_Struct *st;
+
     Token struct_kw = r.expect_full(KW_STRUCT);
 
-    // This only ever gets called if the 'struct' keyword
-    // has been peeked, no need for MUST check
+    // parse_struct only ever gets called if the 'struct' keyword has been peeked
     assert (struct_kw.type);
 
-    AST_Struct* st;
     if (decl) {
-        // TODO this is broken since skim was removed
         Token nameToken = r.expect_full(TOK_ID);
         MUST (nameToken.type); 
 
-        st = (AST_Struct*)ctx.resolve({ nameToken.name });
+        st = ctx.alloc<AST_Struct>(nameToken.name);
+        MUST (ctx.declare({ .name = st->name }, st));
     }
     else {
         st = ctx.alloc<AST_Struct>(nullptr);

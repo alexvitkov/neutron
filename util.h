@@ -11,9 +11,9 @@
 using std::wcout;
 
 #ifdef _MSC_VER
-#   define UNREACHABLE __assume(false)
+#   define UNREACHABLE { assert(!"Unreachable"); __assume(false); }
 #else
-#   define UNREACHABLE __builtin_unreachable()
+#   define UNREACHABLE { assert(!"Unreachable"); __builtin_unreachable(); }
 #endif
 
 #define DIE(msg) { assert(!(msg)); UNREACHABLE; }

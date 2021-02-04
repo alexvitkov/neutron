@@ -222,7 +222,7 @@ struct AST_Struct : AST_Type {
 
 struct AST_MemberAccess : AST_Value {
     AST_Value* lhs;
-    int index;
+    u64 index;
     const char* member_name;
     inline AST_MemberAccess(AST_Value* lhs, const char* member_name) 
         : AST_Value(AST_MEMBER_ACCESS, nullptr), index(-1), lhs(lhs), member_name(member_name) {}

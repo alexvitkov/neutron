@@ -101,11 +101,11 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
             o << instr.bin.dst << " <- " << instr.bin.lhs << " < " << instr.bin.rhs << std::endl;
             break;
         case TOPC_PTR_OFFSET: {
-            o << instr.gep.dst << " <- " << instr.gep.base; //<< "[" << *instr.bin.rhs << "]&" << std::endl;
+            o << instr.gep.dst << " <- GEP " << instr.gep.base << "";
             for (TIR_Value v : instr.gep.offsets) {
                 o << '[' << v << ']';
             }
-            o << "&\n";
+            o << "\n";
             break;
         }
         case TOPC_RET:
@@ -164,34 +164,59 @@ void TIR_Function::print() {
 
 TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst);
 
-TIR_Value store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
-    switch (dst->nodetype) {
+bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
+    switch (val->nodetype) {
         case AST_VAR: {
-            AST_Var* var = (AST_Var*)dst;
+            AST_Var* var = (AST_Var*)val;
 
             if (var->is_global || var->always_on_stack) {
-                TIR_Value ptrloc = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
-
-                TIR_Value srcloc = compile_node_rvalue(fn, src, {});
-                fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
-                return ptrloc;
+                *out = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
+                return true;
             }
             else {
                 TIR_Value varloc = fn._valmap[var];
-                return compile_node_rvalue(fn, src, varloc);
+                return false;
             }
-
         }
-        case AST_DEREFERENCE: {
-            AST_Dereference* deref = (AST_Dereference*)dst;
-            TIR_Value ptrloc = compile_node_rvalue(fn, deref->ptr, {});
-            TIR_Value srcloc = compile_node_rvalue(fn, src, {});
 
-            fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
-            return ptrloc;
+        case AST_DEREFERENCE: {
+            AST_Dereference* deref = (AST_Dereference*)val;
+            *out = compile_node_rvalue(fn, deref->ptr, {});
+            return true;
+        }
+
+        case AST_MEMBER_ACCESS: {
+            AST_MemberAccess *member_access = (AST_MemberAccess*)val;
+
+            TIR_Value base;
+            assert (get_location(fn, member_access->lhs, &base));
+
+            arr<TIR_Value> offsets = {
+                {
+                    .valuespace = TVS_VALUE,
+                    .offset = 0,
+                    .type = &t_u32,
+                },
+                {
+                    .valuespace = TVS_VALUE,
+                    .offset = member_access->index,
+                    .type = &t_u32,
+                }
+            };
+
+            *out = fn.alloc_temp(member_access->type);
+            fn.emit({ 
+                .opcode = TOPC_PTR_OFFSET,
+                .gep = {
+                    .dst = *out,
+                    .base = base,
+                    .offsets = offsets.release(),
+                }
+            });
+            return true;
         }
         default:
-            assert(!"Not supported");
+            UNREACHABLE;
     }
 }
 
@@ -428,14 +453,37 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
 
         case AST_ASSIGNMENT: {
             AST_BinaryOp *assign = (AST_BinaryOp*)node;
-            TIR_Value tv = store(fn, assign->lhs, assign->rhs);
+            TIR_Value ptrloc;
 
-            if (!dst) {
-                return tv;
+            if (get_location(fn, assign->lhs, &ptrloc)) {
+                TIR_Value tmp = compile_node_rvalue(fn, assign->rhs, {});
+
+                fn.emit({ 
+                    .opcode = TOPC_STORE, 
+                    .un = {
+                        .dst = ptrloc,
+                        .src = tmp,
+                    }
+                });
+
+                if (dst) {
+                    fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = tmp } });
+                    return dst;
+                } else {
+                    return tmp;
+                }
             }
+            else {
+                TIR_Value lhsloc = compile_node_rvalue(fn, assign->lhs, {});
+                TIR_Value valloc = compile_node_rvalue(fn, assign->rhs, lhsloc);
 
-            fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = tv } });
-            return dst;
+                if (dst) {
+                    fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = valloc } });
+                    return dst;
+                } else {
+                    return ptrloc;
+                }
+            }
         }
 
         case AST_DEREFERENCE: {
@@ -611,6 +659,23 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             }
         }
 
+        case AST_MEMBER_ACCESS: {
+            AST_MemberAccess *ma = (AST_MemberAccess*)node;
+
+            TIR_Value src;
+            assert (get_location(fn, ma, &src));
+
+            if (!dst)
+                dst = fn.alloc_temp(ma->type);
+
+            fn.emit({
+                .opcode = TOPC_LOAD,
+                .un = { .dst = dst, .src = src }
+            });
+
+            return dst;
+        }
+
         default:
             UNREACHABLE;
     }
@@ -663,6 +728,10 @@ void TIR_Context::compile_all() {
 
             // We already ran through the variables in the previous loop
             case AST_VAR:
+                continue;
+
+            // Nothing to do for structs
+            case AST_STRUCT:
                 continue;
 
             default:

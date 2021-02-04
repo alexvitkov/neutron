@@ -606,8 +606,14 @@ Error:
             AST_Struct* s = (AST_Struct*)gettype(ctx, ma->lhs);
             MUST (s);
             if (s->nodetype != AST_STRUCT) {
+                // TODO ERROR
                 ctx.error({ .code = ERR_NO_SUCH_MEMBER, });
                 return nullptr;
+            }
+
+            if (ma->lhs->nodetype == AST_VAR) {
+                AST_Var* var = (AST_Var*)ma->lhs;
+                var->always_on_stack = true;
             }
 
             for (u32 i = 0; i < s->members.size; i++) {
@@ -618,6 +624,7 @@ Error:
                     return member.type;
                 }
             }
+
             ctx.error({ .code = ERR_NO_SUCH_MEMBER, });
             return nullptr;
         }

@@ -101,6 +101,7 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
         case AST_BINARY_OP:      print(o, (AST_BinaryOp*)node, false); break;
         case AST_ASSIGNMENT:     print(o, (AST_BinaryOp*)node, false); break;
         case AST_VAR:            print(o, (AST_Var*)node, decl); break;
+        case AST_STRUCT:         print(o, (AST_Struct*)node, decl); break;
 
         case AST_PRIMITIVE_TYPE: o << (AST_PrimitiveType*)node; break;
         case AST_RETURN:         o << (AST_Return*)node; break;
