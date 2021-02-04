@@ -1,0 +1,74 @@
+// LEFT ASSOCIATIVE OPERATORS
+fn add_is_left_assoc_1() { (x + y) + z; }
+fn add_is_left_assoc_2() {  x + y  + z; }
+
+fn sub_is_left_assoc_1() { (x - y) - z; }
+fn sub_is_left_assoc_2() {  x - y  - z; }
+
+fn mul_is_left_assoc_1() { (x * y) * z; }
+fn mul_is_left_assoc_2() {  x * y  * z; }
+
+fn div_is_left_assoc_1() { (x / y) / z; }
+fn div_is_left_assoc_2() {  x / y  / z; }
+
+fn mod_is_left_assoc_1() { (x % y) % z; }
+fn mod_is_left_assoc_2() {  x % y  % z; }
+
+fn equals_is_left_assoc_1() { (x == y) == z; }
+fn equals_is_left_assoc_2() {  x == y  == z; }
+
+fn and_is_left_assoc_1() { (x && y) && z; }
+fn and_is_left_assoc_2() {  x && y  && z; }
+
+fn or_is_left_assoc_1() { (x || y) || z; }
+fn or_is_left_assoc_2() {  x || y  || z; }
+
+// fn band_is_left_assoc_1() { (x & y) & z; }
+// fn band_is_left_assoc_2() {  x & y  & z; }
+
+fn bor_is_left_assoc_1() { (x | y) | z; }
+fn bor_is_left_assoc_2() {  x | y  | z; }
+
+fn xor_is_left_assoc_1() { (x ^ y) ^ z; }
+fn xor_is_left_assoc_2() {  x ^ y  ^ z; }
+
+fn shl_is_left_assoc_1() { (x << y) << z; }
+fn shl_is_left_assoc_2() {  x << y  << z; }
+
+fn shr_is_left_assoc_1() { (x >> y) >> z; }
+fn shr_is_left_assoc_2() {  x >> y  >> z; }
+
+
+// RIGHT ASSOCIATIVE OPERATORS
+fn assign_is_right_assoc_1() { x = (y = z); }
+fn assign_is_right_assoc_2() { x =  y = z; }
+
+fn add_assign_is_right_assoc_1() { x += (y += z); }
+fn add_assign_is_right_assoc_2() { x +=  y += z; }
+
+fn sub_assign_is_right_assoc_1() { x -= (y -= z); }
+fn sub_assign_is_right_assoc_2() { x -=  y -= z; }
+
+fn mul_assign_is_right_assoc_1() { x *= (y *= z); }
+fn mul_assign_is_right_assoc_2() { x *=  y *= z; }
+
+fn div_assign_is_right_assoc_1() { x /= (y /= z); }
+fn div_assign_is_right_assoc_2() { x /=  y /= z; }
+
+fn mod_assign_is_right_assoc_1() { x %= (y %= z); }
+fn mod_assign_is_right_assoc_2() { x %=  y %= z; }
+
+fn shl_assign_is_right_assoc_1() { x <<= (y <<= z); }
+fn shl_assign_is_right_assoc_2() { x <<=  y <<= z; }
+
+fn shr_assign_is_right_assoc_1() { x >>= (y >>= z); }
+fn shr_assign_is_right_assoc_2() { x >>=  y >>= z; }
+
+//fn band_assign_is_right_assoc_1() { x &= (y &= z); }
+fn band_assign_is_right_assoc_2() { x &=  y &= z; }
+
+fn bor_assign_is_right_assoc_1() { x |= (y |= z); }
+fn bor_assign_is_right_assoc_2() { x |=  y |= z; }
+
+fn xor_assign_is_right_assoc_1() { x ^= (y ^= z); }
+fn xor_assign_is_right_assoc_2() { x ^=  y ^= z; }

@@ -4,6 +4,7 @@ main.exe
 ntr
 a.out
 run.sh
+test.sh
 test.n
 compile_commands.json
 Makefile

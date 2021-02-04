@@ -1,16 +1,47 @@
+// prec(*) > prec(+)
+fn add_mul_1() { a + b * c; }
+fn add_mul_2() { a + (b * c); }
+fn mul_add_1() { a * b + c; }
+fn mul_add_2() { (a * b) + c; }
 
-fn mul_add_1() { 3 +  2 * 4; }
-fn mul_add_2() { 3 + (2 * 4); }
+// prec(+) == prec(-)
+fn add_sub_1() { a + b - c; }
+fn add_sub_2() { (a + b) - c; }
+fn sub_add_1() { a - b + c; }
+fn sub_add_2() { (a - b) + c; }
 
-fn add_mul_1() {  3 * 2 + 4; }
-fn add_mul_2() { (3 * 2) + 4; }
+// prec(>>) > prec(+)
+fn add_shr_1() { a >> b + c; }
+fn add_shr_2() { (a >> b) + c; }
+fn shr_add_1() { a + b >> c; }
+fn shr_add_2() { a + (b >> c); }
 
-fn add_left_assoc_1() {  1 + 2  + 3; }
-fn add_left_assoc_2() { (1 + 2) + 3; }
+// prec(*) > prec(>>)
+fn mul_shr_1() { a >> b * c; }
+fn mul_shr_2() { a >> (b * c); }
+fn shr_mul_1() { (a * b) >> c; }
+fn shr_mul_2() { a * b >> c; }
 
-fn mul_left_assoc_1() {  1 * 2  * 3; }
-fn mul_left_assoc_2() { (1 * 2) * 3; }
+// prec(>>) == prec(<<)
+fn shl_shr_1() { a << b >> c; }
+fn shl_shr_2() { (a << b) >> c; }
+fn shr_shl_1() { a >> b << c; }
+fn shr_shl_2() { (a >> b) << c; }
 
-fn assign_right_assoc_1() { x = (y = z); }
-fn assign_right_assoc_2() { x =  y = z ; }
+// prec(&&) > prec(||)
+fn add_or_1() { a && b || c; }
+fn add_or_2() { (a && b) || c; }
+fn or_add_1() { a || b && c; }
+fn or_add_2() { a || (b && c); }
 
+// prec(==) == prec(!=)
+fn eq_ne_1() { a == b != c; }
+fn eq_ne_2() { (a == b) != c; }
+fn ne_eq_1() { a != b == c; }
+fn ne_eq_2() { (a != b) == c; }
+
+// prec(<) > prec(==)
+fn lt_eq_1() { (a < b) == c; }
+fn lt_eq_2() { (a < b) == c; }
+fn eq_lt_1() { a == b < c; }
+fn eq_lt_2() { a == (b < c); }

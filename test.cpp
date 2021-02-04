@@ -64,6 +64,7 @@ void run_tree_compare_tests() {
         }
 
         map<char*, arr<AST_Node*>> groups;
+        char *fail = nullptr;
 
         for (auto& decl : global.declarations) {
             if (!decl.key.name)
@@ -73,14 +74,12 @@ void run_tree_compare_tests() {
             // but without the last character
             // TODO MEMORY LEAK - we're leaking the buffer of course
             size_t length = strlen(decl.key.name) - 1;
-            char* buffer = (char*)malloc(length);
+            char* buffer = (char*)malloc(length + 1);
             memcpy(buffer, decl.key.name, length);
             buffer[length] = 0;
 
             groups[buffer].push(decl.value);
         }
-
-        char *fail = nullptr;
 
         for (auto& group : groups) {
             for (u32 i = 1; i < group.value.size; i++) {
@@ -102,7 +101,7 @@ DONE:
 }
 
 
-int main() {
+int main(int argc, const char** argv) {
     run_parse_tests();
     run_tree_compare_tests();
     return 0;

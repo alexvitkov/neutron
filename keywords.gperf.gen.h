@@ -58,13 +58,13 @@ Perfect_Hash::hash (const char *str, size_t len)
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
-      93, 93, 93, 12, 93, 93, 93, 35, 40, 93,
+      93, 93, 93, 17, 93, 93, 93, 12, 40, 93,
       93, 93,  7, 35, 93, 30, 30, 51, 93, 30,
       93, 15, 93, 93,  0, 93, 55, 93, 93, 93,
       10,  5,  0, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
-      93, 93, 35, 93, 41, 93, 93,  0,  5, 93,
+      93, 93, 93, 93, 41, 93, 93,  0,  5, 93,
       93,  5, 15, 93,  0, 10, 93, 93,  0, 93,
       40,  0, 93, 93,  0,  0,  0, 35, 93,  0,
       93, 93, 93, 93, 25, 93, 93, 93, 93, 93,
@@ -121,8 +121,8 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
       {"<=",     OP_LESSEREQUALS},
 #line 19 "/home/alex/src/neutron/keywords.gperf"
       {"f64",    KW_F64},
-#line 37 "/home/alex/src/neutron/keywords.gperf"
-      {"!=",     OP_NOTEQUALS},
+#line 42 "/home/alex/src/neutron/keywords.gperf"
+      {"%=",    OP_MODASSIGN},
 #line 25 "/home/alex/src/neutron/keywords.gperf"
       {"false",  KW_FALSE},
       {""},
@@ -130,7 +130,9 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
       {"<<",     OP_SHIFTLEFT},
 #line 43 "/home/alex/src/neutron/keywords.gperf"
       {"<<=",    OP_SHIFTLEFTASSIGN},
-      {""}, {""}, {""},
+#line 37 "/home/alex/src/neutron/keywords.gperf"
+      {"!=",     OP_NOTEQUALS},
+      {""}, {""},
 #line 26 "/home/alex/src/neutron/keywords.gperf"
       {"if",     KW_IF},
 #line 15 "/home/alex/src/neutron/keywords.gperf"
@@ -178,9 +180,7 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
       {""}, {""}, {""},
 #line 28 "/home/alex/src/neutron/keywords.gperf"
       {"++",     OP_PLUSPLUS},
-#line 42 "/home/alex/src/neutron/keywords.gperf"
-      {"\\%=",    OP_MODASSIGN},
-      {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
+      {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
 #line 35 "/home/alex/src/neutron/keywords.gperf"
       {"&&",     OP_AND},
       {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
