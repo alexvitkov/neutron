@@ -41,7 +41,7 @@ struct T2L_Context {
     llvm::Module mod;
 
     map<AST_Type*, llvm::Type*> translated_types;
-    map<TIR_Value*, llvm::Value*> translated_globals;
+    map<TIR_Value, llvm::Value*> translated_globals;
     map<AST_Fn*, T2L_FunctionContext*> global_functions;
 
     llvm::IRBuilder<> builder;
@@ -61,7 +61,7 @@ struct T2L_FunctionContext {
     arr<T2L_BlockContext*> blocks;
 
     map<TIR_Block*, T2L_BlockContext*> block_translation;
-    map<TIR_Value*, llvm::Value*> stack_pointers;
+    map<TIR_Value, llvm::Value*> stack_pointers;
 
     void compile_header();
     void compile();
@@ -76,24 +76,24 @@ struct T2L_BlockContext {
     TIR_Block *tir_block;
     llvm::BasicBlock *llvm_block;
 
-    map<TIR_Value*, llvm::Value*> modified_values;
-    map<TIR_Value*, TIR_Instruction*> values_to_modify;
+    map<TIR_Value, llvm::Value*> modified_values;
+    map<TIR_Value, TIR_Instruction*> values_to_modify;
 
     struct Promise {
         llvm::PHINode *phi;
         llvm::BasicBlock *llvm_block;
     };
-    map<TIR_Value*, arr<llvm::PHINode*>> promises;
+    map<TIR_Value, arr<llvm::PHINode*>> promises;
 
     void set_value(TIR_Instruction* tir_instr, llvm::Value* l_val);
-    llvm::Value* get_value(TIR_Value* t_val);
+    llvm::Value* get_value(TIR_Value t_val);
 
 
     struct ParentBlockValue {
         T2L_BlockContext *source, *promise;
         llvm::Value *value;
     };
-    llvm::Value* get_value_graph_recurse(TIR_Value* tir_val, bool ask_parents);
+    llvm::Value* get_value_graph_recurse(TIR_Value tir_val, bool ask_parents);
 
     void prepass();
     void compile();

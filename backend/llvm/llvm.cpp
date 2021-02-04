@@ -3,7 +3,9 @@
 
 using namespace llvm;
 
-T2L_Context::T2L_Context(TIR_Context& tirc) : tir_context(tirc), mod("ntrmod", lc), builder(lc) {
+T2L_Context::T2L_Context(TIR_Context& tirc) 
+    : tir_context(tirc), mod("ntrmod", lc), builder(lc) 
+{
     translated_types.insert(&t_bool, IntegerType::get(lc, 1));
     translated_types.insert(&t_u8,   IntegerType::get(lc, 8));
     translated_types.insert(&t_u16,  IntegerType::get(lc, 16));
@@ -77,13 +79,13 @@ llvm::Type* T2L_Context::get_llvm_type(AST_Type* type) {
 void T2L_BlockContext::prepass() {
     for (auto& instr : tir_block->instructions) {
         if (instr.opcode & TOPC_MODIFIES_DST_BIT) {
-            TIR_Value* dst = instr.un.dst;
+            TIR_Value dst = instr.un.dst;
             values_to_modify[dst] = &instr;
         }
     }
 }
 
-llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value *tir_val, bool ask_your_parents) {
+llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value tir_val, bool ask_your_parents) {
 
     T2L_Context* ctx = fn->t2l_context;
 
@@ -108,7 +110,7 @@ llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value *tir_val, bool 
     if (modified_values.find(tir_val, &asdf))
         return asdf;
 
-    llvm::Type *llvm_type = ctx->get_llvm_type(tir_val->type);
+    llvm::Type *llvm_type = ctx->get_llvm_type(tir_val.type);
 
     auto ip = ctx->builder.GetInsertBlock();
 
@@ -139,14 +141,14 @@ llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value *tir_val, bool 
     return phi;
 }
 
-llvm::Value* T2L_BlockContext::get_value(TIR_Value* tir_val) {
+llvm::Value* T2L_BlockContext::get_value(TIR_Value tir_val) {
     T2L_Context* ctx = fn->t2l_context;
 
-    switch (tir_val->valuespace) {
+    switch (tir_val.valuespace) {
         case TVS_VALUE: {
-            llvm::Type *l_type = ctx->translated_types[tir_val->type];
+            llvm::Type *l_type = ctx->translated_types[tir_val.type];
             assert(l_type);
-            return ConstantInt::get(l_type, tir_val->offset, false);
+            return ConstantInt::get(l_type, tir_val.offset, false);
         }
         case TVS_RET_VALUE:
         case TVS_TEMP: {
@@ -164,7 +166,7 @@ llvm::Value* T2L_BlockContext::get_value(TIR_Value* tir_val) {
         }
 
         case TVS_ARGUMENT: {
-            return fn->llvm_fn->arg_begin() + tir_val->offset;
+            return fn->llvm_fn->arg_begin() + tir_val.offset;
         }
 
         case TVS_STACK: {
@@ -177,7 +179,7 @@ llvm::Value* T2L_BlockContext::get_value(TIR_Value* tir_val) {
 }
 
 void T2L_BlockContext::set_value(TIR_Instruction* tir_instr, llvm::Value* llvm_val) {
-    TIR_Value *dst = tir_instr->un.dst;
+    TIR_Value dst = tir_instr->un.dst;
 
     modified_values[dst] = llvm_val;
 
@@ -225,7 +227,7 @@ void T2L_BlockContext::compile() {
             case TOPC_RET: {
                 // TODO t_void
                 if (((AST_FnType*)fn->tir_fn->ast_fn->type)->returntype != &t_void) {
-                    llvm::Value *retval = get_value(&fn->tir_fn->retval);
+                    llvm::Value *retval = get_value(fn->tir_fn->retval);
                     builder.CreateRet(retval);
                 }
                 else {
@@ -293,7 +295,7 @@ void T2L_BlockContext::compile() {
 
                 arr<llvm::Value*> vals;
 
-                for (TIR_Value* v : instr.gep.offsets)
+                for (TIR_Value v : instr.gep.offsets)
                     vals.push(get_value(v));
 
                 gep = builder.CreateGEP(lhs, llvm::ArrayRef<llvm::Value*>(vals.buffer, vals.size));
@@ -302,7 +304,7 @@ void T2L_BlockContext::compile() {
                 break;
             }
             case TOPC_BITCAST: {
-                llvm::Type* l_dest_type = fn->t2l_context->get_llvm_type(instr.un.dst->type);
+                llvm::Type* l_dest_type = fn->t2l_context->get_llvm_type(instr.un.dst.type);
                 llvm::Value* l_src = get_value(instr.un.src);
                 llvm::Value* val = builder.CreateBitCast(l_src, l_dest_type);
                 set_value(&instr, val);
@@ -343,19 +345,17 @@ void T2L_FunctionContext::compile() {
 
         arr<Context*> rem = { &ast_fn->block.ctx };
 
-        for (u32 i = 0; i < tir_fn->values.size; i++) {
+        for (auto& varval : tir_fn->stack) {
 
-            TIR_Value& val_ref = tir_fn->values[i];
+            if (varval.val.valuespace == TVS_STACK) {
 
-            if (val_ref.valuespace == TVS_STACK) {
-
-                AST_PointerType *val_ptr_type = (AST_PointerType*)val_ref.type;
+                AST_PointerType *val_ptr_type = (AST_PointerType*)varval.val.type;
 
                 AST_Type *inner_type = val_ptr_type->pointed_type;
                 llvm::Type* llvm_type = t2l_context->get_llvm_type(inner_type);
 
-                llvm::Value* llvm_var_pointer = builder.CreateAlloca(llvm_type);
-                stack_pointers[&val_ref] = llvm_var_pointer;
+                llvm::Value *llvm_var_pointer = builder.CreateAlloca(llvm_type);
+                stack_pointers[varval.val] = llvm_var_pointer;
             }
         }
     }
@@ -470,7 +470,7 @@ void T2L_Context::compile_all() {
     // Initialize the global variables
     for (auto& kvp : tir_context.valmap) {
         AST_Value* ast_value = kvp.key;
-        TIR_Value* tir_value = kvp.value;
+        TIR_Value tir_value = kvp.value;
 
         assert (ast_value->nodetype == AST_VAR);
 

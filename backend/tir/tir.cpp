@@ -2,33 +2,42 @@
 #include "../../typer.h"
 #include <iostream>
 
-void TIR_Function::free_temp(TIR_Value* val) { }
+TIR_Value::operator bool() {
+    return valuespace;
+}
+bool operator== (TIR_Value& lhs, TIR_Value& rhs) {
+    return lhs.valuespace == rhs.valuespace && lhs.offset == rhs.offset;
+}
+bool operator!= (TIR_Value& lhs, TIR_Value& rhs) {
+    return !(lhs == rhs);
+}
+u32 map_hash(TIR_Value data)                  { return data.valuespace ^ data.offset; }
+bool map_equals(TIR_Value lhs, TIR_Value rhs) { return lhs == rhs; }
+
 
 void TIR_Function::emit(TIR_Instruction inst) {
     writepoint->instructions.push(inst);
 }
 
-TIR_Value* TIR_Function::alloc_temp(AST_Type* type) {
-    return &values.push({
+TIR_Value TIR_Function::alloc_temp(AST_Type* type) {
+    return {
         .valuespace = TVS_TEMP,
         .offset = temp_offset++,
         .type = type,
-    });
+    };
 }
 
-TIR_Value* TIR_Function::alloc_stack(AST_Type* type) {
-    return &values.push({
+TIR_Value TIR_Function::alloc_stack(AST_Var* var) {
+    TIR_Value val {
         .valuespace = TVS_STACK,
         .offset = temp_offset++,
-        .type = type,
-    });
+        .type = get_pointer_type(var->type),
+    };
+    stack.push({var, val});
+    return val;
 }
 
-TIR_Value* TIR_Function::alloc_val(TIR_Value val) {
-    return &values.push(val);
-}
-
-std::wostream& operator<< (std::wostream& o, TIR_Value& val) {
+std::wostream& operator<< (std::wostream& o, TIR_Value val) {
     o << dim;
     print(o, val.type, false);
     o << resetstyle << ' ';
@@ -67,34 +76,34 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
     o << "    ";
     switch (instr.opcode) {
         case TOPC_MOV:
-            o << *instr.un.dst << " <- " << *instr.un.src << std::endl;
+            o << instr.un.dst << " <- " << instr.un.src << std::endl;
             break;
         case TOPC_BITCAST:
-            o << *instr.un.dst << " <- bitcast " << *instr.un.src << std::endl;
+            o << instr.un.dst << " <- bitcast " << instr.un.src << std::endl;
             break;
         case TOPC_LOAD:
-            o << *instr.un.dst << " <-- load " << *instr.un.src << std::endl;
+            o << instr.un.dst << " <-- load " << instr.un.src << std::endl;
             break;
         case TOPC_STORE:
             // o << *instr.un.dst << " <- store " << *instr.un.src << std::endl;
-            o << "store " << *instr.un.src << " -> " << *instr.un.dst << std::endl;
+            o << "store " << instr.un.src << " -> " << instr.un.dst << std::endl;
             break;
         case TOPC_ADD:
-            o << *instr.bin.dst << " <- " << *instr.bin.lhs << " + " << *instr.bin.rhs << std::endl;
+            o << instr.bin.dst << " <- " << instr.bin.lhs << " + " << instr.bin.rhs << std::endl;
             break;
         case TOPC_SUB:
-            o << *instr.bin.dst << " <- " << *instr.bin.lhs << " - " << *instr.bin.rhs << std::endl;
+            o << instr.bin.dst << " <- " << instr.bin.lhs << " - " << instr.bin.rhs << std::endl;
             break;
         case TOPC_EQ:
-            o << *instr.bin.dst << " <- " << *instr.bin.lhs << " == " << *instr.bin.rhs << std::endl;
+            o << instr.bin.dst << " <- " << instr.bin.lhs << " == " << instr.bin.rhs << std::endl;
             break;
         case TOPC_LT:
-            o << *instr.bin.dst << " <- " << *instr.bin.lhs << " < " << *instr.bin.rhs << std::endl;
+            o << instr.bin.dst << " <- " << instr.bin.lhs << " < " << instr.bin.rhs << std::endl;
             break;
         case TOPC_PTR_OFFSET: {
-            o << *instr.gep.dst << " <- " << *instr.gep.base; //<< "[" << *instr.bin.rhs << "]&" << std::endl;
-            for (TIR_Value* v : instr.gep.offsets) {
-                o << '[' << *v << ']';
+            o << instr.gep.dst << " <- " << instr.gep.base; //<< "[" << *instr.bin.rhs << "]&" << std::endl;
+            for (TIR_Value v : instr.gep.offsets) {
+                o << '[' << v << ']';
             }
             o << "&\n";
             break;
@@ -104,13 +113,13 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
             break;
 
         case TOPC_CALL: {
-            if (instr.call.dst)
-                o << *instr.call.dst << " <- ";
+            if (instr.call.dst.valuespace != TVS_DISCARD)
+                o << instr.call.dst << " <- ";
             
             o << instr.call.fn->name << "(";
 
-            for (TIR_Value* val : instr.call.args)
-                o << *val << ", ";
+            for (TIR_Value val : instr.call.args)
+                o << val << ", ";
 
             if (instr.call.args.size > 0)
                 o << "\b\b";
@@ -125,7 +134,7 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
         }
 
         case TOPC_JMPIF: {
-            o << "if " << *instr.jmpif.cond 
+            o << "if " << instr.jmpif.cond 
               << " jmp block" << instr.jmpif.then_block->id
               << " else block" << instr.jmpif.else_block->id << std::endl;
             break;
@@ -153,30 +162,30 @@ void TIR_Function::print() {
     }
 }
 
-TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst);
+TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst);
 
-TIR_Value* store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
+TIR_Value store(TIR_Function& fn, AST_Value* dst, AST_Node* src) {
     switch (dst->nodetype) {
         case AST_VAR: {
             AST_Var* var = (AST_Var*)dst;
 
             if (var->is_global || var->always_on_stack) {
-                TIR_Value* ptrloc = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
+                TIR_Value ptrloc = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
 
-                TIR_Value* srcloc = compile_node_rvalue(fn, src, nullptr);
+                TIR_Value srcloc = compile_node_rvalue(fn, src, {});
                 fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
                 return ptrloc;
             }
             else {
-                TIR_Value* varloc = fn._valmap[var];
+                TIR_Value varloc = fn._valmap[var];
                 return compile_node_rvalue(fn, src, varloc);
             }
 
         }
         case AST_DEREFERENCE: {
             AST_Dereference* deref = (AST_Dereference*)dst;
-            TIR_Value* ptrloc = compile_node_rvalue(fn, deref->ptr, nullptr);
-            TIR_Value* srcloc = compile_node_rvalue(fn, src, nullptr);
+            TIR_Value ptrloc = compile_node_rvalue(fn, deref->ptr, {});
+            TIR_Value srcloc = compile_node_rvalue(fn, src, {});
 
             fn.emit({ .opcode = TOPC_STORE, .un = { .dst = ptrloc, .src = srcloc } });
             return ptrloc;
@@ -197,18 +206,18 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
         switch (decl->nodetype) {
             case AST_VAR: {
                 AST_Var* vardecl = (AST_Var*)decl;
-                TIR_Value* val;
+                TIR_Value val;
 
 
                 if (vardecl->argindex >= 0) {
-                    val = fn.alloc_val({
+                    val = {
                         .valuespace = TVS_ARGUMENT,
                         .offset = (u64)vardecl->argindex,
                         .type = vardecl->type
-                    });
+                    };
                 } 
                 else if (vardecl->always_on_stack) {
-                    val = fn.alloc_stack(get_pointer_type(vardecl->type));
+                    val = fn.alloc_stack(vardecl);
                 } 
                 else {
                     val = fn.alloc_temp(vardecl->type);
@@ -226,7 +235,7 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
     }
 
     for (AST_Node* stmt : ast_block->statements) {
-        compile_node_rvalue(fn, stmt, nullptr);
+        compile_node_rvalue(fn, stmt, {});
     }
 
     if (after) {
@@ -238,7 +247,7 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
     }
 }
 
-TIR_Value* get_array_ptr(TIR_Function& fn, AST_Value* arr) {
+TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
 
     switch (arr->nodetype) {
         case AST_VAR: {
@@ -246,30 +255,27 @@ TIR_Value* get_array_ptr(TIR_Function& fn, AST_Value* arr) {
 
             if (var->is_global) {
                 return fn.c.valmap[var];
-            }
-            else {
+            } else {
                 NOT_IMPLEMENTED();
             }
 
             break;
         }
         default:
-            NOT_IMPLEMENTED();
+            UNREACHABLE;
     }
-
-    return nullptr;
 }
 
-TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst) {
+TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
     switch (node->nodetype) {
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
 
             if (var->is_global || var->always_on_stack) {
-                TIR_Value* ptrloc = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
-                assert(ptrloc);
+                TIR_Value ptrloc = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
+                assert(ptrloc.valuespace);
 
-                if (!dst)
+                if (!dst.valuespace)
                     dst = fn.alloc_temp(var->type);
 
                 fn.emit({
@@ -278,10 +284,10 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                 });
             }
             else {
-                TIR_Value* val = fn._valmap[var];
+                TIR_Value val = fn._valmap[var];
                 assert(val);
 
-                if (dst && dst != val)
+                if (dst.valuespace && dst != val)
                     fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
                 else
                     dst = val;
@@ -293,11 +299,11 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         case AST_NUMBER: {
             AST_Number* num = (AST_Number*)node;
 
-            TIR_Value* num_value = fn.alloc_val({
+            TIR_Value num_value = {
                 .valuespace = TVS_VALUE,
                 .offset = num->floorabs,
                 .type = num->type,
-            });
+            };
 
             if (dst)
                 fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = num_value } });
@@ -310,8 +316,8 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         case AST_BINARY_OP: {
             AST_BinaryOp* bin = (AST_BinaryOp*)node;
 
-            TIR_Value* lhs = compile_node_rvalue(fn, bin->lhs, nullptr);
-            TIR_Value* rhs = compile_node_rvalue(fn, bin->rhs, nullptr);
+            TIR_Value lhs = compile_node_rvalue(fn, bin->lhs, {});
+            TIR_Value rhs = compile_node_rvalue(fn, bin->rhs, {});
 
             TIR_OpCode opcode;
 
@@ -344,7 +350,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                 dst = fn.alloc_temp(bin->type);
 
             if (bin->op == OP_ADD_PTR_INT) {
-                arr<TIR_Value*> offsets = { rhs };
+                arr<TIR_Value> offsets = { rhs };
                 fn.emit({
                     .opcode = TOPC_PTR_OFFSET,
                     .gep = {.dst = dst, .base = lhs, .offsets = offsets.release()}
@@ -366,7 +372,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             AST_Fn* callee = (AST_Fn*)fncall->fn;
             AST_FnType* callee_type = (AST_FnType*)fncall->fn->type;
 
-            arr<TIR_Value*> args;
+            arr<TIR_Value> args;
 
             for (u32 i = 0; i < fncall->args.size; i++) {
 
@@ -374,9 +380,9 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                 if (i < callee_type->param_types.size)
                     callee_type->param_types[i];
 
-                TIR_Value*  arg_dst = fn.alloc_temp(param_type);
+                TIR_Value  arg_dst = fn.alloc_temp(param_type);
 
-                TIR_Value* arg = compile_node_rvalue(fn, fncall->args[i], arg_dst);
+                TIR_Value arg = compile_node_rvalue(fn, fncall->args[i], arg_dst);
                 args.push(arg);
             }
 
@@ -398,10 +404,10 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             AST_Return* ret = (AST_Return*)node;
 
             if (ret->value)
-                TIR_Value* retval = compile_node_rvalue(fn, ret->value, &fn.retval);
+                TIR_Value retval = compile_node_rvalue(fn, ret->value, fn.retval);
 
             fn.emit({ .opcode = TOPC_RET, .none = {} });
-            break;
+            return {};
         }
 
         case AST_BLOCK: {
@@ -417,12 +423,12 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             fn.blocks.push(continuation);
 
             fn.writepoint = continuation;
-            break;
+            return {};
         }
 
         case AST_ASSIGNMENT: {
             AST_BinaryOp *assign = (AST_BinaryOp*)node;
-            TIR_Value* tv = store(fn, assign->lhs, assign->rhs);
+            TIR_Value tv = store(fn, assign->lhs, assign->rhs);
 
             if (!dst) {
                 return tv;
@@ -435,7 +441,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         case AST_DEREFERENCE: {
             AST_Dereference *deref = (AST_Dereference*)node;
 
-            TIR_Value* ptrloc = fn.alloc_temp(deref->ptr->type);
+            TIR_Value ptrloc = fn.alloc_temp(deref->ptr->type);
             compile_node_rvalue(fn, deref->ptr, ptrloc);
 
             if (!dst)
@@ -457,7 +463,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
                     return var->is_global ? fn.c.valmap[var] : fn._valmap[var];
                 }
                 default:
-                    NOT_IMPLEMENTED();
+                    UNREACHABLE;
             }
         }
 
@@ -465,7 +471,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             AST_If* ifs = (AST_If*)node;
             TIR_Block* original_block = fn.writepoint;
 
-            TIR_Value* cond = compile_node_rvalue(fn, ifs->condition, nullptr);
+            TIR_Value cond = compile_node_rvalue(fn, ifs->condition, {});
 
             // TODO ALLOCATION
             TIR_Block* then_block = new TIR_Block();
@@ -489,7 +495,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             fn.blocks.push(continuation);
 
             fn.writepoint = continuation;
-            break;
+            return {};
         }
 
         case AST_WHILE: {
@@ -509,7 +515,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
 
             // Compile the condition into the condition block
             fn.writepoint = cond_block;
-            TIR_Value* cond = compile_node_rvalue(fn, whiles->condition, nullptr);
+            TIR_Value cond = compile_node_rvalue(fn, whiles->condition, {});
 
             // If the condition is false, skip the loop body and jump to the continuation
             // If the condition is true, jump to the loop body
@@ -537,7 +543,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             fn.blocks.push(continuation);
 
             fn.writepoint = continuation;
-            break;
+            return {};
         }
 
         case AST_STRING_LITERAL: {
@@ -546,7 +552,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             DeclarationKey key = { .string_literal = str };
             AST_Var* strvar = (AST_Var*)fn.c.global.resolve(key);
 
-            TIR_Value* val = fn.c.valmap[str];
+            TIR_Value val = fn.c.valmap[str];
 
             if (!dst)
                 dst = fn.alloc_temp(str->type);
@@ -561,12 +567,12 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
 
             if (cast->inner->type->nodetype == AST_ARRAY_TYPE && cast->type->nodetype == AST_POINTER_TYPE) {
 
-                TIR_Value* var_location = get_array_ptr(fn, cast->inner);
+                TIR_Value var_location = get_array_ptr(fn, cast->inner);
 
-                TIR_Value* offset_0 
-                    = fn.alloc_val({ .valuespace = TVS_VALUE, .offset = 0, .type = &t_u32 });
+                TIR_Value offset_0 
+                    = { .valuespace = TVS_VALUE, .offset = 0, .type = &t_u32 };
 
-                arr<TIR_Value*> offsets = { offset_0, offset_0 };
+                arr<TIR_Value> offsets = { offset_0, offset_0 };
 
                 if (!dst)
                     dst = fn.alloc_temp(cast->type);
@@ -585,7 +591,7 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
             else if ((cast->inner->type->nodetype == AST_POINTER_TYPE && cast->type->nodetype == AST_POINTER_TYPE)
                     || cast->type == &t_any8) {
 
-                TIR_Value* src = compile_node_rvalue(fn, cast->inner, nullptr);
+                TIR_Value src = compile_node_rvalue(fn, cast->inner, {});
 
                 if (!dst)
                     dst = fn.alloc_temp(cast->type);
@@ -606,24 +612,24 @@ TIR_Value* compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value* dst)
         }
 
         default:
-            NOT_IMPLEMENTED();
+            UNREACHABLE;
     }
-
-    return nullptr;
 }
 
 void TIR_Context::compile_all() {
 
-    // Run through the global variables and assign them TIR_Values* and initial values
+    // Run through the global variables and assign them TIR_Values and initial values
     for(auto& decl : global.declarations) {
         switch (decl.value->nodetype) {
             case AST_VAR: {
-                TIR_Value& val = values.push({
+                AST_Var* var = (AST_Var*)decl.value;
+
+                TIR_Value val = {
                     .valuespace = TVS_GLOBAL,
-                    .offset = values.size,
+                    .offset = globals_ofset++,
                     .type = get_pointer_type(((AST_Var*)decl.value)->type),
-                });
-                valmap[(AST_Value*)decl.value] = &val;
+                };
+                valmap[var] = val;
                 break;
             }
 

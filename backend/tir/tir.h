@@ -39,7 +39,16 @@ struct TIR_Value {
     TIR_ValueSpace valuespace;
     u64 offset;
     AST_Type* type;
+
+    operator bool();
 };
+
+// For the implementation of all these we consider 2 values equal 
+// if they have the same valuespace and offset
+bool operator== (TIR_Value& lhs, TIR_Value& rhs);
+bool operator!= (TIR_Value& lhs, TIR_Value& rhs);
+u32 map_hash(TIR_Value data);
+bool map_equals(TIR_Value lhs, TIR_Value rhs);
 
 struct TIR_Block;
 
@@ -49,24 +58,24 @@ struct TIR_Instruction {
         struct { char _; } none;
 
         // VOLATILE
-        // All union members with a TIR_Value* destination MUST have it as the first field in the struct
+        // All union members with a TIR_Value destination MUST have it as the first field in the struct
         //
         // That way if we know the opcode if the instruction has TOPC_MODIFIES_DST_BIT set,
         // then we can just use the union .dst, regardless of whether the instruction a unary/binary/call/whatever
         TIR_Value *dst;
 
         struct {
-            TIR_Value *dst, *lhs, *rhs;
+            TIR_Value dst, lhs, rhs;
         } bin;
 
         struct {
-            TIR_Value *dst, *src;
+            TIR_Value dst, src;
         } un;
 
         struct {
-            TIR_Value *dst;
+            TIR_Value dst;
             AST_Fn *fn;
-            arr_ref<TIR_Value*> args;
+            arr_ref<TIR_Value> args;
         } call;
 
         struct {
@@ -74,13 +83,13 @@ struct TIR_Instruction {
         } jmp;
 
         struct {
-            TIR_Value *cond;
+            TIR_Value cond;
             TIR_Block *then_block, *else_block;
         } jmpif;
 
         struct {
-            TIR_Value *dst, *base;
-            arr_ref<TIR_Value*> offsets;
+            TIR_Value dst, base;
+            arr_ref<TIR_Value> offsets;
         } gep;
     };
 
@@ -105,8 +114,8 @@ struct TIR_Context {
     GlobalContext& global;
     map<AST_Fn*, TIR_Function*> fns;
 
-    bucketed_arr<TIR_Value> values;
-    map<AST_Value*, TIR_Value*> valmap;
+    u64 globals_ofset = 0;
+    map<AST_Value*, TIR_Value> valmap;
 
     void compile_all();
 };
@@ -120,26 +129,27 @@ struct TIR_Function {
     u64 temp_offset = 0;
     u64 stack_offset = 0;
 
-    map<AST_Value*, TIR_Value*> _valmap;
+    struct VarValTuple {
+        AST_Var *var;
+        TIR_Value val;
+    };
+    arr<VarValTuple> stack;
+
+    map<AST_Value*, TIR_Value> _valmap;
 
     // Blocks are stored in the order they need to be compiled in
     arr<TIR_Block*> blocks;
 
-    // We use the bucketed_arr here, so we can pass around pointers to TIR_Value safely
-    bucketed_arr<TIR_Value> values;
-
     TIR_Function(TIR_Context& c, AST_Fn* fn) : ast_fn(fn), c(c) {};
 
-    TIR_Value* alloc_temp(AST_Type* type);
-    TIR_Value* alloc_stack(AST_Type* type);
-    TIR_Value* alloc_val(TIR_Value val);
-    void free_temp(TIR_Value* val);
+    TIR_Value alloc_temp(AST_Type* type);
+    TIR_Value alloc_stack(AST_Var* type);
     void emit(TIR_Instruction instr);
 
     void print();
 };
 
-std::wostream& operator<< (std::wostream& o, TIR_Value& loc);
+std::wostream& operator<< (std::wostream& o, TIR_Value loc);
 std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr);
 
 #endif // guard
