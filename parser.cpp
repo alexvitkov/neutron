@@ -1076,12 +1076,15 @@ bool parse_let(AST_Context& ctx, TokenReader& r) {
     MUST (r.expect(TOK(':')).type);
     MUST (var->type = (AST_Type*)parse_expr(ctx, r, TOK('=')));
 
-    /*
     if (r.peek().type == TOK('=')) {
         r.pop();
-        MUST (var->initial_value = (AST_Value*)parse_expr(ctx, r));
+        AST_Value *initial_value = (AST_Value*)parse_expr(ctx, r);
+        MUST (initial_value);
+
+        AST_BinaryOp *assignment = ctx.alloc<AST_BinaryOp>(TOK('='), var, initial_value);
+        assignment->nodetype = AST_ASSIGNMENT;
+        ctx.statements.push(assignment);
     };
-    */
 
     var->is_global = ctx.global == &ctx;
 
