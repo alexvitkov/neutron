@@ -35,34 +35,28 @@ int main(int argc, const char** argv) {
     }
 
     if (!typecheck_all(global)) {
-        // printf("type checker failed with %d errors\n", global.errors.size);
         exit_with_error();
     }
 
     // Print the source code
     if (debug_output) {
         wcout << red << "--------- AST ---------\n" << resetstyle;
-
         for (const auto& decl : global.declarations) {
             print(wcout, decl.value, true);
             wcout << '\n';
-
         }
     }
 
-    TIR_Context t_c { .global = global };
-    t_c.compile_all();
+    TIR_Context tir_context { .global = global };
+    tir_context.compile_all();
 
     // Print the TIR
     if (debug_output) {
         wcout << red << "\n--------- TIR ---------\n" << resetstyle;
-
-        for (auto& kvp : t_c.fns) {
+        for (auto& kvp : tir_context.fns)
             kvp.value->print();
-        }
         wcout.flush();
     }
-    // return 0;
 
     if (debug_output) {
         wcout << red << "\n------- LLVM IR -------\n" << resetstyle;
@@ -70,10 +64,10 @@ int main(int argc, const char** argv) {
     }
     fflush(stdout);
 
-    T2L_Context lllvmcon(t_c);
-    lllvmcon.compile_all();
+    T2L_Context t2l_context(tir_context);
+    t2l_context.compile_all();
 
-    const char* object_filename = lllvmcon.output_object();
+    const char* object_filename = t2l_context.output_object();
 
     if (output_type == OUTPUT_LINKED_EXECUTABLE) {
         // TODO ENCODING
@@ -94,5 +88,15 @@ int main(int argc, const char** argv) {
         }
     }
 
+
+    // Execute the main function
+    TIR_ExecutionContext tir_exec_context;
+    for (auto& kvp : tir_context.fns) {
+        if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
+            wcout << red << "\n------ EXECUTION ------\n" << resetstyle;
+            wcout << "main returned " << (u64)tir_exec_context.call(kvp.value) << "\n";
+        }
+    }
+    
     return 0;
 }

@@ -222,7 +222,7 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
                 return true;
             }
             else {
-                TIR_Value varloc = fn._valmap[var];
+                *out = fn._valmap[var];
                 return false;
             }
         }
@@ -816,13 +816,134 @@ void TIR_Context::compile_all() {
     }
 }
 
-void TIR_Function::call() {
-    assert(blocks.size);
-    TIR_Block *current = blocks[0];
+void TIR_ExecutionContext::StackFrame::set_value(TIR_Value key, void *val) {
+    switch (key.valuespace) {
+        case TVS_DISCARD: {
+            break;
+        }
+        case TVS_GLOBAL: {
+            NOT_IMPLEMENTED();
+        }
+        case TVS_ARGUMENT: {
+            args[key.offset] = val;
+            break;
+        }
+        case TVS_RET_VALUE: {
+            retval = val;
+            break;
+        }
+        case TVS_TEMP: {
+            tmp[key.offset] = val;
+            break;
+        }
+        case TVS_STACK: {
+            memcpy(stack + key.offset, val, key.type->size);
+            break;
+        }
+        case TVS_VALUE: {
+            UNREACHABLE;
+        }
+        default:
+            NOT_IMPLEMENTED();
+    }
+}
 
-    NOT_IMPLEMENTED();
-    for (auto& instr : current->instructions) {
-        //switch (instr.opcode) {
-        //}
+void *TIR_ExecutionContext::StackFrame::get_value(TIR_Value key) {
+    switch (key.valuespace) {
+        case TVS_GLOBAL: {
+            NOT_IMPLEMENTED();
+        }
+        case TVS_ARGUMENT: {
+            return args[key.offset];
+            break;
+        }
+        case TVS_RET_VALUE: {
+            return retval;
+            break;
+        }
+        case TVS_TEMP: {
+            return tmp[key.offset];
+            break;
+        }
+        case TVS_STACK: {
+            return stack + key.offset;
+            break;
+        }
+        case TVS_VALUE: {
+            return (void*)key.offset;
+        }
+        case TVS_DISCARD: {
+            UNREACHABLE;
+        }
+        default:
+            NOT_IMPLEMENTED();
+    }
+}
+
+void* TIR_ExecutionContext::StackFrame::continue_execution() {
+    while (true) {
+        TIR_Instruction &instr = block->instructions[next_instruction];
+
+        if ((instr.opcode & TOPC_BINARY) == TOPC_BINARY) {
+            void *lhs = get_value(instr.bin.lhs);
+            void *rhs = get_value(instr.bin.rhs);
+            void *val;
+
+            switch (instr.opcode) {
+                case TOPC_UADD:
+                    val = (void*)((u64)lhs + (u64)rhs);
+                    break;
+                case TOPC_SADD:
+                    val = (void*)((i64)lhs + (i64)rhs);
+                    break;
+                default:
+                    NOT_IMPLEMENTED();
+            }
+
+            set_value(instr.bin.dst, val);
+        } else {
+            switch (instr.opcode) {
+                case TOPC_RET:
+                    free(stack);
+                    if (!retval)
+                        retval = (void*)1;
+                    return retval;
+                case TOPC_MOV:
+                    set_value(instr.un.dst, get_value(instr.un.src));
+                    break;
+                default:
+                    NOT_IMPLEMENTED();
+            }
+        }
+
+        next_instruction ++;
+    }
+}
+
+void* TIR_ExecutionContext::call(TIR_Function *fn) {
+    assert(fn->blocks.size);
+
+    StackFrame &sf = stackframes.push({
+        .fn = fn,
+        .block = fn->blocks[0],
+        .next_instruction = 0,
+        .stack = (u8*)malloc(fn->stack_offset),
+        .args = arr<void*>(0),
+        .tmp = arr<void*>(fn->temp_offset),
+    });
+
+    return continue_execution();
+}
+
+void* TIR_ExecutionContext::continue_execution() {
+    if (stackframes.size == 0)
+        return (void*)1;
+
+    void *result = stackframes.last().continue_execution();
+    if (result) {
+        stackframes.pop();
+        return result;
+    } else {
+        return nullptr;
     }
 }

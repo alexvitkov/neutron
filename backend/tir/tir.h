@@ -175,6 +175,7 @@ struct TIR_Context {
     void compile_all();
 };
 
+
 struct TIR_Function {
     TIR_Context& c;
     AST_Fn* ast_fn;
@@ -207,8 +208,27 @@ struct TIR_Function {
     void compile();
 
     void print();
+};
 
-    void call();
+
+struct TIR_ExecutionContext {
+    struct StackFrame {
+        TIR_Function *fn;
+        TIR_Block    *block;
+        u32           next_instruction;
+        void         *retval;
+
+        u8 *stack;
+        arr<void*> args, tmp;
+
+        void  set_value(TIR_Value key, void *val);
+        void *get_value(TIR_Value key); // TODO POINTERSIZE
+        void *continue_execution();
+    };
+
+    arr<StackFrame> stackframes;
+    void *call(TIR_Function *tir_fn);
+    void *continue_execution();
 };
 
 std::wostream& operator<< (std::wostream& o, TIR_Value loc);

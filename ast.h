@@ -172,6 +172,9 @@ struct AST_Var : AST_Value {
 struct AST_Number : AST_Value {
     u64 floorabs;
 
+    bool has_decimal_point;
+    u64 after_decimal_point;
+
     AST_Number(u64 floorabs);
 
     bool fits_in(AST_PrimitiveType* numtype);
