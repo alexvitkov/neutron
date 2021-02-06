@@ -21,7 +21,7 @@ void TIR_Function::emit(TIR_Instruction inst) {
 TIR_Value TIR_Function::alloc_temp(AST_Type* type) {
     return {
         .valuespace = TVS_TEMP,
-        .offset = temp_offset++,
+        .offset = temps_count++,
         .type = type,
     };
 }
@@ -29,7 +29,7 @@ TIR_Value TIR_Function::alloc_temp(AST_Type* type) {
 TIR_Value TIR_Function::alloc_stack(AST_Var* var) {
     TIR_Value val {
         .valuespace = TVS_STACK,
-        .offset = temp_offset++,
+        .offset = temps_count++,
         .type = c.global.get_pointer_type(var->type),
     };
     stack.push({var, val});
@@ -218,11 +218,11 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
             AST_Var* var = (AST_Var*)val;
 
             if (var->is_global || var->always_on_stack) {
-                *out = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
+                *out = var->is_global ? fn.c.global_valmap[var] : fn.fn_valmap[var];
                 return true;
             }
             else {
-                *out = fn._valmap[var];
+                *out = fn.fn_valmap[var];
                 return false;
             }
         }
@@ -290,10 +290,7 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
                     val = fn.alloc_temp(vardecl->type);
                 }
 
-                if (vardecl->initial_value)
-                    compile_node_rvalue(fn, vardecl->initial_value, val);
-
-                fn._valmap.insert(vardecl, val);
+                fn.fn_valmap.insert(vardecl, val);
                 break;
             }
             default:
@@ -321,7 +318,7 @@ TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
             AST_Var* var = (AST_Var*)arr;
 
             if (var->is_global) {
-                return fn.c.valmap[var];
+                return fn.c.global_valmap[var];
             } else {
                 NOT_IMPLEMENTED();
             }
@@ -552,7 +549,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             switch (addrof->inner->nodetype) {
                 case AST_VAR: {
                     AST_Var* var = (AST_Var*)addrof->inner;
-                    return var->is_global ? fn.c.valmap[var] : fn._valmap[var];
+                    return var->is_global ? fn.c.global_valmap[var] : fn.fn_valmap[var];
                 }
                 default:
                     UNREACHABLE;
@@ -644,7 +641,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             DeclarationKey key = { .string_literal = str };
             AST_Var* strvar = (AST_Var*)fn.c.global.resolve(key);
 
-            TIR_Value val = fn.c.valmap[str];
+            TIR_Value val = fn.c.global_valmap[str];
 
             if (!dst)
                 dst = fn.alloc_temp(str->type);
@@ -771,10 +768,11 @@ void TIR_Context::compile_all() {
 
                 TIR_Value val = {
                     .valuespace = TVS_GLOBAL,
-                    .offset = globals_ofset++,
+                    .offset = globals_count++,
                     .type = global.get_pointer_type(((AST_Var*)decl.value)->type),
                 };
-                valmap[var] = val;
+                global_valmap[var] = val;
+                globals.push(val);
                 break;
             }
 
@@ -927,9 +925,9 @@ void* TIR_ExecutionContext::call(TIR_Function *fn) {
         .fn = fn,
         .block = fn->blocks[0],
         .next_instruction = 0,
-        .stack = (u8*)malloc(fn->stack_offset),
+        .stack = (u8*)malloc(fn->stack_size),
         .args = arr<void*>(0),
-        .tmp = arr<void*>(fn->temp_offset),
+        .tmp = arr<void*>(fn->temps_count),
     });
 
     return continue_execution();

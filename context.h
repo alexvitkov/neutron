@@ -90,7 +90,10 @@ struct GlobalContext : Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
 
+    map<AST_Node*, AST_Node*> global_initial_values;
+
     map<const char*, AST_StringLiteral*> literals;
+
 
     linear_alloc allocator, temp_allocator;
 

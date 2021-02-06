@@ -592,10 +592,23 @@ void insert_entry_boilerplate(T2L_Context& c, Function* l_main) {
 void T2L_Context::compile_all() {
     llvm::Function* llvm_main_fn;
 
+    for (TIR_Value &var : tir_context.globals) {
+        llvm::Type* l_type = get_llvm_type(var.type);
+
+        auto l_var = new llvm::GlobalVariable(mod, 
+                l_type, 
+                false, 
+                GlobalValue::WeakAnyLinkage, 
+                llvm::Constant::getNullValue(l_type), 
+                "");
+        translated_globals[var] = l_var;
+    }
+
     // TODO this has to go
     // LLVM should only read the TIR, there's no sane reason for it to touch the AST values
     // The reason we do this right now is because TIR values are shit and have to be redone
     // Initialize the global variables
+    /*
     for (auto& kvp : tir_context.valmap) {
         AST_Value* ast_value = kvp.key;
         TIR_Value tir_value = kvp.value;
@@ -639,8 +652,8 @@ void T2L_Context::compile_all() {
             default:
                 NOT_IMPLEMENTED();
         }
-
     }
+    */
 
     // Compile the signatures for all global functions so we can call them
     for (auto& kvp : tir_context.fns) {

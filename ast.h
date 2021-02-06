@@ -150,7 +150,6 @@ struct AST_ArrayType : AST_Type {
 
 struct AST_Var : AST_Value {
     const char* name;
-    AST_Value* initial_value;
 
     // If the variable is a function argument, this is its index
     i64 argindex;
@@ -164,7 +163,6 @@ struct AST_Var : AST_Value {
         : AST_Value(AST_VAR, nullptr), 
           name(name), 
           argindex(argindex), 
-          initial_value(nullptr), 
           is_global(false),
           always_on_stack(false) {};
 };

@@ -89,7 +89,7 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
 
                 string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
                 string_static_var->type = string_array_type;
-                string_static_var->initial_value = str;
+                ctx.global->global_initial_values[string_static_var] = str;
                 string_static_var->is_global = true;
 
                 MUST (ctx.global->declare({ .string_literal = str }, string_static_var));
@@ -155,7 +155,7 @@ bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr) {
         }
 
         case AST_VAR: {
-            AST_Var* var = (AST_Var*)node; MUST (resolve_unresolved_references(global, (AST_Node**)&var->initial_value)); 
+            AST_Var* var = (AST_Var*)node; 
             MUST (resolve_unresolved_references(global, (AST_Node**)&var->type));
             break;
         }
@@ -649,9 +649,6 @@ bool typecheck(Context& ctx, AST_Node* node) {
                     // with the byval tag
                     if (var->type IS AST_STRUCT)
                         var->always_on_stack = true;
-
-                    if (var->initial_value)
-                        MUST (typecheck(block->ctx, var->initial_value));
                 }
             }
 
@@ -671,34 +668,9 @@ bool typecheck(Context& ctx, AST_Node* node) {
             return true;
         }
 
-        // TODO INITIAL_VALUE
-        // There should be a prepass for variables outside the global scope
-        // that converts initial values into assignments
-        // Way too many checks have to be written twice, for assignments and init values
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
-
             MUST (validate_type(ctx, &var->type));
-
-            if (var->initial_value) {
-                MUST (gettype(ctx, var->initial_value));
-
-                MUST (validate_type(ctx, &var->initial_value->type));
-
-                if (!implicit_cast(ctx, &var->initial_value, var->type)) {
-                    ctx.error({
-                        .code = ERR_INVALID_INITIAL_VALUE,
-                        .nodes = {
-                            var,
-                            var->initial_value,
-                        },
-                    });
-                    return false;
-                }
-
-                return true;
-            }
-
             return true;
         }
 

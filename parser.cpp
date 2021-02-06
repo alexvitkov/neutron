@@ -1071,10 +1071,12 @@ bool parse_let(Context& ctx, TokenReader& r) {
     MUST (r.expect(TOK(':')).type);
     MUST (var->type = (AST_Type*)parse_expr(ctx, r, TOK('=')));
 
+    /*
     if (r.peek().type == TOK('=')) {
         r.pop();
         MUST (var->initial_value = (AST_Value*)parse_expr(ctx, r));
     };
+    */
 
     var->is_global = ctx.global == &ctx;
 

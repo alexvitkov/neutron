@@ -222,9 +222,8 @@ void print(std::wostream& o, AST_BinaryOp* node, bool brackets = false) {
 void print(std::wostream& o, AST_Var* node, bool decl) {
     if (decl) {
         o << "let " << (node->name ? node->name : "_") << ": " << node->type;
-        if (node->initial_value) {
-            o << " = "  << node->initial_value;
-        }
+        //if (node->initial_value)
+        //  o << " = "  << node->initial_value;
         o << ";\n";
     }
     else {

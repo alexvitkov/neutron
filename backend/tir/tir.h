@@ -166,11 +166,13 @@ struct TIR_Block {
 struct TIR_Function;
 
 struct TIR_Context {
-    GlobalContext& global;
+    GlobalContext &global;
     map<AST_Fn*, TIR_Function*> fns;
 
-    u64 globals_ofset = 0;
-    map<AST_Value*, TIR_Value> valmap;
+    u64 globals_count = 0;
+    map<AST_Value*, TIR_Value> global_valmap;
+
+    arr<TIR_Value> globals;
 
     void compile_all();
 };
@@ -182,16 +184,16 @@ struct TIR_Function {
 
     TIR_Value retval = { .valuespace = TVS_RET_VALUE };
     TIR_Block* writepoint;
-    u64 temp_offset = 0;
-    u64 stack_offset = 0;
+    u64 temps_count = 0;
 
     struct VarValTuple {
         AST_Var *var;
         TIR_Value val;
     };
+    u64 stack_size = 0;
     arr<VarValTuple> stack;
 
-    map<AST_Value*, TIR_Value> _valmap;
+    map<AST_Value*, TIR_Value> fn_valmap;
 
     arr<TIR_Value> parameters;
 
