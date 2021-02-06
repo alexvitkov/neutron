@@ -28,8 +28,11 @@
 enum TokenType : u8 {
 	TOK_NONE = 0,
 
-    TOK_ADD = '+',
-    TOK_SUBTRACT = '-',
+    OP_ADD = '+',
+    OP_SUB = '-',
+    OP_MUL = '*',
+    OP_DIV = '/',
+    OP_MOD = '%',
 
     OP_GREATERTHAN = '>',
     OP_LESSTHAN = '<',

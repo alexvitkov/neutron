@@ -2,8 +2,7 @@
 #include "../../typer.h"
 #include <iostream>
 
-TIR_Value::operator bool() {
-    return valuespace;
+TIR_Value::operator bool() { return valuespace;
 }
 bool operator== (TIR_Value& lhs, TIR_Value& rhs) {
     return lhs.valuespace == rhs.valuespace && lhs.offset == rhs.offset;
@@ -76,6 +75,54 @@ TIR_Block::TIR_Block() {
 
 std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
     o << "    ";
+
+    if ((instr.opcode & TOPC_BINARY) == TOPC_BINARY) {
+            o << instr.bin.dst << " <- " << instr.bin.lhs;
+
+            switch (instr.opcode) {
+                case TOPC_UADD: case TOPC_SADD: case TOPC_FADD: 
+                    o << " + ";  
+                    break;
+                case TOPC_USUB: case TOPC_SSUB: case TOPC_FSUB: 
+                    o << " - ";  
+                    break;
+                case TOPC_UMUL: case TOPC_SMUL: case TOPC_FMUL: 
+                    o << " * ";  
+                    break;
+                case TOPC_UDIV: case TOPC_SDIV: case TOPC_FDIV: 
+                    o << " / ";  
+                    break;
+                case TOPC_UMOD: case TOPC_SMOD: case TOPC_FMOD: 
+                    o << " / ";  
+                    break;
+                case TOPC_UEQ:  case TOPC_SEQ:  case TOPC_FEQ:  
+                    o << " == "; 
+                    break;
+                case TOPC_ULT:  case TOPC_SLT:  case TOPC_FLT:  
+                    o << " < ";  
+                    break;
+                case TOPC_UGT:  case TOPC_SGT:  case TOPC_FGT:  
+                    o << " > ";  
+                    break;
+                case TOPC_ULTE: case TOPC_SLTE: case TOPC_FLTE: 
+                    o << " <= "; 
+                    break;
+                case TOPC_UGTE: case TOPC_SGTE: case TOPC_FGTE: 
+                    o << " >= "; 
+                    break;
+                case TOPC_SHL:
+                    o << " << "; 
+                    break;
+                case TOPC_SHR:
+                    o << " >> "; 
+                    break;
+                default: UNREACHABLE;
+            }
+
+            o << instr.bin.rhs << std::endl;
+            return o;
+    }
+
     switch (instr.opcode) {
         case TOPC_MOV:
             o << instr.un.dst << " <- " << instr.un.src << std::endl;
@@ -84,29 +131,15 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
             o << instr.un.dst << " <- bitcast " << instr.un.src << std::endl;
             break;
         case TOPC_LOAD:
-            o << instr.un.dst << " <-- load " << instr.un.src << std::endl;
+            o << instr.un.dst << " <- load " << instr.un.src << std::endl;
             break;
         case TOPC_STORE:
-            // o << *instr.un.dst << " <- store " << *instr.un.src << std::endl;
             o << "store " << instr.un.src << " -> " << instr.un.dst << std::endl;
-            break;
-        case TOPC_ADD:
-            o << instr.bin.dst << " <- " << instr.bin.lhs << " + " << instr.bin.rhs << std::endl;
-            break;
-        case TOPC_SUB:
-            o << instr.bin.dst << " <- " << instr.bin.lhs << " - " << instr.bin.rhs << std::endl;
-            break;
-        case TOPC_EQ:
-            o << instr.bin.dst << " <- " << instr.bin.lhs << " == " << instr.bin.rhs << std::endl;
-            break;
-        case TOPC_LT:
-            o << instr.bin.dst << " <- " << instr.bin.lhs << " < " << instr.bin.rhs << std::endl;
             break;
         case TOPC_GEP: {
             o << instr.gep.dst << " <- GEP " << instr.gep.base << "";
-            for (TIR_Value v : instr.gep.offsets) {
+            for (TIR_Value& v : instr.gep.offsets)
                 o << '[' << v << ']';
-            }
             o << "\n";
             break;
         }
@@ -118,11 +151,10 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
             if (instr.call.dst.valuespace != TVS_DISCARD)
                 o << instr.call.dst << " <- ";
             
-            o << instr.call.fn->name << "(";
+            o << "call " << instr.call.fn->name << "(";
 
-            for (TIR_Value val : instr.call.args)
+            for (TIR_Value& val : instr.call.args)
                 o << val << ", ";
-
             if (instr.call.args.size > 0)
                 o << "\b\b";
 
@@ -238,7 +270,6 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
 
 
 void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block, TIR_Block* after) {
-
     fn.writepoint = tir_block;
 
     for (auto& kvp : ast_block->ctx.declarations) {
@@ -352,31 +383,44 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             TIR_Value lhs = compile_node_rvalue(fn, bin->lhs, {});
             TIR_Value rhs = compile_node_rvalue(fn, bin->rhs, {});
 
-            TIR_OpCode opcode;
 
+            TIR_OpCode opcode;
             switch (bin->op) {
-                case TOK_ADD:  {
-                    opcode = TOPC_ADD; 
-                    break;
-                }
-                case TOK_SUBTRACT: {
-                    opcode = TOPC_SUB; 
-                    break;
-                }
-                case OP_DOUBLEEQUALS: {
-                    opcode = TOPC_EQ; 
-                    break;
-                }
-                case OP_LESSTHAN: {
-                    opcode = TOPC_LT; 
-                    break;
-                }
-                case OP_ADD_PTR_INT: {
-                    opcode = TOPC_GEP;
-                    break;
-                }
+                case OP_ADD:             opcode = TOPC_ADD; break;
+                case OP_SUB:             opcode = TOPC_SUB; break;
+                case OP_MUL:             opcode = TOPC_MUL; break;
+                case OP_DIV:             opcode = TOPC_DIV; break;
+                case OP_MOD:             opcode = TOPC_MOD; break;
+                case OP_SHIFTLEFT:       opcode = TOPC_SHL; break;
+                case OP_SHIFTRIGHT:      opcode = TOPC_SHR; break;
+                case OP_DOUBLEEQUALS:    opcode = TOPC_EQ;  break;
+                case OP_LESSTHAN:        opcode = TOPC_LT;  break;
+                case OP_LESSEREQUALS:    opcode = TOPC_LTE; break;
+                case OP_GREATERTHAN:     opcode = TOPC_GT;  break;
+                case OP_GREATEREQUALS:   opcode = TOPC_GTE; break;
+                case OP_ADD_PTR_INT:     opcode = TOPC_GEP; break;
                 default:
                     NOT_IMPLEMENTED();
+            }
+
+            if (lhs.type IS AST_PRIMITIVE_TYPE) {
+                AST_PrimitiveType *prim = (AST_PrimitiveType*)lhs.type;
+
+                if (opcode != TOPC_SHL && opcode != TOPC_SHR) {
+                    switch (prim->kind) {
+                        case PRIMITIVE_SIGNED: 
+                            opcode = (TIR_OpCode)(opcode | TOPC_SIGNED); 
+                            break;
+                        case PRIMITIVE_UNSIGNED: 
+                            opcode = (TIR_OpCode)(opcode | TOPC_UNSIGNED); 
+                            break;
+                        case PRIMITIVE_FLOAT: 
+                            opcode = (TIR_OpCode)(opcode | TOPC_FLOAT); 
+                            break;
+                        default:
+                            UNREACHABLE;
+                    }
+                }
             }
 
             if (!dst)
@@ -769,5 +813,16 @@ void TIR_Context::compile_all() {
 
     for (auto& fn : fns) {
         fn.value->compile();
+    }
+}
+
+void TIR_Function::call() {
+    assert(blocks.size);
+    TIR_Block *current = blocks[0];
+
+    NOT_IMPLEMENTED();
+    for (auto& instr : current->instructions) {
+        //switch (instr.opcode) {
+        //}
     }
 }

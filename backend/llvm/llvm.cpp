@@ -222,121 +222,210 @@ void T2L_BlockContext::compile() {
     builder.SetInsertPoint(llvm_block);
 
     for (auto& instr : tir_block->instructions) {
-        switch (instr.opcode) {
-            case TOPC_MOV: {
-                llvm::Value *l_src = get_value(instr.un.src);
 
-                set_value(&instr, l_src);
-                break;
+        if ((instr.opcode & TOPC_BINARY) == TOPC_BINARY) {
+            llvm::Value *lhs = get_value(instr.bin.lhs);
+            llvm::Value *rhs = get_value(instr.bin.rhs);
+
+            switch (instr.opcode) {
+                case TOPC_SHL:
+                    set_value(&instr, builder.CreateShl(lhs, rhs));
+                    break;
+                case TOPC_SHR:
+                    set_value(&instr, builder.CreateLShr(lhs, rhs));
+                    break;
+
+                case TOPC_UADD:
+                    set_value(&instr, builder.CreateAdd(lhs, rhs));
+                    break;
+                case TOPC_USUB:
+                    set_value(&instr, builder.CreateSub(lhs, rhs));
+                    break;
+                case TOPC_UMUL:
+                    set_value(&instr, builder.CreateMul(lhs, rhs));
+                    break;
+                case TOPC_UDIV:
+                    set_value(&instr, builder.CreateUDiv(lhs, rhs));
+                    break;
+                case TOPC_UMOD:
+                    set_value(&instr, builder.CreateURem(lhs, rhs));
+                    break;
+                case TOPC_UEQ :
+                    set_value(&instr, builder.CreateICmpEQ(lhs, rhs));
+                    break;
+                case TOPC_ULT:
+                    set_value(&instr, builder.CreateICmpULT(lhs, rhs));
+                    break;
+                case TOPC_ULTE:
+                    set_value(&instr, builder.CreateICmpULE(lhs, rhs));
+                    break;
+                case TOPC_UGT:
+                    set_value(&instr, builder.CreateICmpUGT(lhs, rhs));
+                    break;
+                case TOPC_UGTE:
+                    set_value(&instr, builder.CreateICmpUGE(lhs, rhs));
+                    break;
+
+                case TOPC_FADD:
+                    set_value(&instr, builder.CreateFAdd(lhs, rhs));
+                    break;
+                case TOPC_FSUB:
+                    set_value(&instr, builder.CreateFSub(lhs, rhs));
+                    break;
+                case TOPC_FMUL:
+                    set_value(&instr, builder.CreateFMul(lhs, rhs));
+                    break;
+                case TOPC_FDIV:
+                    set_value(&instr, builder.CreateFDiv(lhs, rhs));
+                    break;
+                case TOPC_FMOD:
+                    set_value(&instr, builder.CreateFRem(lhs, rhs));
+                    break;
+                case TOPC_FEQ:
+                    set_value(&instr, builder.CreateFCmpUEQ(lhs, rhs));
+                    break;
+                case TOPC_FLT:
+                    set_value(&instr, builder.CreateFCmpULT(lhs, rhs));
+                    break;
+                case TOPC_FLTE:
+                    set_value(&instr, builder.CreateFCmpULE(lhs, rhs));
+                    break;
+                case TOPC_FGT :
+                    set_value(&instr, builder.CreateFCmpUGT(lhs, rhs));
+                    break;
+                case TOPC_FGTE:
+                    set_value(&instr, builder.CreateFCmpUGE(lhs, rhs));
+                    break;
+                    
+                // TODO SADD = UADD, same for SUB/MUL/EQ
+                case TOPC_SADD:
+                    set_value(&instr, builder.CreateAdd(lhs, rhs));
+                    break;
+                case TOPC_SSUB:
+                    set_value(&instr, builder.CreateSub(lhs, rhs));
+                    break;
+                case TOPC_SMUL:
+                    set_value(&instr, builder.CreateMul(lhs, rhs));
+                    break;
+                case TOPC_SDIV:
+                    set_value(&instr, builder.CreateSDiv(lhs, rhs));
+                    break;
+                case TOPC_SMOD:
+                    set_value(&instr, builder.CreateSRem(lhs, rhs));
+                    break;
+                case TOPC_SEQ:
+                    set_value(&instr, builder.CreateICmpEQ(lhs, rhs));
+                    break;
+                case TOPC_SLT:
+                    set_value(&instr, builder.CreateICmpSLT(lhs, rhs));
+                    break;
+                case TOPC_SLTE:
+                    set_value(&instr, builder.CreateICmpSLE(lhs, rhs));
+                    break;
+                case TOPC_SGT:
+                    set_value(&instr, builder.CreateICmpSGT(lhs, rhs));
+                    break;
+                case TOPC_SGTE:
+                    set_value(&instr, builder.CreateICmpSGE(lhs, rhs));
+                    break;
+
+                default:
+                    UNREACHABLE;
             }
-            case TOPC_ADD: {
-                llvm::Value *lhs = get_value(instr.bin.lhs);
-                llvm::Value *rhs = get_value(instr.bin.rhs);
-                set_value(&instr, builder.CreateAdd(lhs, rhs));
-                break;
-            }
-            case TOPC_EQ: {
-                llvm::Value *lhs = get_value(instr.bin.lhs);
-                llvm::Value *rhs = get_value(instr.bin.rhs);
-                set_value(&instr, builder.CreateICmpEQ(lhs, rhs));
-                break;
-            }
-            case TOPC_LT: {
-                llvm::Value *lhs = get_value(instr.bin.lhs);
-                llvm::Value *rhs = get_value(instr.bin.rhs);
-                set_value(&instr, builder.CreateICmpULT(lhs, rhs));
-                break;
-            }
-            case TOPC_RET: {
-                if (fn->tir_fn->retval) {
-                    llvm::Value *retval = get_value(fn->tir_fn->retval);
-                    builder.CreateRet(retval);
+        } else {
+            switch (instr.opcode) {
+                case TOPC_MOV: {
+                    llvm::Value *l_src = get_value(instr.un.src);
+                    set_value(&instr, l_src);
+                    break;
                 }
-                else {
-                    builder.CreateRetVoid();
+                case TOPC_RET: {
+                    if (fn->tir_fn->retval) {
+                        llvm::Value *retval = get_value(fn->tir_fn->retval);
+                        builder.CreateRet(retval);
+                    } else {
+                        builder.CreateRetVoid();
+                    }
+                    break;
                 }
-                break;
-            }
-            case TOPC_CALL: {
-                AST_Fn* callee = (AST_Fn*)instr.call.fn;
+                case TOPC_CALL: {
+                    AST_Fn* callee = (AST_Fn*)instr.call.fn;
 
-                llvm::Function* l_callee = (llvm::Function*)fn->t2l_context->global_functions[callee]->llvm_fn;
-                assert(l_callee); // TODO
+                    llvm::Function* l_callee = (llvm::Function*)fn->t2l_context->global_functions[callee]->llvm_fn;
+                    assert(l_callee); // TODO
 
-                u32 argc = instr.call.args.size;
+                    u32 argc = instr.call.args.size;
 
-                llvm::Value** args = (llvm::Value**)malloc(sizeof(llvm::Value*) * argc);
+                    llvm::Value** args = (llvm::Value**)malloc(sizeof(llvm::Value*) * argc);
 
-                for (u32 i = 0; i < instr.call.args.size; i++) {
-                    llvm::Value* l_arg = get_value(instr.call.args[i]);
-                    assert(l_arg);
-                    args[i] = l_arg;
+                    for (u32 i = 0; i < instr.call.args.size; i++) {
+                        llvm::Value* l_arg = get_value(instr.call.args[i]);
+                        assert(l_arg);
+                        args[i] = l_arg;
+                    }
+
+                    llvm::CallInst* l_result = builder.CreateCall(l_callee, ArrayRef<llvm::Value*>(args, argc));
+
+                    if (instr.call.dst) {
+                        set_value(&instr, l_result);
+                    }
+
+                    free(args);
+                    break;
                 }
+                case TOPC_STORE: {
+                    // TODO ERROR this will fail if the pointer is uninitialized
+                    // This is undefined behaviour anyway as we're deref'ing an
+                    // uninitialized pointer, the typer should probably catch this
+                    llvm::Value *l_dst_ptr = get_value(instr.un.dst);
+                    llvm::Value* l_src = get_value(instr.un.src);
 
-                llvm::CallInst* l_result = builder.CreateCall(l_callee, ArrayRef<llvm::Value*>(args, argc));
-
-                for (u32 i = 0; i < instr.call.args.size; i++) {
+                    builder.CreateStore(l_src, l_dst_ptr, false);
+                    break;
                 }
+                case TOPC_LOAD: {
+                    llvm::Value *src = get_value(instr.un.src);
+                    llvm::Value* l_val = builder.CreateLoad(src);
 
-                if (instr.call.dst) {
-                    set_value(&instr, l_result);
+                    set_value(&instr, l_val);
+                    break;
                 }
+                case TOPC_JMP: {
+                    builder.CreateBr(fn->block_translation[instr.jmp.next_block]->llvm_block);
+                    break;
+                }
+                case TOPC_JMPIF: {
+                    llvm::Value *cond = get_value(instr.jmpif.cond);
+                    llvm::BasicBlock *true_b = fn->block_translation[instr.jmpif.then_block]->llvm_block;
+                    llvm::BasicBlock *false_b = fn->block_translation[instr.jmpif.else_block]->llvm_block;
+                    builder.CreateCondBr(cond, true_b, false_b);
+                    break;
+                }
+                case TOPC_GEP: {
+                    llvm::Value *lhs = get_value(instr.bin.lhs);
 
-                free(args);
-                break;
+                    llvm::Value* gep;
+
+                    arr<llvm::Value*> vals;
+
+                    for (TIR_Value v : instr.gep.offsets)
+                        vals.push(get_value(v));
+
+                    gep = builder.CreateGEP(lhs, llvm::ArrayRef<llvm::Value*>(vals.buffer, vals.size));
+
+                    set_value(&instr, gep);
+                    break;
+                }
+                case TOPC_BITCAST: {
+                    llvm::Type* l_dest_type = fn->t2l_context->get_llvm_type(instr.un.dst.type);
+                    llvm::Value* l_src = get_value(instr.un.src);
+                    llvm::Value* val = builder.CreateBitCast(l_src, l_dest_type);
+                    set_value(&instr, val);
+                    break;
+                }
+                default:
+                    NOT_IMPLEMENTED();
             }
-            case TOPC_STORE: {
-                // TODO ERROR this will fail if the pointer is uninitialized
-                // This is undefined behaviour anyway as we're deref'ing an
-                // uninitialized pointer, the typer should probably catch this
-                llvm::Value *l_dst_ptr = get_value(instr.un.dst);
-                llvm::Value* l_src = get_value(instr.un.src);
-
-                builder.CreateStore(l_src, l_dst_ptr, false);
-                break;
-            }
-            case TOPC_LOAD: {
-                llvm::Value *src = get_value(instr.un.src);
-                llvm::Value* l_val = builder.CreateLoad(src);
-
-                set_value(&instr, l_val);
-                break;
-            }
-            case TOPC_JMP: {
-                builder.CreateBr(fn->block_translation[instr.jmp.next_block]->llvm_block);
-                break;
-            }
-            case TOPC_JMPIF: {
-                llvm::Value *cond = get_value(instr.jmpif.cond);
-                llvm::BasicBlock *true_b = fn->block_translation[instr.jmpif.then_block]->llvm_block;
-                llvm::BasicBlock *false_b = fn->block_translation[instr.jmpif.else_block]->llvm_block;
-                builder.CreateCondBr(cond, true_b, false_b);
-                break;
-            }
-            case TOPC_GEP: {
-                llvm::Value *lhs = get_value(instr.bin.lhs);
-
-                llvm::Value* gep;
-
-                arr<llvm::Value*> vals;
-
-                for (TIR_Value v : instr.gep.offsets)
-                    vals.push(get_value(v));
-
-                gep = builder.CreateGEP(lhs, llvm::ArrayRef<llvm::Value*>(vals.buffer, vals.size));
-
-                set_value(&instr, gep);
-                break;
-            }
-            case TOPC_BITCAST: {
-                llvm::Type* l_dest_type = fn->t2l_context->get_llvm_type(instr.un.dst.type);
-                llvm::Value* l_src = get_value(instr.un.src);
-                llvm::Value* val = builder.CreateBitCast(l_src, l_dest_type);
-                set_value(&instr, val);
-                break;
-            }
-            default:
-                NOT_IMPLEMENTED();
         }
     }
     compiled = true;
