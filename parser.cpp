@@ -510,10 +510,9 @@ bool parse_type_list(AST_Context& ctx, TokenReader& r, TokenType delim, arr<Stru
     return true;
 }
 
+bool parse_block(AST_Context& block, TokenReader& r);
 
-bool parse_block(AST_Context& block, TokenReader& r) {
-    MUST (r.expect(TOK('{')).type);
-
+bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
     while (true) {
         bool err = false;
         if (parse_decl_statement(block, r, &err))
@@ -583,11 +582,11 @@ bool parse_block(AST_Context& block, TokenReader& r) {
 
                 break;
             }
-            case TOK('}'): {
-                r.pop();
-                return true;
-            }
             default: {
+                if (delim == r.peek().type) {
+                    r.pop();
+                    return true;
+                }
                 AST_Node* expr = parse_expr(block, r);
                 MUST (expr);
                 MUST (r.expect(TOK(';')).type);
@@ -596,6 +595,12 @@ bool parse_block(AST_Context& block, TokenReader& r) {
             }
         }
     }
+}
+
+bool parse_block(AST_Context& block, TokenReader& r) {
+    MUST (r.expect(TOK('{')).type);
+    MUST (parse_scope(block, r, TOK('}')));
+    return true;
 }
 
 AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
@@ -1148,25 +1153,10 @@ bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error) {
     }
 }
 
-bool parse_top_level(AST_Context& ctx, TokenReader r) {
-    bool err = false;
-    while (parse_decl_statement(ctx, r, &err));
-    MUST (!err);
-
-    // parse_decl_statement should consume all tokens in the file
-    // If there's anyhting left, it's an unexpected token
-    if (r.peek().type) {
-        unexpected_token(r.ctx, r.peek_full(), TOK_NONE);
-        return false;
-    }
-
-    return true;
-}
-
 bool parse_source_file(AST_Context& global, SourceFile& sf) {
     TokenReader r { .sf = sf, .ctx = global };
     MUST (tokenize(global, sf));
-    MUST (parse_top_level(global, r));
+    MUST (parse_scope(global, r, TOK_NONE));
     return true;
 }
 
