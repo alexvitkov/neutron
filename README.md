@@ -5,35 +5,24 @@ crossed out entries are in the roadmap, the rest just about works
 - primitive types
 	- unsigned integers
 	- ~~signed integers, floats~~
-	- math:
-		- operator +, -, *
-		- ~~every other operator~~
+	- operator +, -, *
+	- ~~every other operator~~
 - variables
-	- local
-	- global
-    - pointers to variables
 - functions
-	- variadic functions
-		- extern variadic functions
-		- ~~declaring variadic functions~~
-	- extern functions
+	- extern functions, extern variadic functions
+	- ~~declaring variadic functions~~
 	- ~~overloading~~
 - pointers
-	- pointer math
-		- pointer + integer, pointer[integer]
-		- ~~pointer - pointer~~
+	- pointer math: pointer + integer, pointer[integer]
+	- pointer math: ~~pointer - pointer~~
 - casts
-	- implicit casting
+	- implicit
 		- u8 -> u16 -> u32 -> u64
 		- u8 -> i16, u16 -> u32, u32 -> i64
-	- explicit casting
-		- casting pointer type A* to pointer type B*
+	- explicit
+		- A* -> B*
 		- ~~downcasting (u32 -> u16)~~
 - structs
-    - global structs/structs on stack
-    - structs as arguments
-        - ~~by value~~
-        - by pointer
 - compiler metafeatures
     - spitting .o files
 	- linking a callable binary
