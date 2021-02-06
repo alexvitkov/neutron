@@ -1,11 +1,11 @@
+#include "backend/llvm/llvm.h" // include this first
+#include "backend/tir/tir.h"
 #include "typer.h"
 #include "ast.h"
 #include "cmdargs.h"
 #include "error.h"
 #include "linker.h"
 #include "util.h"
-#include "backend/tir/tir.h"
-#include "backend/llvm/llvm.h"
 
 GlobalContext global;
 

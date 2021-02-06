@@ -29,7 +29,11 @@ crossed out entries are in the roadmap, the rest just about works
 	- explicit casting
 		- casting pointer type A* to pointer type B*
 		- ~~downcasting (u32 -> u16)~~
-- ~~structs~~
+- structs
+    - global structs/structs on stack
+    - structs as arguments
+        - ~~by value~~
+        - by pointer
 - compiler metafeatures
     - spitting .o files
 	- linking a callable binary

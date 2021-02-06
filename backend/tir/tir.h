@@ -14,8 +14,11 @@ enum TIR_ValueSpace : u8 {
     TVS_STACK,
 };
 
-#define TOPC_MODIFIES_DST_BIT 0x80
+enum TIR_Value_Flags : u32 {
+     TVF_BYVAL = 0x01,
+};
 
+#define TOPC_MODIFIES_DST_BIT 0x80
 enum TIR_OpCode : u8 {
     TOPC_NONE       = 0x00,
 
@@ -25,7 +28,7 @@ enum TIR_OpCode : u8 {
     TOPC_LT         = 0x03 | TOPC_MODIFIES_DST_BIT,
     TOPC_MOV        = 0x04 | TOPC_MODIFIES_DST_BIT,
     TOPC_CALL       = 0x05 | TOPC_MODIFIES_DST_BIT,
-    TOPC_PTR_OFFSET = 0x06 | TOPC_MODIFIES_DST_BIT,
+    TOPC_GEP        = 0x06 | TOPC_MODIFIES_DST_BIT,
     TOPC_BITCAST    = 0x07 | TOPC_MODIFIES_DST_BIT,
 
     TOPC_JMPIF      = 0x01,
@@ -35,8 +38,11 @@ enum TIR_OpCode : u8 {
     TOPC_STORE      = 0x05,
 };
 
+
 struct TIR_Value {
     TIR_ValueSpace valuespace;
+    TIR_Value_Flags flags;
+
     u64 offset;
     AST_Type* type;
 
@@ -137,6 +143,8 @@ struct TIR_Function {
 
     map<AST_Value*, TIR_Value> _valmap;
 
+    arr<TIR_Value> parameters;
+
     // Blocks are stored in the order they need to be compiled in
     arr<TIR_Block*> blocks;
 
@@ -145,6 +153,9 @@ struct TIR_Function {
     TIR_Value alloc_temp(AST_Type* type);
     TIR_Value alloc_stack(AST_Var* type);
     void emit(TIR_Instruction instr);
+
+    void compile_signature();
+    void compile();
 
     void print();
 };

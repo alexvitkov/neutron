@@ -31,7 +31,7 @@ TIR_Value TIR_Function::alloc_stack(AST_Var* var) {
     TIR_Value val {
         .valuespace = TVS_STACK,
         .offset = temp_offset++,
-        .type = get_pointer_type(var->type),
+        .type = c.global.get_pointer_type(var->type),
     };
     stack.push({var, val});
     return val;
@@ -47,6 +47,8 @@ std::wostream& operator<< (std::wostream& o, TIR_Value val) {
             o << '_';
             break;
         case TVS_ARGUMENT:
+            if (val.flags & TVF_BYVAL)
+                o << "byval ";
             o << "arg" << val.offset;
             break;
         case TVS_VALUE:
@@ -100,7 +102,7 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
         case TOPC_LT:
             o << instr.bin.dst << " <- " << instr.bin.lhs << " < " << instr.bin.rhs << std::endl;
             break;
-        case TOPC_PTR_OFFSET: {
+        case TOPC_GEP: {
             o << instr.gep.dst << " <- GEP " << instr.gep.base << "";
             for (TIR_Value v : instr.gep.offsets) {
                 o << '[' << v << ']';
@@ -147,16 +149,24 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
 }
 
 void TIR_Function::print() {
-
     if (ast_fn->is_extern) {
         wcout << "extern fn " << ast_fn->name << "...\n";
         return;
     }
 
-    wcout << "fn " << ast_fn->name << ":\n";
+    wcout << "fn " << ast_fn->name << "(";
+
+    for (TIR_Value& param : parameters) {
+        wcout << param << ", ";
+    }
+    if (parameters.size)
+        wcout << "\b\b \b";
+    wcout << ")\n";
+
 
     for (TIR_Block* block : blocks) {
-        wcout << "  block" << block->id << ":\n";
+        if (blocks.size > 1)
+            wcout << "  block" << block->id << ":\n";
         for (auto& instr : block->instructions)
             wcout << instr;
     }
@@ -164,6 +174,12 @@ void TIR_Function::print() {
 
 TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst);
 
+// *out will always be filled in.
+// The function returns true if *out is a POINTER to the value we need,
+// and false if *out is the value we need itself
+//
+// If true is returned, you need to use LOAD/STORE
+// If false is returned, you can use the value directly
 bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
     switch (val->nodetype) {
         case AST_VAR: {
@@ -180,7 +196,7 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
         }
 
         case AST_DEREFERENCE: {
-            AST_Dereference* deref = (AST_Dereference*)val;
+            AST_Dereference *deref = (AST_Dereference*)val;
             *out = compile_node_rvalue(fn, deref->ptr, {});
             return true;
         }
@@ -204,9 +220,9 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
                 }
             };
 
-            *out = fn.alloc_temp(member_access->type);
+            *out = fn.alloc_temp(fn.c.global.get_pointer_type(member_access->type));
             fn.emit({ 
-                .opcode = TOPC_PTR_OFFSET,
+                .opcode = TOPC_GEP,
                 .gep = {
                     .dst = *out,
                     .base = base,
@@ -233,14 +249,9 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block,
                 AST_Var* vardecl = (AST_Var*)decl;
                 TIR_Value val;
 
-
                 if (vardecl->argindex >= 0) {
-                    val = {
-                        .valuespace = TVS_ARGUMENT,
-                        .offset = (u64)vardecl->argindex,
-                        .type = vardecl->type
-                    };
-                } 
+                    val = fn.parameters[vardecl->argindex];
+                }
                 else if (vardecl->always_on_stack) {
                     val = fn.alloc_stack(vardecl);
                 } 
@@ -293,32 +304,29 @@ TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
 
 TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
     switch (node->nodetype) {
-        case AST_VAR: {
-            AST_Var* var = (AST_Var*)node;
-
-            if (var->is_global || var->always_on_stack) {
-                TIR_Value ptrloc = var->is_global ? fn.c.valmap[var] : fn._valmap[var];
-                assert(ptrloc.valuespace);
-
-                if (!dst.valuespace)
-                    dst = fn.alloc_temp(var->type);
+        case AST_MEMBER_ACCESS:
+        case AST_VAR: 
+        case AST_DEREFERENCE: 
+        {
+            TIR_Value src;
+            if (get_location(fn, (AST_Value*)node, &src)) {
+                if (!dst)
+                    dst = fn.alloc_temp(((AST_Value*)node)->type);
 
                 fn.emit({
                     .opcode = TOPC_LOAD,
-                    .un = { .dst = dst, .src = ptrloc }
+                    .un = { .dst = dst, .src = src }
                 });
+                return dst;
             }
             else {
-                TIR_Value val = fn._valmap[var];
-                assert(val);
-
-                if (dst.valuespace && dst != val)
-                    fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
-                else
-                    dst = val;
+                if (dst && dst != src) {
+                    fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = src } });
+                    return dst;
+                } else {
+                    return src;
+                }
             }
-
-            return dst;
         }
 
         case AST_NUMBER: {
@@ -364,7 +372,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                     break;
                 }
                 case OP_ADD_PTR_INT: {
-                    opcode = TOPC_PTR_OFFSET;
+                    opcode = TOPC_GEP;
                     break;
                 }
                 default:
@@ -377,7 +385,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             if (bin->op == OP_ADD_PTR_INT) {
                 arr<TIR_Value> offsets = { rhs };
                 fn.emit({
-                    .opcode = TOPC_PTR_OFFSET,
+                    .opcode = TOPC_GEP,
                     .gep = {.dst = dst, .base = lhs, .offsets = offsets.release()}
                 });
             } else {
@@ -393,28 +401,35 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
         case AST_FN_CALL: {
             AST_FnCall* fncall = (AST_FnCall*)node;
             
-            assert(fncall->fn->nodetype == AST_FN);
-            AST_Fn* callee = (AST_Fn*)fncall->fn;
-            AST_FnType* callee_type = (AST_FnType*)fncall->fn->type;
+            assert(fncall->fn IS AST_FN);
+            AST_Fn *callee = (AST_Fn*)fncall->fn;
+            // AST_FnType* callee_type = (AST_FnType*)fncall->fn->type;
+
+            TIR_Function *tir_callee = fn.c.fns[callee];
 
             arr<TIR_Value> args;
 
             for (u32 i = 0; i < fncall->args.size; i++) {
 
                 AST_Type* param_type = &t_any8;
-                if (i < callee_type->param_types.size)
-                    callee_type->param_types[i];
+                if (i < tir_callee->parameters.size)
+                    param_type = tir_callee->parameters[i].type;
 
                 TIR_Value  arg_dst = fn.alloc_temp(param_type);
+                TIR_Value arg;
 
-                TIR_Value arg = compile_node_rvalue(fn, fncall->args[i], arg_dst);
+                if (fncall->args[i]->type IS AST_STRUCT) {
+                    // arg = compile_node_rvalue(fn, fncall->args[i], arg_dst);
+                    assert (get_location(fn, fncall->args[i], &arg));
+                }
+                else {
+                    arg = compile_node_rvalue(fn, fncall->args[i], arg_dst);
+                }
                 args.push(arg);
             }
 
-            if (!dst) {
-                if (callee_type->returntype != &t_void) {
-                    dst = fn.alloc_temp(callee_type->returntype);
-                }
+            if (!dst && fn.retval) {
+                dst = fn.alloc_temp(fn.retval.type);
             }
 
             fn.emit({ 
@@ -486,21 +501,6 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             }
         }
 
-        case AST_DEREFERENCE: {
-            AST_Dereference *deref = (AST_Dereference*)node;
-
-            TIR_Value ptrloc = fn.alloc_temp(deref->ptr->type);
-            compile_node_rvalue(fn, deref->ptr, ptrloc);
-
-            if (!dst)
-                dst = fn.alloc_temp(deref->type);
-            
-            fn.emit({
-                .opcode = TOPC_LOAD,
-                .un = { .dst = dst, .src = ptrloc }
-            });
-            return dst;
-        }
 
         case AST_ADDRESS_OF: {
             AST_AddressOf *addrof = (AST_AddressOf*)node;
@@ -613,7 +613,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
         case AST_CAST: {
             AST_Cast* cast = (AST_Cast*)node;
 
-            if (cast->inner->type->nodetype == AST_ARRAY_TYPE && cast->type->nodetype == AST_POINTER_TYPE) {
+            if (cast->inner->type IS AST_ARRAY_TYPE && cast->type IS AST_POINTER_TYPE) {
 
                 TIR_Value var_location = get_array_ptr(fn, cast->inner);
 
@@ -626,7 +626,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                     dst = fn.alloc_temp(cast->type);
 
                 fn.emit({ 
-                    .opcode =  TOPC_PTR_OFFSET, 
+                    .opcode =  TOPC_GEP, 
                     .gep = { 
                         .dst = dst, 
                         .base = var_location, 
@@ -636,7 +636,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                 return dst;
             }
 
-            else if ((cast->inner->type->nodetype == AST_POINTER_TYPE && cast->type->nodetype == AST_POINTER_TYPE)
+            else if ((cast->inner->type IS AST_POINTER_TYPE && cast->type IS AST_POINTER_TYPE)
                     || cast->type == &t_any8) {
 
                 TIR_Value src = compile_node_rvalue(fn, cast->inner, {});
@@ -659,30 +659,66 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             }
         }
 
-        case AST_MEMBER_ACCESS: {
-            AST_MemberAccess *ma = (AST_MemberAccess*)node;
-
-            TIR_Value src;
-            assert (get_location(fn, ma, &src));
-
-            if (!dst)
-                dst = fn.alloc_temp(ma->type);
-
-            fn.emit({
-                .opcode = TOPC_LOAD,
-                .un = { .dst = dst, .src = src }
-            });
-
-            return dst;
-        }
-
         default:
             UNREACHABLE;
     }
 }
 
-void TIR_Context::compile_all() {
+void TIR_Function::compile_signature() {
+    AST_FnType *fntype = (AST_FnType*)ast_fn->type;
+    // TODO VOID
+    if (fntype->returntype && fntype->returntype != &t_void) {
+        retval.valuespace = TVS_RET_VALUE;
+        retval.type = fntype->returntype;
+    }
+    else {
+        retval.valuespace = TVS_DISCARD;
+        retval.type = &t_void;
+    }
 
+    for (auto& kvp : this->ast_fn->block.ctx.declarations) {
+        if (kvp.value IS AST_VAR) {
+            AST_Var *vardecl = (AST_Var*)kvp.value;
+
+            if (vardecl->argindex < 0)
+                continue;
+
+            AST_Type *arg_type = vardecl->type;
+            TIR_Value_Flags flags = (TIR_Value_Flags)0;
+
+            if (vardecl->type IS AST_STRUCT) {
+                arg_type = c.global.get_pointer_type(vardecl->type);
+                flags = TVF_BYVAL;
+            }
+
+            TIR_Value val = {
+                .valuespace = TVS_ARGUMENT,
+                .flags = flags,
+                .offset = (u64)vardecl->argindex,
+                .type = arg_type,
+            };
+
+            // TODO DS
+            while (parameters.size <= vardecl->argindex)
+                parameters.push({});
+            parameters[vardecl->argindex] = val;
+        }
+    }
+}
+
+void TIR_Function::compile() {
+    AST_Type* rettype = ((AST_FnType*)ast_fn->type)->returntype;
+    if (rettype) 
+        retval.type = rettype;
+
+    if (!ast_fn->is_extern) {
+        TIR_Block* entry = new TIR_Block();
+        blocks.push(entry);
+        compile_block(*this, entry, &ast_fn->block, nullptr);
+    }
+}
+
+void TIR_Context::compile_all() {
     // Run through the global variables and assign them TIR_Values and initial values
     for(auto& decl : global.declarations) {
         switch (decl.value->nodetype) {
@@ -692,7 +728,7 @@ void TIR_Context::compile_all() {
                 TIR_Value val = {
                     .valuespace = TVS_GLOBAL,
                     .offset = globals_ofset++,
-                    .type = get_pointer_type(((AST_Var*)decl.value)->type),
+                    .type = global.get_pointer_type(((AST_Var*)decl.value)->type),
                 };
                 valmap[var] = val;
                 break;
@@ -711,15 +747,7 @@ void TIR_Context::compile_all() {
                 
                 TIR_Function* tir_fn = new TIR_Function(*this, fn);
 
-                AST_Type* rettype = ((AST_FnType*)fn->type)->returntype;
-                if (rettype) 
-                    tir_fn->retval.type = rettype;
-
-                if (!fn->is_extern) {
-                    TIR_Block* entry = new TIR_Block();
-                    tir_fn->blocks.push(entry);
-                    compile_block(*tir_fn, entry, &fn->block, nullptr);
-                }
+                tir_fn->compile_signature();
 
                 fns.insert(fn, tir_fn);
 
@@ -737,5 +765,9 @@ void TIR_Context::compile_all() {
             default:
                 NOT_IMPLEMENTED();
         }
+    }
+
+    for (auto& fn : fns) {
+        fn.value->compile();
     }
 }

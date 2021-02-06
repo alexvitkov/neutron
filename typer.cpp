@@ -23,65 +23,6 @@ AST_PrimitiveType t_string_literal (PRIMITIVE_UNIQUE,  0, "string_literal");
 AST_PrimitiveType t_any8 (PRIMITIVE_UNIQUE, 8, "any8");
 
 
-// TODO This should be a hashset if someone ever makes one
-//
-// The reason this exists is to make sure function types are unique
-// Type pointers MUST be comparable by checking their pointers with ==
-// so we need additional logic to make sure we don't create the same
-// composite type twice.
-map<AST_FnType*, AST_FnType*> fn_types_hash;
-
-map<AST_Type*, AST_PointerType*> pointer_types;
-
-struct TypeSizeTuple {
-    AST_Type* t;
-    u64 u;
-};
-
-map<TypeSizeTuple, AST_ArrayType*> array_types;
-
-bool validate_type(Context& ctx, AST_Type** type);
-
-u32 map_hash(TypeSizeTuple tst) {
-    return map_hash(tst.t) ^ (u32)tst.u;
-}
-
-u32 map_equals(TypeSizeTuple lhs, TypeSizeTuple rhs) {
-    return lhs.t == rhs.t && lhs.u == rhs.u;
-}
-
-u32 hash(AST_Type* returntype, arr<AST_Type*>& param_types) {
-    u32 hash = map_hash(returntype);
-
-    for (AST_Type* param : param_types)
-        hash ^= map_hash(param);
-
-    return hash;
-}
-
-u32 map_hash(AST_FnType* fn_type) {
-    return hash(fn_type->returntype, fn_type->param_types);
-};
-
-// TODO RESOLUTION we should check if it's a AST_UnresolvedId
-AST_PointerType* get_pointer_type(AST_Type* pointed_type) {
-    AST_PointerType* pt;
-    if (!pointer_types.find(pointed_type, &pt)) {
-        pt = new AST_PointerType(pointed_type);
-        pointer_types.insert(pointed_type, pt);
-    }
-    return pt;
-}
-
-AST_ArrayType* get_array_type(AST_Type* base_type, u64 size) {
-    TypeSizeTuple key = { base_type, size };
-    AST_ArrayType* at;
-    if (!array_types.find(key, &at)) {
-        at = new AST_ArrayType(base_type, size);
-        array_types.insert(key, at);
-    }
-    return at;
-}
 
 bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     MUST (lhs->returntype == rhs->returntype);
@@ -94,21 +35,6 @@ bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     return true;
 }
 
-AST_FnType* make_function_type_unique(AST_FnType* temp_type) {
-
-    AST_FnType* result;
-    if (fn_types_hash.find(temp_type, &result)) {
-        return result;
-    }
-    else {
-        // TODO ALLOCATION
-        AST_FnType* newtype = new AST_FnType(std::move(*temp_type));
-
-        fn_types_hash.insert(newtype, newtype);
-        return newtype;
-    }
-}
-
 bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
     AST_Type* dstt = gettype(ctx, *dst);
     MUST (dstt);
@@ -116,14 +42,14 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
     if (dstt == type) 
         return true;
 
-    if (dstt->nodetype == AST_PRIMITIVE_TYPE 
-            && type->nodetype == AST_PRIMITIVE_TYPE
+    if (dstt IS AST_PRIMITIVE_TYPE 
+            && type IS AST_PRIMITIVE_TYPE
             && ((AST_PrimitiveType*)type)->kind != PRIMITIVE_UNIQUE)
     {
         AST_PrimitiveType* l = (AST_PrimitiveType*)dstt;
         AST_PrimitiveType* r = (AST_PrimitiveType*)type;
 
-        if ((*dst)->nodetype == AST_NUMBER) {
+        if ((*dst) IS AST_NUMBER) {
             AST_Number* num = (AST_Number*)*dst;
             if (num->fits_in((AST_PrimitiveType*)type)) {
                 num->type = type;
@@ -149,7 +75,7 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
 
     else if (dstt == &t_string_literal) {
 
-        if (type == get_pointer_type(&t_i8) || type == &t_any8) {
+        if (type == ctx.get_pointer_type(&t_i8) || type == &t_any8) {
 
             AST_StringLiteral* str = (AST_StringLiteral*)*dst;
 
@@ -159,7 +85,7 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
 
             if (!string_static_var) {
                 // Get an array type that's just big enough to fit the C string 
-                AST_ArrayType* string_array_type = get_array_type(&t_i8, str->length + 1);
+                AST_ArrayType* string_array_type = ctx.get_array_type(&t_i8, str->length + 1);
 
                 string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
                 string_static_var->type = string_array_type;
@@ -169,7 +95,7 @@ bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
                 MUST (ctx.global->declare({ .string_literal = str }, string_static_var));
             }
 
-            *dst =  ctx.alloc<AST_Cast>(get_pointer_type(&t_i8), string_static_var);
+            *dst =  ctx.alloc<AST_Cast>(ctx.get_pointer_type(&t_i8), string_static_var);
             return true;
         }
 
@@ -327,10 +253,10 @@ bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr) {
 
         case AST_POINTER_TYPE: {
             AST_PointerType* pt = (AST_PointerType*)node;
-            if (pt->pointed_type->nodetype == AST_UNRESOLVED_ID) {
+            if (pt->pointed_type IS AST_UNRESOLVED_ID) {
                 MUST (resolve_unresolved_references(global, (AST_Node**)&pt->pointed_type));
 
-                *nodeptr = get_pointer_type(pt->pointed_type);
+                *nodeptr = global.get_pointer_type(pt->pointed_type);
                 // TODO ALLOCATION free the temp pointer type here
             }
             break;
@@ -365,6 +291,7 @@ bool is_integral_type(AST_Type* type) {
     }
 }
 
+bool validate_type(Context& ctx, AST_Type** type);
 
 bool validate_fn_type(Context& ctx, AST_Fn* fn) {
     AST_FnType *fntype = (AST_FnType*)fn->type;
@@ -379,7 +306,7 @@ bool validate_fn_type(Context& ctx, AST_Fn* fn) {
 
     MUST (validate_type(ctx, &fntype->returntype));
     
-    fntype = make_function_type_unique(fntype);
+    fntype = ctx.make_function_type_unique(fntype);
     fn->type = fntype;
     
     return fn->type;
@@ -407,7 +334,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
 
             // The parser can't tell apart function calls from casts
             // We are smarter than the parser though so we can
-            if (fncall->fn->nodetype == AST_FN) {
+            if (fncall->fn IS AST_FN) {
                 AST_Fn *fn = (AST_Fn*)fncall->fn;
                 AST_FnType *fntype = (AST_FnType*)fn->type;
 
@@ -469,8 +396,8 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 MUST (gettype(ctx, cast->inner));
                 
                 // Right now we only support pointer->pointer casts
-                if ((cast->type->nodetype == AST_POINTER_TYPE || cast->type->nodetype == AST_ARRAY_TYPE)
-                    && (cast->inner->type->nodetype == AST_POINTER_TYPE || cast->inner->type->nodetype == AST_ARRAY_TYPE))
+                if ((cast->type IS AST_POINTER_TYPE || cast->type IS AST_ARRAY_TYPE)
+                    && (cast->inner->type IS AST_POINTER_TYPE || cast->inner->type IS AST_ARRAY_TYPE))
                 {
                     return cast->type;
                 }
@@ -522,7 +449,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
             MUST (lhst && rhst);
 
             // Handle pointer arithmetic
-            if (lhst->nodetype == AST_POINTER_TYPE || rhst->nodetype == AST_POINTER_TYPE) {
+            if (lhst IS AST_POINTER_TYPE || rhst IS AST_POINTER_TYPE) {
                 if (bin->op != '+' && bin->op != '-') {
                     ctx.error({
                         .code = ERR_INVALID_ASSIGNMENT,
@@ -540,14 +467,14 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
                 // Pointer  - Pointer  -- valid
                 // Integral - Pointer  -- invalid
 
-                if (lhst->nodetype == AST_POINTER_TYPE) {
+                if (lhst IS AST_POINTER_TYPE) {
                     // If LHS is a pointer and operator is +, RHS can only be an integral type
                     if (bin->op == '+' && !is_integral_type(rhst))
                         goto Error;
 
                     if (bin->op == '-') {
                         // Pointer Pointer subtraction is valid if the pointers the same type
-                        if (rhst->nodetype == AST_POINTER_TYPE) {
+                        if (rhst IS AST_POINTER_TYPE) {
                             if (lhst != rhst)
                                 goto Error;
                             bin->op = OP_SUB_PTR_PTR;
@@ -577,7 +504,7 @@ AST_Type* gettype(Context& ctx, AST_Value* node) {
 
                 // After this is all done, the type of the binary expression
                 // is the same as the pointer type
-                bin->type = lhst->nodetype == AST_POINTER_TYPE ? lhst : rhst;
+                bin->type = lhst IS AST_POINTER_TYPE ? lhst : rhst;
                 return bin->type;
 
                 return nullptr;
@@ -609,11 +536,6 @@ Error:
                 // TODO ERROR
                 ctx.error({ .code = ERR_NO_SUCH_MEMBER, });
                 return nullptr;
-            }
-
-            if (ma->lhs->nodetype == AST_VAR) {
-                AST_Var* var = (AST_Var*)ma->lhs;
-                var->always_on_stack = true;
             }
 
             for (u32 i = 0; i < s->members.size; i++) {
@@ -652,9 +574,9 @@ Error:
             AST_Type* inner_type = gettype(ctx, addrof->inner);
             MUST (inner_type);
 
-            addrof->type = get_pointer_type(inner_type);
+            addrof->type = ctx.get_pointer_type(inner_type);
 
-            if (addrof->inner->nodetype == AST_VAR) {
+            if (addrof->inner IS AST_VAR) {
                 ((AST_Var*)addrof->inner)->always_on_stack = true;
             }
             return addrof->type;
@@ -692,7 +614,7 @@ bool validate_type(Context& ctx, AST_Type** type) {
 
             Location loc = location_of(ctx, (AST_Node**)&deref);
 
-            *type = get_pointer_type((AST_Type*)deref->ptr);
+            *type = ctx.get_pointer_type((AST_Type*)deref->ptr);
             ctx.global->reference_locations[(AST_Node**)type] = loc;
 
             return true;
@@ -716,10 +638,18 @@ bool typecheck(Context& ctx, AST_Node* node) {
             AST_Block* block = (AST_Block*)node;
 
             for (const auto& decl : block->ctx.declarations) {
-                if (decl.value->nodetype == AST_VAR) {
+                if (decl.value IS AST_VAR) {
                     AST_Var* var = (AST_Var*)decl.value;
 
                     MUST (typecheck(block->ctx, var));
+
+                    // TODO STRUCT
+                    // Right now structures are always on the stack
+                    // since they are always passed by pointer in LLVM
+                    // with the byval tag
+                    if (var->type IS AST_STRUCT)
+                        var->always_on_stack = true;
+
                     if (var->initial_value)
                         MUST (typecheck(block->ctx, var->initial_value));
                 }
@@ -776,6 +706,9 @@ bool typecheck(Context& ctx, AST_Node* node) {
             AST_Return *ret = (AST_Return*)node;
             AST_Type *rettype = ((AST_FnType*)ctx.fn->type)->returntype;
 
+            if (ret->value)
+                MUST (typecheck(ctx, ret->value));
+
             if (rettype != &t_void && !ret->value) {
                 ctx.error({
                     .code = ERR_RETURN_TYPE_MISSING,
@@ -816,10 +749,36 @@ bool typecheck(Context& ctx, AST_Node* node) {
         }
 
         case AST_STRUCT: {
-            //AST_Struct* s = (AST_Struct*)node;
-            //for (auto& member : s->members.entries) {
-                // MUST(typecheck(ctx, member.type));
-            //}
+            AST_Struct* s = (AST_Struct*)node;
+            s->size = 0;
+
+            for (auto& member : s->members) {
+                MUST(typecheck(ctx, member.type));
+                u64 member_size = member.type->size;
+
+                // For most types, alignment = size
+                // For structs, alignment = biggest member alignment
+                u64 member_alignment = member.type->size;
+                if (member.type IS AST_STRUCT) {
+                    AST_Struct *member_struct = (AST_Struct*)member.type;
+                    member_alignment = member_struct->alignment;
+                }
+                if (s->alignment < member_alignment)
+                    s->alignment = member_alignment;
+
+                u64 padding = s->size % member_size;
+                if (padding > 0)
+                    padding = member_size - padding;
+
+                member.offset = s->size + padding;
+                s->size += padding + member_size;
+            }
+
+            u64 end_padding = s->size % s->alignment;
+            if (end_padding > 0)
+                end_padding = s->alignment - end_padding;
+            s->size += end_padding;
+
             return true;
         }
 
@@ -849,10 +808,10 @@ bool typecheck_all(GlobalContext& global) {
 
     // First resolve the function types, we need their signatures for everything else
     for (auto& decl : declarations_copy) {
-        if (decl->nodetype == AST_FN) {
+        if (decl IS AST_FN) {
             MUST (validate_fn_type(global, (AST_Fn*)decl));
         }
-        else if (decl->nodetype == AST_VAR) {
+        else if (decl IS AST_VAR) {
             MUST (typecheck(global, decl));
         }
     }

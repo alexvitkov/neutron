@@ -21,35 +21,43 @@ T2L_Context::T2L_Context(TIR_Context& tirc)
     translated_types.insert(&t_any8, IntegerType::get(lc, 64));
 }
 
-llvm::Type* T2L_Context::get_llvm_type(AST_Type* type) {
+llvm::FunctionType *T2L_Context::get_function_type(TIR_Function* fn) {
+    arr<llvm::Type*> l_param_types;
+    AST_FnType *fntype = (AST_FnType*)fn->ast_fn->type;
+
+    llvm::Type *llvm_fntype;
+    if (translated_types.find(fntype, &llvm_fntype)) {
+        return (llvm::FunctionType*)llvm_fntype;
+    }
+
+    for (auto& param : fn->parameters) {
+        //if (param.flags & TVF_BYVAL) {
+            //NOT_IMPLEMENTED();
+        //} else {
+            l_param_types.push(get_llvm_type(param.type));
+        //}
+    }
+
+    llvm::Type* returntype = returntype = get_llvm_type(fn->retval.type);
+
+    FunctionType* l_fn_type = FunctionType::get(
+            returntype, 
+            ArrayRef<llvm::Type*>(l_param_types.buffer, l_param_types.size),
+            fntype->is_variadic);
+
+    translated_types.insert(fntype, l_fn_type);
+    return l_fn_type;
+}
+
+llvm::Type *T2L_Context::get_llvm_type(AST_Type* type) {
     llvm::Type* t;
     if (translated_types.find(type, &t))
         return t;
 
     switch (type->nodetype) {
         case AST_FN_TYPE: {
-            AST_FnType* fntype = (AST_FnType*)type;
-
-            arr<llvm::Type*> l_param_types;
-
-            for (auto& param : fntype->param_types)
-                l_param_types.push(get_llvm_type(param));
-
-            llvm::Type* returntype;
-            if (!fntype->returntype || fntype->returntype == &t_void) {
-                returntype = translated_types[&t_void];
-            }
-            else {
-                returntype = get_llvm_type(fntype->returntype);
-            }
-
-            FunctionType* l_fn_type = FunctionType::get(
-                    returntype, 
-                    ArrayRef<llvm::Type*>(l_param_types.buffer, l_param_types.size),
-                    fntype->is_variadic);
-
-            translated_types.insert(type, l_fn_type);
-            return l_fn_type;
+            assert(!"NOT SUPPORTED");
+            UNREACHABLE;
         }
 
         case AST_POINTER_TYPE: {
@@ -240,8 +248,7 @@ void T2L_BlockContext::compile() {
                 break;
             }
             case TOPC_RET: {
-                // TODO t_void
-                if (((AST_FnType*)fn->tir_fn->ast_fn->type)->returntype != &t_void) {
+                if (fn->tir_fn->retval) {
                     llvm::Value *retval = get_value(fn->tir_fn->retval);
                     builder.CreateRet(retval);
                 }
@@ -266,7 +273,10 @@ void T2L_BlockContext::compile() {
                     args[i] = l_arg;
                 }
 
-                llvm::Value* l_result = builder.CreateCall(l_callee, ArrayRef<llvm::Value*>(args, argc));
+                llvm::CallInst* l_result = builder.CreateCall(l_callee, ArrayRef<llvm::Value*>(args, argc));
+
+                for (u32 i = 0; i < instr.call.args.size; i++) {
+                }
 
                 if (instr.call.dst) {
                     set_value(&instr, l_result);
@@ -303,7 +313,7 @@ void T2L_BlockContext::compile() {
                 builder.CreateCondBr(cond, true_b, false_b);
                 break;
             }
-            case TOPC_PTR_OFFSET: {
+            case TOPC_GEP: {
                 llvm::Value *lhs = get_value(instr.bin.lhs);
 
                 llvm::Value* gep;
@@ -333,9 +343,23 @@ void T2L_BlockContext::compile() {
 }
 
 void T2L_FunctionContext::compile_header() {
-    llvm::FunctionType* l_fn_type = (llvm::FunctionType*)t2l_context->get_llvm_type(tir_fn->ast_fn->type);
+    llvm::FunctionType* l_fn_type = t2l_context->get_function_type(tir_fn);
+
     auto linkage = tir_fn->ast_fn->is_extern ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::WeakAnyLinkage;
     llvm_fn = Function::Create(l_fn_type, linkage, tir_fn->ast_fn->name, t2l_context->mod);
+
+    for (u32 i = 0; i < tir_fn->parameters.size; i++)
+        if (tir_fn->parameters[i].flags & TVF_BYVAL) {
+
+            AST_PointerType *pt = (AST_PointerType*)tir_fn->parameters[i].type;
+            llvm::Type *t = t2l_context->get_llvm_type(pt->pointed_type);
+
+            auto llvm_byval = llvm::Attribute::get(
+                    this->t2l_context->lc, 
+                    llvm::Attribute::ByVal, 
+                    t);
+            llvm_fn->addParamAttr(i, llvm_byval);
+        }
 }
 
 void T2L_FunctionContext::compile() {
@@ -383,7 +407,7 @@ void T2L_FunctionContext::compile() {
         Context* current = rem[index];
 
         for (auto decl : current->declarations) {
-            if (decl.value->nodetype == AST_VAR) {
+            if (decl.value IS AST_VAR) {
                 AST_Var* var = (AST_Var*)decl.value;
 
                 if (var->always_on_stack) {
@@ -487,7 +511,7 @@ void T2L_Context::compile_all() {
         AST_Value* ast_value = kvp.key;
         TIR_Value tir_value = kvp.value;
 
-        assert (ast_value->nodetype == AST_VAR);
+        assert (ast_value IS AST_VAR);
 
         switch (ast_value->nodetype) {
             case AST_VAR: {

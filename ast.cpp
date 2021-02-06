@@ -48,7 +48,7 @@ AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_L
     str = stringToken.name;
 }
 
-std::wostream& operator<< (std::wostream& o, arr<NamedType>& tl) {
+std::wostream& operator<< (std::wostream& o, arr<StructElement>& tl) {
     for (const auto& entry : tl) {
         o << entry.name << ": " << entry.type << ", ";
     }
@@ -172,7 +172,7 @@ void print(std::wostream& o, AST_BinaryOp* node, bool brackets = false) {
     if (ALWAYS_BRACKETS || brackets)
         o << '(';
 
-    if (node->lhs->nodetype == AST_BINARY_OP)
+    if (node->lhs IS AST_BINARY_OP)
         print(o, (AST_BinaryOp*)node->lhs, PREC(((AST_BinaryOp*)(node->lhs))->op) < PREC(node->op));
     else
         print(o, node->lhs, false);
@@ -211,7 +211,7 @@ void print(std::wostream& o, AST_BinaryOp* node, bool brackets = false) {
     }
 
     o << ' ';
-    if (node->rhs->nodetype == AST_BINARY_OP)
+    if (node->rhs IS AST_BINARY_OP)
         print(o, (AST_BinaryOp*)node->rhs, PREC(((AST_BinaryOp*)(node->rhs))->op) < PREC(node->op));
     else
         print(o, node->rhs, false);
@@ -307,7 +307,7 @@ std::wostream& operator<< (std::wostream& o, AST_MemberAccess* node) {
 }
 
 std::wostream& operator<< (std::wostream& o, AST_Dereference* node) {
-    if (node->ptr->nodetype == AST_BINARY_OP || ALWAYS_BRACKETS) {
+    if (node->ptr IS AST_BINARY_OP || ALWAYS_BRACKETS) {
         o << '(' << node->ptr << ")*";
     } else {
         o << node->ptr << '*';

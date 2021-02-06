@@ -11,6 +11,8 @@ struct Context;
 #define AST_TYPE_BIT  0x80
 #define AST_VALUE_BIT 0x40
 
+#define IS ->nodetype == 
+
 enum AST_NodeType : u8 {
 	AST_NONE = 0,
 
@@ -74,7 +76,10 @@ struct AST_Value : AST_Node {
 
 
 struct AST_Type : AST_Value {
-    inline AST_Type(AST_NodeType nodetype) : AST_Value(nodetype, (AST_Type*)&t_type) {}
+    u64 size;
+    inline AST_Type(AST_NodeType nodetype, u64 size) 
+        : AST_Value(nodetype, (AST_Type*)&t_type), 
+          size(size) {}
 };
 
 struct AST_UnresolvedId : AST_Value {
@@ -116,11 +121,10 @@ struct AST_FnCall : AST_Value {
 
 struct AST_PrimitiveType : AST_Type {
     PrimitiveTypeKind kind;
-    u8 size;
     const char* name;
 
-    inline AST_PrimitiveType(PrimitiveTypeKind kind, u8 size, const char* name)
-        : AST_Type(AST_PRIMITIVE_TYPE), kind(kind), size(size), name(name) {}
+    inline AST_PrimitiveType(PrimitiveTypeKind kind, u64 size, const char* name)
+        : AST_Type(AST_PRIMITIVE_TYPE, size), kind(kind), name(name) {}
 };
 
 // VOLATILE
@@ -130,15 +134,18 @@ struct AST_FnType : AST_Type {
     arr<AST_Type*> param_types;
     bool is_variadic;
 
-    inline AST_FnType() : AST_Type(AST_FN_TYPE), is_variadic(false) {}
+    inline AST_FnType(u64 size) : AST_Type(AST_FN_TYPE, size), is_variadic(false) {}
 };
 
 
 struct AST_ArrayType : AST_Type { 
     AST_Type* base_type;
     u64 array_length;
+
     inline AST_ArrayType(AST_Type* base_type, u64 length) 
-        : AST_Type(AST_ARRAY_TYPE), base_type(base_type), array_length(length) {}
+        : AST_Type(AST_ARRAY_TYPE, base_type->size * length), 
+          base_type(base_type), 
+          array_length(length) {}
 };
 
 struct AST_Var : AST_Value {
@@ -197,9 +204,10 @@ struct AST_Return : AST_Node {
     inline AST_Return(AST_Value* value) : AST_Node(AST_RETURN), value(value) {};
 };
 
-struct NamedType {
+struct StructElement {
     const char* name;
     AST_Type* type;
+    u64 offset;
 };
 
 struct AST_Fn : AST_Value {
@@ -216,8 +224,12 @@ struct AST_Fn : AST_Value {
 
 struct AST_Struct : AST_Type {
     const char* name;
-    arr<NamedType> members;
-    inline AST_Struct(const char* name) : AST_Type(AST_STRUCT), name(name) {}
+    arr<StructElement> members;
+    u64 alignment;
+    inline AST_Struct(const char* name) 
+        : AST_Type(AST_STRUCT, 0), 
+          name(name),
+          alignment(0) {}
 };
 
 struct AST_MemberAccess : AST_Value {
@@ -238,8 +250,8 @@ struct AST_MemberAccess : AST_Value {
 // If you add stuff to this, you MUST update map_hash and map_equals (defined in typer.cpp)
 struct AST_PointerType : AST_Type {
     AST_Type* pointed_type;
-    inline AST_PointerType(AST_Type* pointed_type) 
-        : AST_Type(AST_POINTER_TYPE), pointed_type(pointed_type) {}
+    inline AST_PointerType(AST_Type* pointed_type, u64 pointer_size) 
+        : AST_Type(AST_POINTER_TYPE, pointer_size), pointed_type(pointed_type) {}
 };
 
 struct AST_Dereference : AST_Value {

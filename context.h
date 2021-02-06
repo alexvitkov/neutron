@@ -25,7 +25,15 @@ struct DeclarationKey {
     };
 };
 
-struct AST_Fn;
+struct AST_Fn; 
+struct AST_Type; 
+struct AST_PointerType; 
+struct AST_ArrayType;
+
+struct CompileTarget {
+    u64 pointer_size;
+    u64 coerce_target_size;
+};
 
 struct Context {
     map<DeclarationKey, AST_Node*> declarations;
@@ -36,9 +44,11 @@ struct Context {
     AST_Fn* fn; // the function that this context is a part of
     arr<Context*> children;
 
+
     Context(Context* parent);
     Context(Context&) = delete;
     Context(Context&&) = delete;
+
 
     AST_Node* resolve(DeclarationKey key);
     bool declare(DeclarationKey key, AST_Node* value);
@@ -70,6 +80,10 @@ struct Context {
     //    If something is only needed until before the typing stage, you should allocate it here
     template <typename T, typename ... Ts>
     T* alloc_temp(Ts &&...args);
+
+    AST_PointerType *get_pointer_type(AST_Type* pointed_type);
+    AST_ArrayType   *get_array_type(AST_Type* base_type, u64 length);
+    AST_FnType      *make_function_type_unique(AST_FnType* temp_type);
 };
 
 struct GlobalContext : Context {
@@ -79,6 +93,8 @@ struct GlobalContext : Context {
     map<const char*, AST_StringLiteral*> literals;
 
     linear_alloc allocator, temp_allocator;
+
+    CompileTarget target = { 8, 8 };
 
     // This is silly, but there are two ways of storing information about a node's location
     //
@@ -93,6 +109,15 @@ struct GlobalContext : Context {
     // the address of the 'some_node' pointer itself is what we use as a key in reference_locations
     map<AST_Node*, Location> definition_locations;
     map<AST_Node**, Location> reference_locations;
+
+    // TODO DS This should be a hashset if someone ever makes one
+    //
+    // The reason those maps exist is to make sure function/pointer types are unique
+    // Types MUST be comparable by checking their pointers with ==,
+    // so we need those maps to make sure we don't create the same
+    // composite type twice.
+    map<AST_FnType*, AST_FnType*> fn_types_hash;
+    map<AST_Type*, AST_PointerType*> pointer_types;
 
     inline GlobalContext() : Context(nullptr) {}
 };

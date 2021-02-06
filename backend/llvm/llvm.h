@@ -1,18 +1,13 @@
 #ifndef LLVM_H
 #define LLVM_H
 
-#include "../../common.h"
-#include "../../ast.h"
-#include "../../typer.h"
-#include "../../cmdargs.h"
-#include "../tir/tir.h"
-
 // Visual Studio goes insane with llvm warnings.
 #ifdef _MSC_VER
 #pragma warning(push, 0)
 #endif
 
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/PassManager.h>
@@ -29,6 +24,13 @@
 #ifdef _MSC_VER
 #pragma warning(pop, 0)
 #endif
+
+#include "../../common.h"
+#include "../../ast.h"
+#include "../../typer.h"
+#include "../../cmdargs.h"
+#include "../tir/tir.h"
+
 
 struct T2L_Context;
 struct T2L_FunctionContext;
@@ -50,7 +52,8 @@ struct T2L_Context {
     void compile_all();
     const char* output_object();
 
-    llvm::Type* get_llvm_type(AST_Type* type);
+    llvm::Type *get_llvm_type(AST_Type *type);
+    llvm::FunctionType *get_function_type(TIR_Function *fn);
 };
 
 struct T2L_FunctionContext {
@@ -65,8 +68,6 @@ struct T2L_FunctionContext {
 
     void compile_header();
     void compile();
-
-    llvm::Value* retval;
 };
 
 struct T2L_BlockContext {

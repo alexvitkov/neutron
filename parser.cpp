@@ -481,7 +481,7 @@ void unexpected_token(Context& ctx, Token actual, TokenType expected_tt) {
 bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error);
 AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim = TOK_NONE);
 
-bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<NamedType>* tl) {
+bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<StructElement>* tl) {
     SmallToken t = r.peek();
     if (t.type == delim) {
         r.pop();
@@ -615,7 +615,7 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
     }
 
     AST_Fn* fn = ctx.alloc<AST_Fn>(ctx, name);
-    AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>();
+    AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global->target.pointer_size);
 
     fn->type = temp_fn_type;
     fn->block.ctx.fn = fn;
@@ -958,7 +958,7 @@ AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
                     }
                 };
 
-                if (top->nodetype == AST_DEREFERENCE) {
+                if (top IS AST_DEREFERENCE) {
                     // TODO ALLOCATION FREE we're leaking the Dereference node here
 
                     // foo*& is the same as x
