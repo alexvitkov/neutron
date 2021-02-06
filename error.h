@@ -55,7 +55,7 @@ struct Error {
     arr<ArgumentErr> args;
 };
 
-struct Context;
-void print_err(Context& global, Error& err);
+struct AST_Context;
+void print_err(AST_Context &AST_GlobalContext, Error& err);
 
 #endif // guard

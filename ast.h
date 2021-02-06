@@ -6,42 +6,10 @@
 #include "ds.h"
 #include <iostream>
 
-struct Context;
-
-#define AST_TYPE_BIT  0x80
-#define AST_VALUE_BIT 0x40
+struct AST_Context;
 
 #define IS ->nodetype == 
 
-enum AST_NodeType : u8 {
-	AST_NONE = 0,
-
-    AST_RETURN        = 0x01,
-    AST_IF            = 0x02,
-    AST_WHILE         = 0x03,
-    AST_BLOCK         = 0x04,
-
-    AST_FN            = 0x00 | AST_VALUE_BIT,
-    AST_VAR           = 0x01 | AST_VALUE_BIT,
-    AST_BINARY_OP     = 0x02 | AST_VALUE_BIT,
-    AST_ASSIGNMENT    = 0x03 | AST_VALUE_BIT,
-    AST_CAST          = 0x04 | AST_VALUE_BIT,
-    AST_NUMBER        = 0x05 | AST_VALUE_BIT,
-    AST_FN_CALL       = 0x06 | AST_VALUE_BIT,
-    AST_MEMBER_ACCESS = 0x07 | AST_VALUE_BIT,
-    AST_TEMP_REF      = 0x08 | AST_VALUE_BIT,
-    AST_UNRESOLVED_ID = 0x09 | AST_VALUE_BIT,
-    AST_DEREFERENCE   = 0x0a | AST_VALUE_BIT,
-    AST_ADDRESS_OF    = 0x0b | AST_VALUE_BIT,
-    AST_STRING_LITERAL= 0x0c | AST_VALUE_BIT,
-
-
-    AST_STRUCT         = 0x00 | AST_VALUE_BIT | AST_TYPE_BIT,
-	AST_PRIMITIVE_TYPE = 0x01 | AST_VALUE_BIT | AST_TYPE_BIT,
-    AST_FN_TYPE        = 0x02 | AST_VALUE_BIT | AST_TYPE_BIT,
-    AST_POINTER_TYPE   = 0x03 | AST_VALUE_BIT | AST_TYPE_BIT,
-    AST_ARRAY_TYPE     = 0x04 | AST_VALUE_BIT | AST_TYPE_BIT,
-};
 
 enum PrimitiveTypeKind : u8 {
     PRIMITIVE_SIGNED,
@@ -51,16 +19,6 @@ enum PrimitiveTypeKind : u8 {
     PRIMITIVE_UNIQUE
 };
 
-struct AST_Node {
-	AST_NodeType nodetype;
-    inline AST_Node(AST_NodeType nt) : nodetype(nt) {}
-};
-
-struct AST_Block : AST_Node {
-    Context ctx;
-    arr<AST_Node*> statements;
-    inline AST_Block(Context& parent) : AST_Node(AST_BLOCK), ctx(&parent) {}
-};
 
 struct AST_Type;
 struct AST_PrimitiveType;;
@@ -83,12 +41,12 @@ struct AST_Type : AST_Value {
 };
 
 struct AST_UnresolvedId : AST_Value {
-    Context& ctx;
+    AST_Context& ctx;
 
     const char* name;
     AST_Node* resolved;
 
-    inline AST_UnresolvedId(const char* typeName, Context& ctx) 
+    inline AST_UnresolvedId(const char* typeName, AST_Context& ctx) 
         : AST_Value(AST_UNRESOLVED_ID, nullptr), name(typeName), ctx(ctx) 
     {
         ctx.global->unresolved.push(this);
@@ -180,16 +138,16 @@ struct AST_Number : AST_Value {
 
 struct AST_If : AST_Node {
     AST_Node* condition;
-    AST_Block then_block;
+    AST_Context then_block;
 
-    inline AST_If(Context& parent_ctx) : AST_Node(AST_IF), then_block(parent_ctx) {}
+    inline AST_If(AST_Context* parent_ctx) : AST_Node(AST_IF), then_block(parent_ctx) {}
 };
 
 struct AST_While : AST_Node {
     AST_Node* condition;
-    AST_Block block;
+    AST_Context block;
 
-    inline AST_While(Context& parent_ctx) : AST_Node(AST_WHILE), block(parent_ctx) {}
+    inline AST_While(AST_Context* parent_ctx) : AST_Node(AST_WHILE), block(parent_ctx) {}
 };
 
 struct AST_BinaryOp : AST_Value {
@@ -216,10 +174,10 @@ struct AST_Fn : AST_Value {
 
     arr<const char*> argument_names;
 
-    AST_Block block;
+    AST_Context block;
     bool is_extern = false;
 
-    inline AST_Fn(Context& parent_ctx, const char* name) 
+    inline AST_Fn(AST_Context* parent_ctx, const char* name) 
         : AST_Value(AST_FN, nullptr), block(parent_ctx), name(name) {}
 };
 
@@ -298,7 +256,7 @@ std::wostream& operator<<(std::wostream& o, AST_Cast* node);
 std::wostream& operator<<(std::wostream& o, AST_Number* node);
 std::wostream& operator<<(std::wostream& o, AST_If* node);
 std::wostream& operator<<(std::wostream& o, AST_While* node);
-std::wostream& operator<<(std::wostream& o, AST_Block* bl);
+std::wostream& operator<<(std::wostream& o, AST_Context* bl);
 std::wostream& operator<<(std::wostream& o, AST_FnCall* node);
 std::wostream& operator<<(std::wostream& o, AST_MemberAccess* node);
 std::wostream& operator<<(std::wostream& o, AST_PointerType* node);

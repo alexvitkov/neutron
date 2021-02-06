@@ -7,7 +7,7 @@
 #include "linker.h"
 #include "util.h"
 
-GlobalContext global;
+AST_GlobalContext global;
 
 void exit_with_error() {
 	for (auto& err : global.errors) {

@@ -5,7 +5,7 @@
 #include "ds.h"
 #include "error.h"
 
-struct GlobalContext;
+struct AST_GlobalContext;
 struct AST_UnresolvedId;
 struct AST_FnType;
 struct AST_StringLiteral;
@@ -35,20 +35,19 @@ struct CompileTarget {
     u64 coerce_target_size;
 };
 
-struct Context {
+struct AST_Context : AST_Node {
     map<DeclarationKey, AST_Node*> declarations;
+    arr<AST_Node*> statements;
 
-    GlobalContext* global;
-    Context* parent;
+    AST_GlobalContext* global;
+    AST_Context* parent;
 
     AST_Fn* fn; // the function that this context is a part of
-    arr<Context*> children;
+    arr<AST_Context*> children;
 
-
-    Context(Context* parent);
-    Context(Context&) = delete;
-    Context(Context&&) = delete;
-
+    AST_Context(AST_Context* parent);
+    AST_Context(AST_Context&) = delete;
+    AST_Context(AST_Context&&) = delete;
 
     AST_Node* resolve(DeclarationKey key);
     bool declare(DeclarationKey key, AST_Node* value);
@@ -59,7 +58,7 @@ struct Context {
 
     struct RecursiveDefinitionsIterator {
         i64 index = 0;
-        arr<Context*> remaining;
+        arr<AST_Context*> remaining;
     };
 
     // In the temp allocator we store:
@@ -86,7 +85,7 @@ struct Context {
     AST_FnType      *make_function_type_unique(AST_FnType* temp_type);
 };
 
-struct GlobalContext : Context {
+struct AST_GlobalContext : AST_Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
 
@@ -122,25 +121,25 @@ struct GlobalContext : Context {
     map<AST_FnType*, AST_FnType*> fn_types_hash;
     map<AST_Type*, AST_PointerType*> pointer_types;
 
-    inline GlobalContext() : Context(nullptr) {}
+    inline AST_GlobalContext() : AST_Context(nullptr) {}
 };
 
 template <typename T, typename ... Ts>
-T* Context::alloc(Ts &&...args) {
+T* AST_Context::alloc(Ts &&...args) {
     T* buf = (T*)global->allocator.alloc(sizeof(T));
     new (buf) T (args...);
     return buf;
 }
 
 template <typename T, typename ... Ts>
-T* Context::alloc_temp(Ts &&...args) {
+T* AST_Context::alloc_temp(Ts &&...args) {
     T* buf = (T*)global->temp_allocator.alloc(sizeof(T));
     new (buf) T (args...);
     return buf;
 }
 
-Location location_of(Context& ctx, AST_Node** node);
-bool parse_all(Context& global);
-bool parse_source_file(Context& global, SourceFile& sf);
+Location location_of(AST_Context& ctx, AST_Node** node);
+bool parse_all(AST_Context& global);
+bool parse_source_file(AST_Context& global, SourceFile& sf);
 
 #endif // guard

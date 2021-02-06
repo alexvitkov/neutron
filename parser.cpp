@@ -164,7 +164,7 @@ u8 prec[148] = {
 /* |= */  1 | ASSIGNMENT,
 };
 
-Location location_of(Context& ctx, AST_Node** node) {
+Location location_of(AST_Context& ctx, AST_Node** node) {
     Location loc;
     if (ctx.global->reference_locations.find(node, &loc)) {
         return loc;
@@ -175,11 +175,11 @@ Location location_of(Context& ctx, AST_Node** node) {
 }
 
 struct TokenReader;
-void unexpected_token(Context& ctx, Token actual, TokenType expected);
+void unexpected_token(AST_Context& ctx, Token actual, TokenType expected);
 
 
 
-NumberData* parse_number(Context& ctx, char* start, char* end) {
+NumberData* parse_number(AST_Context& ctx, char* start, char* end) {
     // TODO ALLOCATION
     NumberData* data = new NumberData();
 
@@ -221,7 +221,7 @@ NumberData* parse_number(Context& ctx, char* start, char* end) {
 }
 
 
-bool tokenize(Context& global, SourceFile &s) {
+bool tokenize(AST_Context& global, SourceFile &s) {
 	u64 word_start;
 	enum { NONE, WORD, NUMBER } state = NONE;
 
@@ -414,7 +414,7 @@ struct TokenReader {
     u64 pos_in_file;
 
 	SourceFile& sf;
-	Context& ctx;
+	AST_Context& ctx;
 
 	SmallToken peek() {
 		if (pos >= sf._tokens.size)
@@ -467,7 +467,7 @@ struct TokenReader {
 };
 
 
-void unexpected_token(Context& ctx, Token actual, TokenType expected_tt) {
+void unexpected_token(AST_Context& ctx, Token actual, TokenType expected_tt) {
     Token expected = actual;
     expected.type = expected_tt;
 
@@ -478,10 +478,10 @@ void unexpected_token(Context& ctx, Token actual, TokenType expected_tt) {
     });
 }
 
-bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error);
-AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim = TOK_NONE);
+bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error);
+AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim = TOK_NONE);
 
-bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<StructElement>* tl) {
+bool parse_type_list(AST_Context& ctx, TokenReader& r, TokenType delim, arr<StructElement>* tl) {
     SmallToken t = r.peek();
     if (t.type == delim) {
         r.pop();
@@ -511,12 +511,12 @@ bool parse_type_list(Context& ctx, TokenReader& r, TokenType delim, arr<StructEl
 }
 
 
-bool parse_block(AST_Block& block, TokenReader& r) {
+bool parse_block(AST_Context& block, TokenReader& r) {
     MUST (r.expect(TOK('{')).type);
 
     while (true) {
         bool err = false;
-        if (parse_decl_statement(block.ctx, r, &err))
+        if (parse_decl_statement(block, r, &err))
             continue;
         MUST (!err);
 
@@ -526,10 +526,10 @@ bool parse_block(AST_Block& block, TokenReader& r) {
 
                 AST_Return *ret;
                 if (r.peek().type == TOK(';')) {
-                    ret = block.ctx.alloc<AST_Return>(nullptr);
+                    ret = block.alloc<AST_Return>(nullptr);
                 }
                 else {
-                    ret = block.ctx.alloc<AST_Return>(parse_expr(block.ctx, r));
+                    ret = block.alloc<AST_Return>(parse_expr(block, r));
                     MUST (ret->value);
                 }
                 block.statements.push((AST_Node*)ret);
@@ -548,8 +548,8 @@ bool parse_block(AST_Block& block, TokenReader& r) {
             case KW_IF: {
                 Token if_tok = r.pop_full();
 
-                AST_If* ifs = block.ctx.alloc<AST_If>(block.ctx);
-                ifs->condition = parse_expr(block.ctx, r);
+                AST_If* ifs = block.alloc<AST_If>(&block);
+                ifs->condition = parse_expr(block, r);
                 MUST (ifs->condition);
                 MUST (parse_block(ifs->then_block, r));
                 block.statements.push(ifs);
@@ -567,8 +567,8 @@ bool parse_block(AST_Block& block, TokenReader& r) {
             case KW_WHILE: {
                 Token while_tok = r.pop_full();
 
-                AST_While* whiles = block.ctx.alloc<AST_While>(block.ctx);
-                whiles->condition = parse_expr(block.ctx, r);
+                AST_While* whiles = block.alloc<AST_While>(&block);
+                whiles->condition = parse_expr(block, r);
                 MUST (whiles->condition);
                 MUST (parse_block(whiles->block, r));
                 block.statements.push(whiles);
@@ -588,7 +588,7 @@ bool parse_block(AST_Block& block, TokenReader& r) {
                 return true;
             }
             default: {
-                AST_Node* expr = parse_expr(block.ctx, r);
+                AST_Node* expr = parse_expr(block, r);
                 MUST (expr);
                 MUST (r.expect(TOK(';')).type);
                 block.statements.push(expr);
@@ -598,7 +598,7 @@ bool parse_block(AST_Block& block, TokenReader& r) {
     }
 }
 
-AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
+AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     Token fn_kw = r.expect_full(KW_FN);
 
     // This only ever gets called if the 'struct' keyword
@@ -614,11 +614,11 @@ AST_Fn* parse_fn(Context& ctx, TokenReader& r, bool decl) {
         MUST (nameToken.type);
     }
 
-    AST_Fn* fn = ctx.alloc<AST_Fn>(ctx, name);
+    AST_Fn* fn = ctx.alloc<AST_Fn>(&ctx, name);
     AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global->target.pointer_size);
 
     fn->type = temp_fn_type;
-    fn->block.ctx.fn = fn;
+    fn->block.fn = fn;
 
     if (decl) {
         MUST (ctx.declare({ name }, fn));
@@ -696,7 +696,7 @@ struct SYValue {
 };
 
 struct SYState {
-    Context& ctx;
+    AST_Context& ctx;
     u32 brackets = 0;
     arr<SYValue> output;
     arr<TokenType> stack;
@@ -769,7 +769,7 @@ bool _token_is_value(TokenType t) {
     return false;
 }
 
-AST_Value* parse_expr(Context& ctx, TokenReader& r, TokenType delim) {
+AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
     SYState s { .ctx = ctx };
 
     Token t;
@@ -1059,7 +1059,7 @@ Done:
     return s.output[0].val;
 }
 
-bool parse_let(Context& ctx, TokenReader& r) {
+bool parse_let(AST_Context& ctx, TokenReader& r) {
     Token let_tok = r.expect_full(KW_LET);
     MUST (let_tok.type);
 
@@ -1095,7 +1095,7 @@ bool parse_let(Context& ctx, TokenReader& r) {
     return true;
 }
 
-AST_Struct *parse_struct(Context& ctx, TokenReader& r, bool decl) {
+AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
     AST_Struct *st;
 
     Token struct_kw = r.expect_full(KW_STRUCT);
@@ -1120,7 +1120,7 @@ AST_Struct *parse_struct(Context& ctx, TokenReader& r, bool decl) {
     return st;
 }
 
-bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error) {
+bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error) {
     switch (r.peek().type) {
         case KW_FN: {
             if (!parse_fn(ctx, r, true)) {
@@ -1148,7 +1148,7 @@ bool parse_decl_statement(Context& ctx, TokenReader& r, bool* error) {
     }
 }
 
-bool parse_top_level(Context& ctx, TokenReader r) {
+bool parse_top_level(AST_Context& ctx, TokenReader r) {
     bool err = false;
     while (parse_decl_statement(ctx, r, &err));
     MUST (!err);
@@ -1163,14 +1163,14 @@ bool parse_top_level(Context& ctx, TokenReader r) {
     return true;
 }
 
-bool parse_source_file(Context& global, SourceFile& sf) {
+bool parse_source_file(AST_Context& global, SourceFile& sf) {
     TokenReader r { .sf = sf, .ctx = global };
     MUST (tokenize(global, sf));
     MUST (parse_top_level(global, r));
     return true;
 }
 
-bool parse_all(Context& global) {
+bool parse_all(AST_Context& global) {
     for (SourceFile& sf : sources)
         MUST (parse_source_file(global, sf));
     return true;

@@ -269,10 +269,10 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
 }
 
 
-void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Block* ast_block, TIR_Block* after) {
+void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Context* ast_block, TIR_Block* after) {
     fn.writepoint = tir_block;
 
-    for (auto& kvp : ast_block->ctx.declarations) {
+    for (auto& kvp : ast_block->declarations) {
         AST_Node* decl = kvp.value;
 
         switch (decl->nodetype) {
@@ -492,7 +492,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
         }
 
         case AST_BLOCK: {
-            AST_Block* ast_block = (AST_Block*)node;
+            AST_Context* ast_block = (AST_Context*)node;
 
             // TODO ALLOCATION
             TIR_Block* inner_block = new TIR_Block();
@@ -717,7 +717,7 @@ void TIR_Function::compile_signature() {
         retval.type = &t_void;
     }
 
-    for (auto& kvp : this->ast_fn->block.ctx.declarations) {
+    for (auto& kvp : this->ast_fn->block.declarations) {
         if (kvp.value IS AST_VAR) {
             AST_Var *vardecl = (AST_Var*)kvp.value;
 

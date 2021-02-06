@@ -166,7 +166,7 @@ struct TIR_Block {
 struct TIR_Function;
 
 struct TIR_Context {
-    GlobalContext &global;
+    AST_GlobalContext &global;
     map<AST_Fn*, TIR_Function*> fns;
 
     u64 globals_count = 0;

@@ -35,7 +35,7 @@ bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     return true;
 }
 
-bool implicit_cast(Context& ctx, AST_Value** dst, AST_Type* type) {
+bool implicit_cast(AST_Context& ctx, AST_Value** dst, AST_Type* type) {
     AST_Type* dstt = gettype(ctx, *dst);
     MUST (dstt);
 
@@ -122,18 +122,18 @@ bool is_valid_lvalue(AST_Node* expr) {
     }
 }
 
-bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr);
+bool resolve_unresolved_references(AST_GlobalContext& global, AST_Node** nodeptr);
 
-bool resolve_unresolved_references(GlobalContext& global, AST_Block* block) {
-    for (const auto& decl : block->ctx.declarations)
-        MUST (resolve_unresolved_references(global, (AST_Node**)&decl.value));
+bool resolve_unresolved_references(AST_Context* block) {
+    for (const auto& decl : block->declarations)
+        MUST (resolve_unresolved_references(*block->global, (AST_Node**)&decl.value));
 
     for (auto& stmt : block->statements)
-        MUST (resolve_unresolved_references(global, &stmt));
+        MUST (resolve_unresolved_references(*block->global, &stmt));
     return true;
 }
 
-bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr) {
+bool resolve_unresolved_references(AST_GlobalContext& global, AST_Node** nodeptr) {
     AST_Node* node = *nodeptr;
     if (!node)
         return true;
@@ -186,10 +186,10 @@ bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr) {
                 AST_Var* argvar = global.alloc<AST_Var>(fn->argument_names[i], i);
                 argvar->type = fntype->param_types[i];
 
-                MUST (fn->block.ctx.declare({ .name = argvar->name }, argvar));
+                MUST (fn->block.declare({ .name = argvar->name }, argvar));
             }
 
-            MUST (resolve_unresolved_references(global, &fn->block));
+            MUST (resolve_unresolved_references(&fn->block));
             break;
         }
 
@@ -222,20 +222,20 @@ bool resolve_unresolved_references(GlobalContext& global, AST_Node** nodeptr) {
 
         case AST_IF: {
             AST_If* ifs = (AST_If*)node;
-            MUST (resolve_unresolved_references(global, &ifs->then_block));
+            MUST (resolve_unresolved_references(&ifs->then_block));
             MUST (resolve_unresolved_references(global, &ifs->condition));
             break;
         }
 
         case AST_WHILE: {
             AST_While* whiles = (AST_While*)node;
-            MUST (resolve_unresolved_references(global, &whiles->block));
+            MUST (resolve_unresolved_references(&whiles->block));
             MUST (resolve_unresolved_references(global, &whiles->condition));
             break;
         }
 
         case AST_BLOCK: {
-            MUST (resolve_unresolved_references(global, (AST_Block*)node));
+            MUST (resolve_unresolved_references((AST_Context*)node));
             break;
         }
         case AST_STRUCT: {
@@ -291,9 +291,9 @@ bool is_integral_type(AST_Type* type) {
     }
 }
 
-bool validate_type(Context& ctx, AST_Type** type);
+bool validate_type(AST_Context& ctx, AST_Type** type);
 
-bool validate_fn_type(Context& ctx, AST_Fn* fn) {
+bool validate_fn_type(AST_Context& ctx, AST_Fn* fn) {
     AST_FnType *fntype = (AST_FnType*)fn->type;
     
     for (auto& p : fntype->param_types) {
@@ -313,7 +313,7 @@ bool validate_fn_type(Context& ctx, AST_Fn* fn) {
 }
 
 
-AST_Type* gettype(Context& ctx, AST_Value* node) {
+AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
     if (node->type)
         return node->type;
 
@@ -599,7 +599,7 @@ Error:
 // to patch up the node into a valid type
 //
 // TODO ALLOCATION this function leaks from all sides
-bool validate_type(Context& ctx, AST_Type** type) {
+bool validate_type(AST_Context& ctx, AST_Type** type) {
     
     AST_Value* val = (AST_Value*)*type;
 
@@ -631,17 +631,17 @@ bool validate_type(Context& ctx, AST_Type** type) {
     return true;
 };
 
-bool typecheck(Context& ctx, AST_Node* node) {
+bool typecheck(AST_Context& ctx, AST_Node* node) {
 
     switch (node->nodetype) {
         case AST_BLOCK: {
-            AST_Block* block = (AST_Block*)node;
+            AST_Context* block = (AST_Context*)node;
 
-            for (const auto& decl : block->ctx.declarations) {
+            for (const auto& decl : block->declarations) {
                 if (decl.value IS AST_VAR) {
                     AST_Var* var = (AST_Var*)decl.value;
 
-                    MUST (typecheck(block->ctx, var));
+                    MUST (typecheck(*block, var));
 
                     // TODO STRUCT
                     // Right now structures are always on the stack
@@ -653,7 +653,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
             }
 
             for (const auto& stmt : block->statements)
-                MUST (typecheck(block->ctx, stmt));
+                MUST (typecheck(*block, stmt));
             return true;
         }
 
@@ -663,7 +663,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
             // MUST (gettype(ctx, fn)); // This is done in a prepass
 
             if (!fn->is_extern) {
-                MUST (typecheck(fn->block.ctx, &fn->block));
+                MUST (typecheck(fn->block, &fn->block));
             }
             return true;
         }
@@ -766,7 +766,7 @@ bool typecheck(Context& ctx, AST_Node* node) {
 
 }
 
-bool typecheck_all(GlobalContext& global) {
+bool typecheck_all(AST_GlobalContext& global) {
     for (auto& decl : global.declarations)
         MUST (resolve_unresolved_references(global, &decl.value));
 

@@ -14,7 +14,7 @@ void run_parse_tests() {
         std::wstring path = dir + L"/" + f;
         std::wcout << "Test case " << path << "... ";
 
-        GlobalContext global;
+        AST_GlobalContext global;
 
         u32 sf_id;
         if (!add_source(path, &sf_id)) {
@@ -47,7 +47,7 @@ void run_tree_compare_tests() {
         std::wstring path = dir + L"/" + f;
         std::wcout << "Test case " << path << "... ";
 
-        GlobalContext global;
+        AST_GlobalContext global;
 
         u32 sf_id;
         if (!add_source(path, &sf_id)) {

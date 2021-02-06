@@ -9,7 +9,7 @@ enum VirtualTokens {
     VIRT_MISSING_TYPE_SPECIFIER = 2,
 };
 
-void print_line(Context& global, SourceFile& sf, i64 line, arr<Location>& red_tokens) {
+void print_line(AST_Context &global, SourceFile& sf, i64 line, arr<Location>& red_tokens) {
     if (line < 0 || line > sf.line_start.size)
         return;
 
@@ -52,7 +52,7 @@ ERR_OfType oftype(AST_Node* node) {
     return ERR_OfType { (AST_Value*)node };
 }
 
-void print_code_segment(Context& global, arr<Token>* tokens, arr<AST_Node*>* nodes, arr<AST_Node**>* node_ptrs) {
+void print_code_segment(AST_Context& global, arr<Token>* tokens, arr<AST_Node*>* nodes, arr<AST_Node**>* node_ptrs) {
     // Group the tokens by file
     map<SourceFile*, arr<Location>> grouped;
 
@@ -163,7 +163,7 @@ void th(u64 n) {
     }
 }
 
-void print_err(Context& global, Error& err) {
+void print_err(AST_Context &global, Error& err) {
     wcout << "Fatal: ";
 
     switch (err.code) {

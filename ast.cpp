@@ -62,11 +62,11 @@ void indent_line(std::wostream& o) {
         o << "    ";
 }
 
-std::wostream& operator<< (std::wostream& o, AST_Block* bl) {
+std::wostream& operator<< (std::wostream& o, AST_Context* bl) {
     indent ++;
     o << "{ \n";
 
-    for (auto nnp : bl->ctx.declarations) {
+    for (auto nnp : bl->declarations) {
         indent_line(o);
 
         switch (nnp.value->nodetype) {
@@ -147,7 +147,7 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
 
 
         // TODO RETURNTYPE
-        AST_Type* rettype = (AST_Type*)fn->block.ctx.resolve({ "returntype" });
+        AST_Type* rettype = (AST_Type*)fn->block.resolve({ "returntype" });
         if (rettype)
             o << ": " << rettype;
 
@@ -343,8 +343,8 @@ bool postparse_tree_compare(AST_Node *lhs, AST_Node *rhs) {
         }
 
         case AST_BLOCK: {
-            AST_Block *bl1 = (AST_Block*)lhs;
-            AST_Block *bl2 = (AST_Block*)rhs;
+            AST_Context *bl1 = (AST_Context*)lhs;
+            AST_Context *bl2 = (AST_Context*)rhs;
 
             MUST (bl1->statements.size == bl2->statements.size);
 

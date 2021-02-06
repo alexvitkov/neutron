@@ -471,7 +471,7 @@ void T2L_FunctionContext::compile() {
         auto& builder = t2l_context->builder;
         builder.SetInsertPoint(blocks[0]->llvm_block);
 
-        arr<Context*> rem = { &ast_fn->block.ctx };
+        arr<AST_Context*> rem = { &ast_fn->block };
 
         for (auto& varval : tir_fn->stack) {
 

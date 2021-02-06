@@ -167,4 +167,43 @@ struct Token : SmallToken {
     LocationInFile loc;
 };
 
+
+#define AST_TYPE_BIT  0x80
+#define AST_VALUE_BIT 0x40
+
+enum AST_NodeType : u8 {
+	AST_NONE = 0,
+
+    AST_RETURN        = 0x01,
+    AST_IF            = 0x02,
+    AST_WHILE         = 0x03,
+    AST_BLOCK         = 0x04,
+
+    AST_FN            = 0x00 | AST_VALUE_BIT,
+    AST_VAR           = 0x01 | AST_VALUE_BIT,
+    AST_BINARY_OP     = 0x02 | AST_VALUE_BIT,
+    AST_ASSIGNMENT    = 0x03 | AST_VALUE_BIT,
+    AST_CAST          = 0x04 | AST_VALUE_BIT,
+    AST_NUMBER        = 0x05 | AST_VALUE_BIT,
+    AST_FN_CALL       = 0x06 | AST_VALUE_BIT,
+    AST_MEMBER_ACCESS = 0x07 | AST_VALUE_BIT,
+    AST_TEMP_REF      = 0x08 | AST_VALUE_BIT,
+    AST_UNRESOLVED_ID = 0x09 | AST_VALUE_BIT,
+    AST_DEREFERENCE   = 0x0a | AST_VALUE_BIT,
+    AST_ADDRESS_OF    = 0x0b | AST_VALUE_BIT,
+    AST_STRING_LITERAL= 0x0c | AST_VALUE_BIT,
+
+
+    AST_STRUCT         = 0x00 | AST_VALUE_BIT | AST_TYPE_BIT,
+	AST_PRIMITIVE_TYPE = 0x01 | AST_VALUE_BIT | AST_TYPE_BIT,
+    AST_FN_TYPE        = 0x02 | AST_VALUE_BIT | AST_TYPE_BIT,
+    AST_POINTER_TYPE   = 0x03 | AST_VALUE_BIT | AST_TYPE_BIT,
+    AST_ARRAY_TYPE     = 0x04 | AST_VALUE_BIT | AST_TYPE_BIT,
+};
+
+struct AST_Node {
+	AST_NodeType nodetype;
+    inline AST_Node(AST_NodeType nt) : nodetype(nt) {}
+};
+
 #endif // guard
