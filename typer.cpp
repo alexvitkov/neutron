@@ -770,6 +770,9 @@ bool typecheck_all(AST_GlobalContext& global) {
     for (auto& decl : global.declarations)
         MUST (resolve_unresolved_references(global, &decl.value));
 
+    for (AST_Node*& stmt : global.statements)
+        MUST (resolve_unresolved_references(global, &stmt));
+
     // During typechecking we can declare more stuff
     // so it's not safe to iterate over global.declarations as it may relocate
     // Right now we copy the original declartions into an array and iterate over those
@@ -787,6 +790,9 @@ bool typecheck_all(AST_GlobalContext& global) {
             MUST (typecheck(global, decl));
         }
     }
+
+    for (AST_Node*& stmt : global.statements)
+        MUST (typecheck(global, stmt));
 
     global.temp_allocator.free_all();
 

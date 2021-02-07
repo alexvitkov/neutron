@@ -443,9 +443,9 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             
             assert(fncall->fn IS AST_FN);
             AST_Fn *callee = (AST_Fn*)fncall->fn;
-            // AST_FnType* callee_type = (AST_FnType*)fncall->fn->type;
 
             TIR_Function *tir_callee = fn.c.fns[callee];
+            assert(tir_callee);
 
             arr<TIR_Value> args;
 
@@ -459,7 +459,6 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                 TIR_Value arg;
 
                 if (fncall->args[i]->type IS AST_STRUCT) {
-                    // arg = compile_node_rvalue(fn, fncall->args[i], arg_dst);
                     assert (get_location(fn, fncall->args[i], &arg));
                 }
                 else {
@@ -807,6 +806,19 @@ void TIR_Context::compile_all() {
         }
     }
 
+    for(auto& decl : global.declarations) {
+        switch (decl.value->nodetype) {
+            case AST_FN: {
+                AST_Fn* fn = (AST_Fn*)decl.value;
+                TIR_Function* tir_fn = new TIR_Function(*this, fn);
+                tir_fn->compile_signature();
+                fns.insert(fn, tir_fn);
+                break;
+            }
+            default: continue;
+        }
+    }
+
     for (auto& stmt : global.statements) {
         switch (stmt->nodetype) {
             case AST_ASSIGNMENT: {
@@ -850,18 +862,6 @@ void TIR_Context::compile_all() {
         }
     }
 
-    for(auto& decl : global.declarations) {
-        switch (decl.value->nodetype) {
-            case AST_FN: {
-                AST_Fn* fn = (AST_Fn*)decl.value;
-                TIR_Function* tir_fn = new TIR_Function(*this, fn);
-                tir_fn->compile_signature();
-                fns.insert(fn, tir_fn);
-                break;
-            }
-            default: continue;
-        }
-    }
 
     for (auto& fn : fns) {
         fn.value->compile();
@@ -981,6 +981,9 @@ void* TIR_ExecutionContext::StackFrame::continue_execution() {
                             NOT_IMPLEMENTED();
                     }
                     break;
+                case TOPC_CALL: {
+                    NOT_IMPLEMENTED();
+                }
                 default:
                     NOT_IMPLEMENTED();
             }
