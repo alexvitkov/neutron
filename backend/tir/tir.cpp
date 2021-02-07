@@ -269,7 +269,7 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
 }
 
 
-void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Context* ast_block, TIR_Block* after) {
+void compile_block(TIR_Function &fn, TIR_Block *tir_block, AST_Context *ast_block, TIR_Block *after) {
     fn.writepoint = tir_block;
 
     for (auto& kvp : ast_block->declarations) {
@@ -312,7 +312,6 @@ void compile_block(TIR_Function& fn, TIR_Block* tir_block, AST_Context* ast_bloc
 }
 
 TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
-
     switch (arr->nodetype) {
         case AST_VAR: {
             AST_Var* var = (AST_Var*)arr;
@@ -759,26 +758,95 @@ void TIR_Function::compile() {
     }
 }
 
+TIR_Value pack_into_const(void *val, AST_Type *type) {
+    switch (type->nodetype) {
+        case AST_PRIMITIVE_TYPE: {
+            AST_PrimitiveType *prim = (AST_PrimitiveType*)type;
+            switch (prim->kind) {
+                case PRIMITIVE_UNSIGNED: {
+                    return {
+                        .valuespace = TVS_VALUE,
+                        .offset = (u64)val,
+                        .type = type,
+                    };
+                }
+                case PRIMITIVE_SIGNED: {
+                    return {
+                        .valuespace = TVS_VALUE,
+                        .offset = (u64)val,
+                        .type = type,
+                    };
+                }
+                default:
+                    NOT_IMPLEMENTED();
+            }
+        }
+        default: {
+            NOT_IMPLEMENTED();
+        }
+    }
+}
+
 void TIR_Context::compile_all() {
-    // Run through the global variables and assign them TIR_Values and initial values
+    storage = new TIR_ExecutionStorage();
+
+    // Run through the global variables and assign them TIR_Values
     for(auto& decl : global.declarations) {
         switch (decl.value->nodetype) {
             case AST_VAR: {
                 AST_Var* var = (AST_Var*)decl.value;
-
                 TIR_Value val = {
                     .valuespace = TVS_GLOBAL,
                     .offset = globals_count++,
                     .type = global.get_pointer_type(((AST_Var*)decl.value)->type),
                 };
                 global_valmap[var] = val;
-                globals.push(val);
                 break;
             }
+            default: continue;
+        }
+    }
 
-            default: {
-                continue;
+    for (auto& stmt : global.statements) {
+        switch (stmt->nodetype) {
+            case AST_ASSIGNMENT: {
+                AST_BinaryOp *assignment = (AST_BinaryOp*)stmt;
+                AST_Type *var_Type = assignment->lhs->type;
+
+                TIR_Function *pseudo_fn = new TIR_Function(*this, nullptr);
+                TIR_Block* entry = new TIR_Block();
+                pseudo_fn->retval = {
+                    .valuespace = TVS_RET_VALUE,
+                    .type = var_Type,
+                };
+                pseudo_fn->writepoint = entry;
+                pseudo_fn->blocks.push(entry);
+
+                compile_node_rvalue(*pseudo_fn, assignment->rhs, pseudo_fn->retval);
+                pseudo_fn->emit({ 
+                    .opcode = TOPC_STORE, 
+                    .un = { 
+                        .dst = global_valmap[assignment->lhs],
+                        .src = pseudo_fn->retval,
+                    }
+                });
+                pseudo_fn->emit({ .opcode = TOPC_RET });
+                
+                TIR_ExecutionContext exec_ctx = {
+                    .storage = storage
+                };
+
+                void *result = exec_ctx.call(pseudo_fn);
+                if (result) {
+                    TIR_Value packed = pack_into_const(result, var_Type);
+                    global_initial_values[assignment->lhs] = packed;
+                } else {
+                    assert(0);
+                }
+                break;
             }
+            default:
+                UNREACHABLE;
         }
     }
 
@@ -786,26 +854,12 @@ void TIR_Context::compile_all() {
         switch (decl.value->nodetype) {
             case AST_FN: {
                 AST_Fn* fn = (AST_Fn*)decl.value;
-                
                 TIR_Function* tir_fn = new TIR_Function(*this, fn);
-
                 tir_fn->compile_signature();
-
                 fns.insert(fn, tir_fn);
-
                 break;
             }
-
-            // We already ran through the variables in the previous loop
-            case AST_VAR:
-                continue;
-
-            // Nothing to do for structs
-            case AST_STRUCT:
-                continue;
-
-            default:
-                NOT_IMPLEMENTED();
+            default: continue;
         }
     }
 
@@ -909,6 +963,24 @@ void* TIR_ExecutionContext::StackFrame::continue_execution() {
                 case TOPC_MOV:
                     set_value(instr.un.dst, get_value(instr.un.src));
                     break;
+                case TOPC_STORE:
+                    switch (instr.un.dst.valuespace) {
+                        case TVS_GLOBAL:
+                            ctx->storage->global_values[instr.un.dst.offset] = get_value(instr.un.src);
+                            break;
+                        default:
+                            NOT_IMPLEMENTED();
+                    }
+                    break;
+                case TOPC_LOAD:
+                    switch (instr.un.src.valuespace) {
+                        case TVS_GLOBAL:
+                            set_value(instr.un.dst, ctx->storage->global_values[instr.un.src.offset]);
+                            break;
+                        default:
+                            NOT_IMPLEMENTED();
+                    }
+                    break;
                 default:
                     NOT_IMPLEMENTED();
             }
@@ -922,6 +994,7 @@ void* TIR_ExecutionContext::call(TIR_Function *fn) {
     assert(fn->blocks.size);
 
     StackFrame &sf = stackframes.push({
+        .ctx = this,
         .fn = fn,
         .block = fn->blocks[0],
         .next_instruction = 0,

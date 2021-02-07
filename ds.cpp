@@ -41,7 +41,7 @@ bool map_equals(char const* lhs, const char* rhs) {
     return !strcmp(lhs, rhs);
 }
 
-// @POINTERSIZE - We're assuming a pointer is 64 bits
+// TODO POINTERSIZE - We're assuming a pointer is 64 bits
 u32 map_hash(void* node) {
     union {
         void* p;
@@ -52,6 +52,15 @@ u32 map_hash(void* node) {
 }
 
 bool map_equals(void* lhs, void* rhs) {
+    return lhs == rhs;
+}
+
+// TODO POINTERSIZE - We're assuming a pointer is 64 bits
+u32 map_hash(u64 node) {
+    return map_hash((void*)node);
+}
+
+bool map_equals(u64 lhs, u64 rhs) {
     return lhs == rhs;
 }
 

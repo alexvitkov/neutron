@@ -90,7 +90,7 @@ int main(int argc, const char** argv) {
 
 
     // Execute the main function
-    TIR_ExecutionContext tir_exec_context;
+    TIR_ExecutionContext  tir_exec_context { .storage = tir_context.storage };
     for (auto& kvp : tir_context.fns) {
         if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
             wcout << red << "\n------ EXECUTION ------\n" << resetstyle;

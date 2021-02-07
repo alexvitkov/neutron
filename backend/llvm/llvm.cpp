@@ -21,6 +21,18 @@ T2L_Context::T2L_Context(TIR_Context& tirc)
     translated_types.insert(&t_any8, IntegerType::get(lc, 64));
 }
 
+llvm::Constant *get_constant(T2L_Context *ctx, TIR_Value tir_val) {
+    switch (tir_val.valuespace) {
+        case TVS_VALUE: {
+            llvm::Type *l_type = ctx->translated_types[tir_val.type];
+            assert(l_type);
+            return ConstantInt::get(l_type, tir_val.offset, false);
+        }
+        default:
+            return nullptr;
+    }
+}
+
 llvm::FunctionType *T2L_Context::get_function_type(TIR_Function* fn) {
     arr<llvm::Type*> l_param_types;
     AST_FnType *fntype = (AST_FnType*)fn->ast_fn->type;
@@ -164,15 +176,15 @@ llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value tir_val, bool a
     return phi;
 }
 
+
 llvm::Value* T2L_BlockContext::get_value(TIR_Value tir_val) {
     T2L_Context* ctx = fn->t2l_context;
 
+    llvm::Constant *constant = get_constant(fn->t2l_context, tir_val);
+    if (constant)
+        return constant;
+
     switch (tir_val.valuespace) {
-        case TVS_VALUE: {
-            llvm::Type *l_type = ctx->translated_types[tir_val.type];
-            assert(l_type);
-            return ConstantInt::get(l_type, tir_val.offset, false);
-        }
         case TVS_RET_VALUE:
         case TVS_TEMP: {
 
@@ -592,16 +604,31 @@ void insert_entry_boilerplate(T2L_Context& c, Function* l_main) {
 void T2L_Context::compile_all() {
     llvm::Function* llvm_main_fn;
 
-    for (TIR_Value &var : tir_context.globals) {
-        llvm::Type* l_type = get_llvm_type(var.type);
+    for (auto &kvp : tir_context.global_valmap) {
+        AST_Var *var = (AST_Var*)kvp.key;
+        if (!(var IS AST_VAR))
+            continue;
+
+        llvm::Type* l_type = get_llvm_type(var->type);
+
+        TIR_Value initial_value;
+        llvm::Constant *llvm_initial_value;
+
+        if (tir_context.global_initial_values.find(var, &initial_value)) {
+            llvm_initial_value = get_constant(this, initial_value);
+            assert(llvm_initial_value);
+        } else {
+            llvm_initial_value = llvm::Constant::getNullValue(l_type);
+        }
 
         auto l_var = new llvm::GlobalVariable(mod, 
                 l_type, 
                 false, 
                 GlobalValue::WeakAnyLinkage, 
-                llvm::Constant::getNullValue(l_type), 
+                llvm_initial_value, 
                 "");
-        translated_globals[var] = l_var;
+
+        translated_globals[kvp.value] = l_var;
     }
 
     // TODO this has to go

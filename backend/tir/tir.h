@@ -165,14 +165,19 @@ struct TIR_Block {
 
 struct TIR_Function;
 
+struct TIR_ExecutionStorage {
+    map<u64, void*> global_values;
+};
+
 struct TIR_Context {
     AST_GlobalContext &global;
     map<AST_Fn*, TIR_Function*> fns;
 
     u64 globals_count = 0;
     map<AST_Value*, TIR_Value> global_valmap;
+    map<AST_Value*, TIR_Value> global_initial_values;
 
-    arr<TIR_Value> globals;
+    TIR_ExecutionStorage *storage;
 
     void compile_all();
 };
@@ -212,13 +217,14 @@ struct TIR_Function {
     void print();
 };
 
-
 struct TIR_ExecutionContext {
     struct StackFrame {
+        TIR_ExecutionContext* ctx;
         TIR_Function *fn;
         TIR_Block    *block;
-        u32           next_instruction;
         void         *retval;
+        u32           next_instruction;
+
 
         u8 *stack;
         arr<void*> args, tmp;
@@ -227,6 +233,8 @@ struct TIR_ExecutionContext {
         void *get_value(TIR_Value key); // TODO POINTERSIZE
         void *continue_execution();
     };
+
+    TIR_ExecutionStorage *storage;
 
     arr<StackFrame> stackframes;
     void *call(TIR_Function *tir_fn);

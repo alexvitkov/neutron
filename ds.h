@@ -10,6 +10,8 @@ extern u32 map_hash(const char* key);
 extern bool map_equals(void* lhs, void* rhs);
 extern u32 map_hash(void* key);
 
+extern bool map_equals(u64 lhs, u64 rhs);
+extern u32 map_hash(u64 key);
 
 template <typename K, typename V>
 struct map {
