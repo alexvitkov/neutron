@@ -44,6 +44,8 @@ struct T2L_Context {
 
     map<AST_Type*, llvm::Type*> translated_types;
     map<TIR_Value, llvm::Value*> translated_globals;
+
+    // TODO this should map TIR_Functions to llvm fns
     map<AST_Fn*, T2L_FunctionContext*> global_functions;
 
     llvm::IRBuilder<> builder;

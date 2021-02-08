@@ -18,6 +18,12 @@ void exit_with_error() {
 
 void link(const char* object_filename);
 
+void main_exec_job_on_done(Job *job) {
+    TIR_ExecutionJob *exec = (TIR_ExecutionJob*)job;
+    wcout << red << "\n------ EXECUTION ------\n" << resetstyle;
+    wcout << "main returned " << (i64)exec->next_retval << "\n";
+}
+
 int main(int argc, const char** argv) {
     init_utils();
 
@@ -64,6 +70,7 @@ int main(int argc, const char** argv) {
     }
     fflush(stdout);
 
+    /*
     T2L_Context t2l_context(tir_context);
     t2l_context.compile_all();
 
@@ -87,16 +94,21 @@ int main(int argc, const char** argv) {
             link(lld, object_filename_w, output_filename_w);
         }
     }
+    */
 
 
     // Execute the main function
-    TIR_ExecutionContext  tir_exec_context { .storage = tir_context.storage };
+    TIR_ExecutionJob *tir_exec_job = new TIR_ExecutionJob(&tir_context);
+    global.jobs.push(tir_exec_job);
+    tir_exec_job->on_done = main_exec_job_on_done;
+
     for (auto& kvp : tir_context.fns) {
         if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
-            wcout << red << "\n------ EXECUTION ------\n" << resetstyle;
-            wcout << "main returned " << (u64)tir_exec_context.call(kvp.value) << "\n";
+            tir_exec_job->call(kvp.value);
+            break;
         }
     }
-    
+
+    global.run_jobs();
     return 0;
 }

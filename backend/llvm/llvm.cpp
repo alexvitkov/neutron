@@ -43,11 +43,7 @@ llvm::FunctionType *T2L_Context::get_function_type(TIR_Function* fn) {
     }
 
     for (auto& param : fn->parameters) {
-        //if (param.flags & TVF_BYVAL) {
-            //NOT_IMPLEMENTED();
-        //} else {
-            l_param_types.push(get_llvm_type(param.type));
-        //}
+        l_param_types.push(get_llvm_type(param.type));
     }
 
     llvm::Type* returntype = returntype = get_llvm_type(fn->retval.type);
@@ -361,7 +357,7 @@ void T2L_BlockContext::compile() {
                     break;
                 }
                 case TOPC_CALL: {
-                    AST_Fn* callee = (AST_Fn*)instr.call.fn;
+                    AST_Fn* callee = instr.call.fn->ast_fn;
 
                     llvm::Function* l_callee = (llvm::Function*)fn->t2l_context->global_functions[callee]->llvm_fn;
                     assert(l_callee); // TODO
@@ -583,7 +579,7 @@ const char* T2L_Context::output_object() {
 void insert_entry_boilerplate(T2L_Context& c, Function* l_main) {
     Type* l_void_type = Type::getVoidTy(c.lc);
 
-    // NOTE we're assuming libc int == i32
+    // TODO we're assuming libc int == i32
     Type* l_exit_params[] = { c.translated_types[&t_i32] };
 
     FunctionType* l_exit_type     = FunctionType::get(l_void_type, ArrayRef<Type*>(l_exit_params, 1), false);
@@ -614,9 +610,8 @@ void T2L_Context::compile_all() {
         TIR_Value initial_value;
         llvm::Constant *llvm_initial_value;
 
-        if (tir_context.global_initial_values.find(var, &initial_value)) {
+        if (tir_context._global_initial_values.find(kvp.value.offset, &initial_value)) {
             llvm_initial_value = get_constant(this, initial_value);
-            assert(llvm_initial_value);
         } else {
             llvm_initial_value = llvm::Constant::getNullValue(l_type);
         }

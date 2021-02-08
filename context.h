@@ -85,6 +85,21 @@ struct AST_Context : AST_Node {
     AST_FnType      *make_function_type_unique(AST_FnType* temp_type);
 };
 
+struct Job {
+    void (*on_done)      (Job *job);
+    bool (*continue_job) (Job *job);
+
+    arr<Job*> dependent_jobs;
+    u32 dependencies_left = 0;
+
+    void add_dependency(Job* dependency);
+    void complete();
+
+    bool completed = false;
+
+    Job(void (*on_done)(Job*), bool (*continue_job) (Job*));
+};
+
 struct AST_GlobalContext : AST_Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
@@ -122,6 +137,9 @@ struct AST_GlobalContext : AST_Context {
     map<AST_Type*, AST_PointerType*> pointer_types;
 
     inline AST_GlobalContext() : AST_Context(nullptr) {}
+
+    arr<Job*> jobs;
+    bool run_jobs();
 };
 
 template <typename T, typename ... Ts>

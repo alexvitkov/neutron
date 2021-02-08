@@ -3,6 +3,7 @@
 
 #include "../../common.h"
 #include "../../ast.h"
+#include "../../context.h"
 
 enum TIR_ValueSpace : u8 {
     TVS_DISCARD = 0x00,
@@ -106,6 +107,7 @@ u32 map_hash(TIR_Value data);
 bool map_equals(TIR_Value lhs, TIR_Value rhs);
 
 struct TIR_Block;
+struct TIR_Function;
 
 struct TIR_Instruction {
     TIR_OpCode opcode;
@@ -129,7 +131,7 @@ struct TIR_Instruction {
 
         struct {
             TIR_Value dst;
-            AST_Fn *fn;
+            TIR_Function *fn;
             arr_ref<TIR_Value> args;
         } call;
 
@@ -175,7 +177,9 @@ struct TIR_Context {
 
     u64 globals_count = 0;
     map<AST_Value*, TIR_Value> global_valmap;
-    map<AST_Value*, TIR_Value> global_initial_values;
+
+    map<u64, TIR_Value> _global_initial_values;
+    map<u64, Job*> _global_running_jobs;
 
     TIR_ExecutionStorage *storage;
 
@@ -217,28 +221,34 @@ struct TIR_Function {
     void print();
 };
 
-struct TIR_ExecutionContext {
+struct TIR_ExecutionJob : Job {
     struct StackFrame {
-        TIR_ExecutionContext* ctx;
         TIR_Function *fn;
         TIR_Block    *block;
         void         *retval;
         u32           next_instruction;
-
 
         u8 *stack;
         arr<void*> args, tmp;
 
         void  set_value(TIR_Value key, void *val);
         void *get_value(TIR_Value key); // TODO POINTERSIZE
-        void *continue_execution();
     };
 
-    TIR_ExecutionStorage *storage;
+    TIR_Context *tir_context;
+    void *next_retval;
+
+    TIR_ExecutionJob(TIR_Context *tir_context);
 
     arr<StackFrame> stackframes;
-    void *call(TIR_Function *tir_fn);
-    void *continue_execution();
+    void call(TIR_Function *tir_fn);
+    bool continue_execution();
+};
+
+
+struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
+    TIR_Value var;
+    TIR_GlobalVarInitJob(TIR_Value var, TIR_Context *tir_context);
 };
 
 std::wostream& operator<< (std::wostream& o, TIR_Value loc);

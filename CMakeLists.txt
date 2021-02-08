@@ -20,6 +20,7 @@ set(NEUTRON_SOURCE_FILES
 	ds.h        ds.cpp
 	error.h     error.cpp
 	            parser.cpp
+                job.cpp
 	cmdargs.h   cmdargs.cpp
 	typer.h     typer.cpp
     backend/tir/tir.h   backend/tir/tir.cpp
