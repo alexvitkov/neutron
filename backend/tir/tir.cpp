@@ -828,7 +828,9 @@ TIR_ExecutionJob *create_global_initialization_job(TIR_Context& tir_context, AST
     
     auto job = new TIR_GlobalVarInitJob(var, &tir_context);
     job->on_done = global_variable_initialization_job_on_done;
-    job->call(pseudo_fn);
+
+    arr<void*> _args;
+    job->call(pseudo_fn, _args);
 
     tir_context._global_running_jobs[var.offset] = job;
 
@@ -951,15 +953,14 @@ void *TIR_ExecutionJob::StackFrame::get_value(TIR_Value key) {
     }
 }
 
-void TIR_ExecutionJob::call(TIR_Function *fn) {
+void TIR_ExecutionJob::call(TIR_Function *fn, arr<void*> &args) {
     assert(fn->blocks.size);
 
     StackFrame &sf = stackframes.push({
-        .fn = fn,
         .block = fn->blocks[0],
         .next_instruction = 0,
         .stack = (u8*)malloc(fn->stack_size),
-        .args = arr<void*>(0),
+        .args = args,
         .tmp = arr<void*>(fn->temps_count),
     });
 }
@@ -980,12 +981,28 @@ bool TIR_ExecutionJob::continue_execution() {
             void *val;
 
             switch (instr.opcode) {
-                case TOPC_UADD:
-                    val = (void*)((u64)lhs + (u64)rhs);
-                    break;
-                case TOPC_SADD:
-                    val = (void*)((i64)lhs + (i64)rhs);
-                    break;
+                case TOPC_UADD: val = (void*)((u64)lhs +  (u64)rhs); break;
+                case TOPC_USUB: val = (void*)((u64)lhs -  (u64)rhs); break;
+                case TOPC_UMUL: val = (void*)((u64)lhs *  (u64)rhs); break;
+                case TOPC_UDIV: val = (void*)((u64)lhs /  (u64)rhs); break;
+                case TOPC_UMOD: val = (void*)((u64)lhs %  (u64)rhs); break;
+                case TOPC_UEQ : val = (void*)((u64)lhs == (u64)rhs); break;
+                case TOPC_ULT : val = (void*)((u64)lhs <  (u64)rhs); break;
+                case TOPC_ULTE: val = (void*)((u64)lhs <= (u64)rhs); break;
+                case TOPC_UGT : val = (void*)((u64)lhs >  (u64)rhs); break;
+                case TOPC_UGTE: val = (void*)((u64)lhs >= (u64)rhs); break;
+
+                case TOPC_SADD: val = (void*)((i64)lhs +  (i64)rhs); break;
+                case TOPC_SSUB: val = (void*)((i64)lhs -  (i64)rhs); break;
+                case TOPC_SMUL: val = (void*)((i64)lhs *  (i64)rhs); break;
+                case TOPC_SDIV: val = (void*)((i64)lhs /  (i64)rhs); break;
+                case TOPC_SMOD: val = (void*)((i64)lhs %  (i64)rhs); break;
+                case TOPC_SEQ : val = (void*)((i64)lhs == (i64)rhs); break;
+                case TOPC_SLT : val = (void*)((i64)lhs <  (i64)rhs); break;
+                case TOPC_SLTE: val = (void*)((i64)lhs <= (i64)rhs); break;
+                case TOPC_SGT : val = (void*)((i64)lhs >  (i64)rhs); break;
+                case TOPC_SGTE: val = (void*)((i64)lhs >= (i64)rhs); break;
+
                 default:
                     NOT_IMPLEMENTED();
             }
@@ -993,15 +1010,20 @@ bool TIR_ExecutionJob::continue_execution() {
             sf.set_value(instr.bin.dst, val);
         } else {
             switch (instr.opcode) {
-                case TOPC_RET:
+                case TOPC_RET: {
                     free(sf.stack);
                     stackframes.pop();
+                    has_next_retval = true;
                     next_retval = sf.retval;
                     goto NextFrame;
-                case TOPC_MOV:
+                }
+
+                case TOPC_MOV: {
                     sf.set_value(instr.un.dst, sf.get_value(instr.un.src));
                     break;
-                case TOPC_STORE:
+                }
+
+                case TOPC_STORE: {
                     switch (instr.un.dst.valuespace) {
                         case TVS_GLOBAL:
                             NOT_IMPLEMENTED("not here");
@@ -1012,7 +1034,9 @@ bool TIR_ExecutionJob::continue_execution() {
                             NOT_IMPLEMENTED();
                     }
                     break;
-                case TOPC_LOAD:
+                }
+
+                case TOPC_LOAD: {
                     switch (instr.un.src.valuespace) {
                         case TVS_GLOBAL:
                             void *val;
@@ -1024,7 +1048,7 @@ bool TIR_ExecutionJob::continue_execution() {
                                 // The initial value is assigned via a job that may not be completed, 
                                 // so if the job isn't done we have to wait on it
                                 Job *job;
-                                if (tir_context->_global_running_jobs.find(instr.un.src, &job)) {
+                                if (tir_context->_global_running_jobs.find(instr.un.src.offset, &job)) {
                                     // TODO DS DELETE
                                     assert(job);
                                     this->add_dependency(job);
@@ -1038,11 +1062,42 @@ bool TIR_ExecutionJob::continue_execution() {
                             NOT_IMPLEMENTED();
                     }
                     break;
-                case TOPC_CALL: {
-                     call(instr.call.fn);
-                     NOT_IMPLEMENTED();
-                     goto NextFrame;
                 }
+
+                case TOPC_CALL: {
+                    if (has_next_retval) {
+                        sf.set_value(instr.call.dst, next_retval);
+                        has_next_retval = false;
+                        break;
+                    }
+                    else {
+                        arr<void*> args;
+
+                        for (const TIR_Value& arg : instr.call.args) {
+                            args.push(sf.get_value(arg));
+                        }
+
+                        call(instr.call.fn, args);
+                        goto NextFrame;
+                    }
+                }
+
+                case TOPC_JMP: {
+                    sf.block = instr.jmp.next_block;
+                    sf.next_instruction = 0;
+                    goto NextFrame;
+                }
+
+                case TOPC_JMPIF: {
+                    if (sf.get_value(instr.jmpif.cond)) {
+                        sf.block = instr.jmpif.then_block;
+                    } else {
+                        sf.block = instr.jmpif.else_block;
+                    }
+                    sf.next_instruction = 0;
+                    goto NextFrame;
+                }
+
                 default:
                     NOT_IMPLEMENTED();
             }

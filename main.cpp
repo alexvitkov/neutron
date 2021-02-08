@@ -104,7 +104,8 @@ int main(int argc, const char** argv) {
 
     for (auto& kvp : tir_context.fns) {
         if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
-            tir_exec_job->call(kvp.value);
+            arr<void*> _args;
+            tir_exec_job->call(kvp.value, _args);
             break;
         }
     }

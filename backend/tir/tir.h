@@ -223,12 +223,10 @@ struct TIR_Function {
 
 struct TIR_ExecutionJob : Job {
     struct StackFrame {
-        TIR_Function *fn;
-        TIR_Block    *block;
-        void         *retval;
-        u32           next_instruction;
-
-        u8 *stack;
+        TIR_Block *block;
+        void      *retval;
+        u32        next_instruction;
+        u8        *stack;
         arr<void*> args, tmp;
 
         void  set_value(TIR_Value key, void *val);
@@ -236,12 +234,13 @@ struct TIR_ExecutionJob : Job {
     };
 
     TIR_Context *tir_context;
-    void *next_retval;
+    bool has_next_retval = false;
+    void *next_retval = nullptr;
 
     TIR_ExecutionJob(TIR_Context *tir_context);
 
     arr<StackFrame> stackframes;
-    void call(TIR_Function *tir_fn);
+    void call(TIR_Function *tir_fn, arr<void*> &args);
     bool continue_execution();
 };
 
