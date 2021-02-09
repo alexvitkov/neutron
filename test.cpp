@@ -1,6 +1,7 @@
 #include "context.h"
 #include "util.h"
 #include "ast.h"
+#include "test/ds_tests.cpp"
 
 void run_parse_tests() {
     arr<std::wstring> files;
@@ -23,7 +24,7 @@ void run_parse_tests() {
         }
 
         if (parse_source_file(global, sources[sf_id])) {
-            std::wcout << "OK.\n";
+            std::wcout << "OK\n";
         }
         else {
             std::wcout << red << "PARSE ERROR:\n" << resetstyle;
@@ -92,7 +93,7 @@ void run_tree_compare_tests() {
 
 DONE:
         if (!fail) {
-            wcout << "OK.\n";
+            wcout << "OK\n";
         } else {
             wcout << red << "FAIL at " << fail << "*\n" << resetstyle;
         }
@@ -102,6 +103,7 @@ DONE:
 
 
 int main(int argc, const char** argv) {
+    run_ds_tests();
     run_parse_tests();
     run_tree_compare_tests();
     return 0;
