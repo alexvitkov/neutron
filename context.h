@@ -86,18 +86,14 @@ struct AST_Context : AST_Node {
 };
 
 struct Job {
-    void (*on_done)      (Job *job);
-    bool (*continue_job) (Job *job);
-
+    virtual bool run() = 0;
+    
     arr<Job*> dependent_jobs;
     u32 dependencies_left = 0;
 
     void add_dependency(Job* dependency);
-    void complete();
 
-    bool completed = false;
-
-    Job(void (*on_done)(Job*), bool (*continue_job) (Job*));
+    virtual std::wstring get_name();
 };
 
 struct AST_GlobalContext : AST_Context {
@@ -138,7 +134,10 @@ struct AST_GlobalContext : AST_Context {
 
     inline AST_GlobalContext() : AST_Context(nullptr) {}
 
-    arr<Job*> jobs;
+    arr<Job*> ready_jobs;
+    u32 jobs_count;
+
+    void add_job(Job *job);
     bool run_jobs();
 };
 

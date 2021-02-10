@@ -1,6 +1,7 @@
 #include "tir.h"
 #include "../../typer.h"
 #include <iostream>
+#include <sstream>
 
 TIR_Value::operator bool() { return valuespace;
 }
@@ -129,6 +130,12 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
             break;
         case TOPC_BITCAST:
             o << instr.un.dst << " <- bitcast " << instr.un.src << std::endl;
+            break;
+        case TOPC_SEXT:
+            o << instr.un.dst << " <- sext " << instr.un.src << std::endl;
+            break;
+        case TOPC_ZEXT:
+            o << instr.un.dst << " <- zext " << instr.un.src << std::endl;
             break;
         case TOPC_LOAD:
             o << instr.un.dst << " <- load " << instr.un.src << std::endl;
@@ -652,13 +659,12 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
         case AST_CAST: {
             AST_Cast* cast = (AST_Cast*)node;
 
-            if (cast->inner->type IS AST_ARRAY_TYPE && cast->type IS AST_POINTER_TYPE) {
-
+            // TODO this is probobobably unnnecessary
+            if (cast->inner->type IS AST_ARRAY_TYPE 
+                    && cast->type IS AST_POINTER_TYPE) 
+            {
                 TIR_Value var_location = get_array_ptr(fn, cast->inner);
-
-                TIR_Value offset_0 
-                    = { .valuespace = TVS_VALUE, .offset = 0, .type = &t_u32 };
-
+                TIR_Value offset_0 = { .valuespace = TVS_VALUE, .offset = 0, .type = &t_u32 };
                 arr<TIR_Value> offsets = { offset_0, offset_0 };
 
                 if (!dst)
@@ -673,28 +679,29 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                     },
                 });
                 return dst;
-            }
-
-            else if ((cast->inner->type IS AST_POINTER_TYPE && cast->type IS AST_POINTER_TYPE)
-                    || cast->type == &t_any8) {
-
+            } else {
                 TIR_Value src = compile_node_rvalue(fn, cast->inner, {});
+                if (!dst) dst = fn.alloc_temp(cast->type);
 
-                if (!dst)
-                    dst = fn.alloc_temp(cast->type);
+                TIR_OpCode topc;
+                switch (cast->casttype) {
+                    case AST_Cast::SignedExtend:
+                        topc = TOPC_SEXT;
+                        break;
+                    case AST_Cast::ZeroExtend:
+                        topc = TOPC_ZEXT;
+                        break;
+                    default:
+                        topc = TOPC_BITCAST;
+                        break;
+                }
 
                 fn.emit({
-                    .opcode = TOPC_BITCAST,
-                    .un = {
-                        .dst = dst,
-                        .src = src,
-                    }
+                    .opcode = topc,
+                    .un = { .dst = dst, .src = src }
                 });
                 
                 return dst;
-            }
-            else {
-                assert(!"Cast not supported");
             }
         }
 
@@ -786,57 +793,61 @@ TIR_Value pack_into_const(void *val, AST_Type *type) {
     }
 }
 
-void global_variable_initialization_job_on_done(Job *job) {
-    TIR_GlobalVarInitJob *exec = (TIR_GlobalVarInitJob*)job;
-    void *global_initial_value = exec->next_retval;
 
-    AST_PointerType *var_ptr_type = (AST_PointerType*)exec->var.type;
+TIR_ExecutionJob::TIR_ExecutionJob(TIR_Context *tir_context) 
+    : tir_context(tir_context) {}
 
-    exec->tir_context->_global_initial_values[exec->var.offset]
-         = pack_into_const(global_initial_value, var_ptr_type->pointed_type);
 
-    // TODO DS DELETE
-    exec->tir_context->_global_running_jobs[exec->var.offset] = nullptr;
+struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
+    TIR_Function *pseudo_fn;
+    TIR_Value var;
+    TIR_GlobalVarInitJob(TIR_Value var, TIR_Context *tir_context);
 
-    exec->tir_context->storage->global_values[exec->var.offset] = global_initial_value;
+    AST_Var *varr;
 
-    wcout.flush();
-}
 
-TIR_GlobalVarInitJob::TIR_GlobalVarInitJob(TIR_Value var, TIR_Context *tir_context)
-    : TIR_ExecutionJob(tir_context),
-      var(var)
-{
-    this->on_done = global_variable_initialization_job_on_done;
-}
+    TIR_GlobalVarInitJob(TIR_Context &tir_context, AST_BinaryOp *assignment) 
+        : TIR_ExecutionJob(&tir_context) 
+    {
+        var = tir_context.global_valmap[assignment->lhs];
+        varr = (AST_Var*)assignment->lhs;
 
-TIR_ExecutionJob *create_global_initialization_job(TIR_Context& tir_context, AST_BinaryOp *assignment) {
-    TIR_Value var = tir_context.global_valmap[assignment->lhs];
+        // This function calculates the initial value and returns it
+        TIR_Function *pseudo_fn = new TIR_Function(tir_context, nullptr);
+        TIR_Block* entry = new TIR_Block();
+        pseudo_fn->retval = {
+            .valuespace = TVS_RET_VALUE,
+            .type = var.type,
+        };
+        pseudo_fn->writepoint = entry;
+        pseudo_fn->blocks.push(entry);
 
-    // This function calculates the initial value and returns it
-    TIR_Function *pseudo_fn = new TIR_Function(tir_context, nullptr);
-    TIR_Block* entry = new TIR_Block();
-    pseudo_fn->retval = {
-        .valuespace = TVS_RET_VALUE,
-        .type = var.type,
-    };
-    pseudo_fn->writepoint = entry;
-    pseudo_fn->blocks.push(entry);
+        compile_node_rvalue(*pseudo_fn, assignment->rhs, pseudo_fn->retval);
+        pseudo_fn->emit({ .opcode = TOPC_RET });
 
-    compile_node_rvalue(*pseudo_fn, assignment->rhs, pseudo_fn->retval);
-    pseudo_fn->emit({ .opcode = TOPC_RET });
-    
-    auto job = new TIR_GlobalVarInitJob(var, &tir_context);
-    job->on_done = global_variable_initialization_job_on_done;
+        arr<void*> _args;
+        call(pseudo_fn, _args);
 
-    arr<void*> _args;
-    job->call(pseudo_fn, _args);
+        tir_context._global_running_jobs[var.offset] = this;
+    }
 
-    tir_context._global_running_jobs[var.offset] = job;
+    std::wstring get_name() override {
+        std::wostringstream stream;
+        stream << L"init<" << varr->name << ">";
+        return stream.str();
+    }
 
-    tir_context.global.jobs.push(job); 
-    return job;
-}
+    virtual void on_complete(void *value) override {
+        tir_context->_global_initial_values[var.offset]
+            = pack_into_const(value, varr->type);
+
+        // TODO DS DELETE
+        tir_context->_global_running_jobs[var.offset] = nullptr;
+        tir_context->storage->global_values[var.offset] = value;
+
+        wcout.flush();
+    }
+};
 
 void TIR_Context::compile_all() {
     storage = new TIR_ExecutionStorage();
@@ -875,7 +886,7 @@ void TIR_Context::compile_all() {
         switch (stmt->nodetype) {
             case AST_ASSIGNMENT: {
                 AST_BinaryOp *assignment = (AST_BinaryOp*)stmt;
-                create_global_initialization_job(*this, assignment);
+                global.add_job(new TIR_GlobalVarInitJob(*this, assignment));
                 break;
             }
             default:
@@ -957,18 +968,20 @@ void TIR_ExecutionJob::call(TIR_Function *fn, arr<void*> &args) {
     assert(fn->blocks.size);
 
     StackFrame &sf = stackframes.push({
-        .block = fn->blocks[0],
-        .next_instruction = 0,
-        .stack = (u8*)malloc(fn->stack_size),
-        .args = args,
-        .tmp = arr<void*>(fn->temps_count),
-    });
+            .block = fn->blocks[0],
+            .next_instruction = 0,
+            .stack = (u8*)malloc(fn->stack_size),
+            .args = args,
+            .tmp = arr<void*>(fn->temps_count),
+            });
 }
 
-bool TIR_ExecutionJob::continue_execution() {
-    NextFrame:
-    if (stackframes.size == 0)
+bool TIR_ExecutionJob::run() {
+NextFrame:
+    if (stackframes.size == 0) {
+        on_complete(next_retval);
         return true;
+    }
 
     while (true) {
         StackFrame &sf = stackframes.last();
@@ -1004,7 +1017,7 @@ bool TIR_ExecutionJob::continue_execution() {
                 case TOPC_SGTE: val = (void*)((i64)lhs >= (i64)rhs); break;
 
                 default:
-                    NOT_IMPLEMENTED();
+                                NOT_IMPLEMENTED();
             }
 
             sf.set_value(instr.bin.dst, val);
@@ -1098,6 +1111,31 @@ bool TIR_ExecutionJob::continue_execution() {
                     goto NextFrame;
                 }
 
+                case TOPC_SEXT: {
+                    AST_PrimitiveType *srct = (AST_PrimitiveType*)instr.un.src.type;
+                    AST_PrimitiveType *dstt = (AST_PrimitiveType*)instr.un.dst.type;
+                    size_t src = (size_t)sf.get_value(instr.un.src);
+
+                    int sing_bit = srct->size * 8 - 1;
+                    bool is_negative = src & (1 << sing_bit);
+
+                    if (is_negative) {
+                        NOT_IMPLEMENTED();
+                    }
+                    else {
+                        sf.set_value(instr.dst, sf.get_value(instr.un.src));
+                        break;
+                    }
+
+                }
+
+                case TOPC_BITCAST:
+                case TOPC_ZEXT: 
+                {
+                    sf.set_value(instr.dst, sf.get_value(instr.un.src));
+                    break;
+                }
+
                 default:
                     NOT_IMPLEMENTED();
             }
@@ -1107,15 +1145,3 @@ bool TIR_ExecutionJob::continue_execution() {
     }
 }
 
-void execjob_ondone(Job *job) {
-    TIR_ExecutionJob *exec = (TIR_ExecutionJob*)job;
-}
-
-bool execjob_continue(Job *job) {
-    TIR_ExecutionJob *exec = (TIR_ExecutionJob*)job;
-    return exec->continue_execution();
-}
-
-TIR_ExecutionJob::TIR_ExecutionJob(TIR_Context *context)
-    : Job(execjob_ondone, execjob_continue),
-      tir_context(context) { }

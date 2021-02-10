@@ -18,7 +18,6 @@ struct SourceFile {
 	arr<SmallToken> _tokens;
     arr<LocationInFile> _token_locations;
 
-
     Token pushToken(SmallToken st, LocationInFile loc);
     Token getToken(u64 tok_id);
 };
@@ -37,7 +36,7 @@ extern arr<SourceFile> sources;
 extern OutputType output_type;
 extern const char* output_file;
 extern Target target;
-extern bool debug_output;
+extern bool debug_output, exec_main;
 
 bool add_source(std::wstring& filename, u32* out);
 bool parse_args(int argc, const char** argv);

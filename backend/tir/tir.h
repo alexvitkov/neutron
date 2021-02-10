@@ -79,7 +79,10 @@ enum TIR_OpCode : u16 {
     TOPC_MOV        = 0x00 | TOPC_MODIFIES_DST_BIT,
     TOPC_CALL,
     TOPC_GEP,
+
     TOPC_BITCAST,
+    TOPC_ZEXT,
+    TOPC_SEXT,
 
     TOPC_JMPIF      = 0x01,
     TOPC_JMP        = 0x02,
@@ -119,7 +122,7 @@ struct TIR_Instruction {
         //
         // That way if we know the opcode if the instruction has TOPC_MODIFIES_DST_BIT set,
         // then we can just use the union .dst, regardless of whether the instruction a unary/binary/call/whatever
-        TIR_Value *dst;
+        TIR_Value dst;
 
         struct {
             TIR_Value dst, lhs, rhs;
@@ -241,14 +244,12 @@ struct TIR_ExecutionJob : Job {
 
     arr<StackFrame> stackframes;
     void call(TIR_Function *tir_fn, arr<void*> &args);
-    bool continue_execution();
+
+    virtual bool run() override;
+    virtual void on_complete(void *value) = 0;
 };
 
 
-struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
-    TIR_Value var;
-    TIR_GlobalVarInitJob(TIR_Value var, TIR_Context *tir_context);
-};
 
 std::wostream& operator<< (std::wostream& o, TIR_Value loc);
 std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr);

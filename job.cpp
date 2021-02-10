@@ -2,55 +2,38 @@
 
 #include <iostream>
 
-Job::Job(void (*on_done)(Job*), bool (*continue_job) (Job*))
-    : on_done(on_done),
-      continue_job(continue_job) { }
-
 void Job::add_dependency(Job* dependency) {
     dependencies_left++;
     dependency->dependent_jobs.push(this);
+    // wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
 }
 
-void Job::complete() {
-    on_done(this);
-    completed = true;
+std::wstring Job::get_name() {
+    return L"generic_job";
+}
 
-    for (Job *job : dependent_jobs)
-        job->dependencies_left --;
+void AST_GlobalContext::add_job(Job *job) {
+    jobs_count++;
+    ready_jobs.push(job);
 }
 
 bool AST_GlobalContext::run_jobs() {
-    bool has_uncompleted_jobs = true;
-    bool completed_a_job = true;
+    while (ready_jobs.size) {
+        Job *job = ready_jobs.pop();
 
-    while (has_uncompleted_jobs && completed_a_job) {
-        completed_a_job = false;
-        has_uncompleted_jobs = false;
+        if (job->dependencies_left != 0)
+            continue;
 
-        // TODO
-        for (i64 i = jobs.size - 1; i >= 0; i-- ) {
-            Job *j = jobs[i];
-            if (!j->completed) {
-                has_uncompleted_jobs = true;
-
-                if (j->dependencies_left == 0) {
-                    completed_a_job = true;
-                    // wcout << "Continuing job " << i << "\n";
-                    if (j->continue_job(j)) {
-                        j->complete();
-                    }
-                }
-                else {
-                    // wcout << "Job " << i << " has " << jobs[i]->dependencies_left << " dependencies\n";
-                }
+        if (job->run()) {
+            // wcout << dim << "finished " << resetstyle << job->get_name() << "\n";
+            jobs_count--;
+            for (Job *dependent_job : job->dependent_jobs) {
+                dependent_job->dependencies_left --;
+                if (job->dependencies_left == 0)
+                    ready_jobs.push(dependent_job);
             }
         }
     }
 
-    if (has_uncompleted_jobs) {
-        std::wcout << "Failed to complete all jobs. Possible circular dependency\n";
-        return false;
-    }
-
-    return true;
+    return jobs_count == 0;
 }

@@ -2,6 +2,8 @@
 #include "cmdargs.h"
 
 bool debug_output = false;
+bool exec_main = false;
+
 const char* output_file = nullptr;
 OutputType output_type;
 arr<SourceFile> sources;
@@ -52,7 +54,7 @@ bool add_source(std::wstring& filename, u32* out) {
 
 
 bool parse_args(int argc, const char** argv) {
-    // Once -- has been passed, we no longer read command line switches, just files
+    // Once "--" has been passed, we no longer read command line switches, just files
     bool done_with_switches = false; 
 
     for (int i = 1; i < argc; i++) {
@@ -78,6 +80,9 @@ bool parse_args(int argc, const char** argv) {
                         continue;
                     }
                 }
+                if (!strcmp(argname, "exec_main")) {
+                    exec_main = true;
+                }
             }
             else if (strlen(a) == 2) {
                 switch (a[1]) {
@@ -94,6 +99,10 @@ bool parse_args(int argc, const char** argv) {
                     }
                     case 'd': {
                         debug_output = true;
+                        continue;
+                    }
+                    case 'e': {
+                        exec_main = true;
                         continue;
                     }
                 }

@@ -23,7 +23,6 @@ AST_PrimitiveType t_string_literal (PRIMITIVE_UNIQUE,  0, "string_literal");
 AST_PrimitiveType t_any8 (PRIMITIVE_UNIQUE, 8, "any8");
 
 
-
 bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     MUST (lhs->returntype == rhs->returntype);
     MUST (lhs->param_types.size == rhs->param_types.size);
@@ -67,14 +66,16 @@ bool implicit_cast(AST_Context& ctx, AST_Value** dst, AST_Type* type) {
                     || (l->kind == r->kind && l->size < r->size)
                     || (l->kind == PRIMITIVE_UNSIGNED && r->kind == PRIMITIVE_SIGNED && l->size < r->size))
             {
-                *dst = ctx.alloc<AST_Cast>(r, *dst);
+                AST_Cast *cast = ctx.alloc<AST_Cast>(r, *dst);;
+                *dst = cast;
+
+                cast->casttype = l->kind == PRIMITIVE_UNSIGNED ? AST_Cast::ZeroExtend : AST_Cast::SignedExtend;
                 return true;
             }
         }
     }
 
     else if (dstt == &t_string_literal) {
-
         if (type == ctx.get_pointer_type(&t_i8) || type == &t_any8) {
 
             AST_StringLiteral* str = (AST_StringLiteral*)*dst;
@@ -95,7 +96,9 @@ bool implicit_cast(AST_Context& ctx, AST_Value** dst, AST_Type* type) {
                 MUST (ctx.global->declare({ .string_literal = str }, string_static_var));
             }
 
-            *dst =  ctx.alloc<AST_Cast>(ctx.get_pointer_type(&t_i8), string_static_var);
+            AST_Cast *cast = ctx.alloc<AST_Cast>(ctx.get_pointer_type(&t_i8), string_static_var);
+            cast->casttype = AST_Cast::StringLiteral_I8;
+            *dst = cast;
             return true;
         }
 
@@ -371,7 +374,6 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
                 return fntype->returntype;
             }
             else {
-                
                 MUST (validate_type(ctx, (AST_Type**)(&fncall->fn)));
 
                 // If the user is trying to 'call' a type then that's a cast.
@@ -395,14 +397,21 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
                 MUST (validate_type(ctx, &cast->type));
                 MUST (gettype(ctx, cast->inner));
                 
-                // Right now we only support pointer->pointer casts
                 if ((cast->type IS AST_POINTER_TYPE || cast->type IS AST_ARRAY_TYPE)
                     && (cast->inner->type IS AST_POINTER_TYPE || cast->inner->type IS AST_ARRAY_TYPE))
                 {
+                    cast->casttype = AST_Cast::Pointer_Pointer;
                     return cast->type;
                 }
-                else 
+                else if (cast->type IS AST_PRIMITIVE_TYPE 
+                        && cast->inner->type IS AST_PRIMITIVE_TYPE)
                 {
+                    AST_PrimitiveType *dst = (AST_PrimitiveType*)cast->type;
+                    AST_PrimitiveType *src = (AST_PrimitiveType*)cast->inner->type;
+
+                    NOT_IMPLEMENTED();
+                }
+                else {
                     // TODO ERROR
                     ctx.error({ .code = ERR_INVALID_CAST });
                     return nullptr;;

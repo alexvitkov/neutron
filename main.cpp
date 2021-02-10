@@ -18,11 +18,15 @@ void exit_with_error() {
 
 void link(const char* object_filename);
 
-void main_exec_job_on_done(Job *job) {
-    TIR_ExecutionJob *exec = (TIR_ExecutionJob*)job;
-    wcout << red << "\n------ EXECUTION ------\n" << resetstyle;
-    wcout << "main returned " << (i64)exec->next_retval << "\n";
-}
+struct MainExecJob : TIR_ExecutionJob {
+    void on_complete(void *value) override {
+        wcout << "main returned " << (i64)value << "\n";
+    }
+
+    std::wstring get_name() override { return L"main_exec"; };
+
+    MainExecJob(TIR_Context *tir_context) : TIR_ExecutionJob(tir_context) {}
+};
 
 int main(int argc, const char** argv) {
     init_utils();
@@ -71,42 +75,42 @@ int main(int argc, const char** argv) {
     fflush(stdout);
 
     /*
-    T2L_Context t2l_context(tir_context);
-    t2l_context.compile_all();
+       T2L_Context t2l_context(tir_context);
+       t2l_context.compile_all();
 
-    const char* object_filename = t2l_context.output_object();
+       const char* object_filename = t2l_context.output_object();
 
-    if (output_type == OUTPUT_LINKED_EXECUTABLE) {
-        // TODO ENCODING
-        std::string of = object_filename;
-        std::wstring object_filename_w(of.begin(), of.end());
+       if (output_type == OUTPUT_LINKED_EXECUTABLE) {
+    // TODO ENCODING
+    std::string of = object_filename;
+    std::wstring object_filename_w(of.begin(), of.end());
 
-        std::string ouf = output_file;
-        std::wstring output_filename_w(ouf.begin(), ouf.end());
+    std::string ouf = output_file;
+    std::wstring output_filename_w(ouf.begin(), ouf.end());
 
-        if (has_msvc_linker) {
-            link(msvc_linker, object_filename_w, output_filename_w);
-        }
-        else if (has_gnu_ld) {
-            link(gnu_ld, object_filename_w, output_filename_w);
-        }
-        else if (has_lld) {
-            link(lld, object_filename_w, output_filename_w);
-        }
+    if (has_msvc_linker) {
+    link(msvc_linker, object_filename_w, output_filename_w);
+    }
+    else if (has_gnu_ld) {
+    link(gnu_ld, object_filename_w, output_filename_w);
+    }
+    else if (has_lld) {
+    link(lld, object_filename_w, output_filename_w);
+    }
     }
     */
 
-
     // Execute the main function
-    TIR_ExecutionJob *tir_exec_job = new TIR_ExecutionJob(&tir_context);
-    global.jobs.push(tir_exec_job);
-    tir_exec_job->on_done = main_exec_job_on_done;
+    if (exec_main) {
+        MainExecJob *tir_exec_job = new MainExecJob(&tir_context);
+        global.add_job(tir_exec_job);
 
-    for (auto& kvp : tir_context.fns) {
-        if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
-            arr<void*> _args;
-            tir_exec_job->call(kvp.value, _args);
-            break;
+        for (auto& kvp : tir_context.fns) {
+            if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
+                arr<void*> _args;
+                tir_exec_job->call(kvp.value, _args);
+                break;
+            }
         }
     }
 

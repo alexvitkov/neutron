@@ -63,6 +63,13 @@ struct AST_UnresolvedId : AST_Value {
 struct AST_Cast : AST_Value {
     AST_Value* inner;
 
+    enum CastType {
+        Pointer_Pointer,
+        StringLiteral_I8,
+        ZeroExtend,
+        SignedExtend,
+    } casttype;
+
     inline AST_Cast(AST_Type* targetType, AST_Value* inner)
         : AST_Value(AST_CAST, targetType), inner(inner) {};
 };
