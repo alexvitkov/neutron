@@ -265,6 +265,12 @@ bool resolve_unresolved_references(AST_GlobalContext& global, AST_Node** nodeptr
             break;
         }
 
+        case AST_TYPEOF: {
+            AST_Typeof *t = (AST_Typeof*)node;
+            MUST (resolve_unresolved_references(global, (AST_Node**)&t->inner));
+            break;
+        }
+
         case AST_NONE:
         case AST_TEMP_REF:
             assert(!"Not supported");
@@ -628,10 +634,17 @@ bool validate_type(AST_Context& ctx, AST_Type** type) {
 
             return true;
         }
+        case AST_TYPEOF: {
+            AST_Typeof *t = (AST_Typeof*)val;
+            AST_Type *the_type = gettype(ctx, t->inner);
+            MUST (the_type);
+            *type = the_type;
+            return true;
+        }
         default: {
             ctx.error({
                 .code = ERR_INVALID_TYPE,
-                .nodes = { val },
+                .node_ptrs = { (AST_Node**)val },
             });
             return false;
         }
@@ -641,7 +654,6 @@ bool validate_type(AST_Context& ctx, AST_Type** type) {
 };
 
 bool typecheck(AST_Context& ctx, AST_Node* node) {
-
     switch (node->nodetype) {
         case AST_BLOCK: {
             AST_Context* block = (AST_Context*)node;

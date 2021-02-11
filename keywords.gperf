@@ -25,6 +25,7 @@ true,   KW_TRUE
 false,  KW_FALSE
 if,     KW_IF
 while,  KW_WHILE
+typeof, KW_TYPEOF
 ++,     OP_PLUSPLUS
 --,     OP_MINUSMINUS
 <<,     OP_SHIFTLEFT

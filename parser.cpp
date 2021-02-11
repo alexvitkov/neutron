@@ -832,6 +832,26 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                 break;
             }
 
+            case KW_TYPEOF: {
+                MUST (r.expect(TOK('(')).type);
+                AST_Value *inner = parse_expr(ctx, r, TOK(')'));
+                MUST (r.expect(TOK(')')).type);
+
+                Location loc = {
+                    .file_id = t.file_id,
+                    .loc = {
+                        .start = t.loc.start,
+                        .end = r.pos_in_file,
+                    }
+                };
+
+                AST_Typeof* ast_typeof = ctx.alloc<AST_Typeof>(inner);
+                ctx.global->definition_locations[ast_typeof] = loc;
+
+                s.output.push({ ast_typeof, loc });
+                break;
+            }
+
             case TOK_OPENBRACKET: {
                 // Value followed by a open brackets means function call
                 if (prev_was_value) {
@@ -846,8 +866,6 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                     arr<Location> arg_locs;
 
                     while (r.peek().type != TOK(')')) {
-
-
                         AST_Value* arg = parse_expr(ctx, r);
                         MUST (arg);
                         fncall->args.push(arg);
@@ -1081,7 +1099,16 @@ bool parse_let(AST_Context& ctx, TokenReader& r) {
         AST_Value *initial_value = (AST_Value*)parse_expr(ctx, r);
         MUST (initial_value);
 
+        Location loc = {
+            .file_id = let_tok.file_id,
+            .loc = {
+                .start = let_tok.loc.start,
+                .end = r.pos_in_file,
+            }
+        };
+
         AST_BinaryOp *assignment = ctx.alloc<AST_BinaryOp>(TOK('='), var, initial_value);
+        ctx.global->definition_locations[assignment] = loc;
         assignment->nodetype = AST_ASSIGNMENT;
         ctx.statements.push(assignment);
     };

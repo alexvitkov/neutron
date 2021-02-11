@@ -117,6 +117,7 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
         case AST_ADDRESS_OF:     o << (AST_AddressOf*)node; break;
         case AST_UNRESOLVED_ID:  o << (AST_UnresolvedId*)node; break;
         case AST_STRING_LITERAL: o << (AST_StringLiteral*)node; break;
+        case AST_TYPEOF:         o << (AST_Typeof*)node; break;
         default:                 o << "NOPRINT[" << (int)node->nodetype << ']'; break;
     }
 }
@@ -385,4 +386,9 @@ bool postparse_tree_compare(AST_Node *lhs, AST_Node *rhs) {
             NOT_IMPLEMENTED();
         }
     }
+}
+
+std::wostream& operator<<(std::wostream& o, AST_Typeof* node) {
+    o << "typeof(" << node->inner << ")";
+    return o;
 }

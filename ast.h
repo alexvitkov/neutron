@@ -221,14 +221,17 @@ struct AST_PointerType : AST_Type {
 };
 
 struct AST_Dereference : AST_Value {
-    AST_Value* ptr;
+    AST_Value *ptr;
 
     inline AST_Dereference(AST_Value* ptr) 
         : AST_Value(AST_DEREFERENCE, nullptr), ptr(ptr) {}
 };
 
-
-
+struct AST_Typeof : AST_Value {
+    AST_Value *inner;
+    inline AST_Typeof(AST_Value* inner) 
+        : AST_Value(AST_TYPEOF, &t_type), inner(inner) {}
+};
 
 struct AST_AddressOf : AST_Value {
     AST_Value* inner;
@@ -272,5 +275,6 @@ std::wostream& operator<<(std::wostream& o, AST_Dereference* node);
 std::wostream& operator<<(std::wostream& o, AST_AddressOf* node);
 std::wostream& operator<<(std::wostream& o, AST_UnresolvedId* node);
 std::wostream& operator<<(std::wostream& o, AST_StringLiteral* node);
+std::wostream& operator<<(std::wostream& o, AST_Typeof* node);
 
 #endif // guard

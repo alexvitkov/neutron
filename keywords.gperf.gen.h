@@ -35,7 +35,7 @@
 #line 7 "/home/alex/src/neutron/keywords.gperf"
 struct tok { const char* name; TokenType type; };
 
-#define TOTAL_KEYWORDS 40
+#define TOTAL_KEYWORDS 41
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 6
 #define MIN_HASH_VALUE 2
@@ -64,10 +64,10 @@ Perfect_Hash::hash (const char *str, size_t len)
       10,  5,  0, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
-      93, 93, 93, 93, 41, 93, 93,  0,  5, 93,
-      93,  5, 15, 93,  0, 10, 93, 93,  0, 93,
-      40,  0, 93, 93,  0,  0,  0, 35, 93,  0,
-      93, 93, 93, 93, 25, 93, 93, 93, 93, 93,
+      93, 93, 93, 93,  1, 93, 93,  0,  5, 93,
+      93, 10, 15, 93,  0, 10, 93, 93, 35, 93,
+      40,  0, 93, 93,  0,  5,  0, 35, 93,  0,
+      93,  0, 93, 93, 25, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
@@ -91,46 +91,48 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
   static struct tok wordlist[] =
     {
       {""}, {""},
-#line 31 "/home/alex/src/neutron/keywords.gperf"
+#line 32 "/home/alex/src/neutron/keywords.gperf"
       {">>",     OP_SHIFTRIGHT},
-#line 44 "/home/alex/src/neutron/keywords.gperf"
+#line 45 "/home/alex/src/neutron/keywords.gperf"
       {">>=",    OP_SHIFTRIGHTASSIGN},
 #line 24 "/home/alex/src/neutron/keywords.gperf"
       {"true",   KW_TRUE},
 #line 27 "/home/alex/src/neutron/keywords.gperf"
       {"while",  KW_WHILE},
-#line 21 "/home/alex/src/neutron/keywords.gperf"
-      {"struct", KW_STRUCT},
-#line 33 "/home/alex/src/neutron/keywords.gperf"
+#line 28 "/home/alex/src/neutron/keywords.gperf"
+      {"typeof", KW_TYPEOF},
+#line 34 "/home/alex/src/neutron/keywords.gperf"
       {">=",     OP_GREATEREQUALS},
-#line 22 "/home/alex/src/neutron/keywords.gperf"
-      {"let",    KW_LET},
+#line 47 "/home/alex/src/neutron/keywords.gperf"
+      {"^=",     OP_BITXORASSIGN},
 #line 17 "/home/alex/src/neutron/keywords.gperf"
       {"bool",   KW_BOOL},
       {""},
-#line 23 "/home/alex/src/neutron/keywords.gperf"
-      {"return", KW_RETURN},
-#line 34 "/home/alex/src/neutron/keywords.gperf"
+#line 21 "/home/alex/src/neutron/keywords.gperf"
+      {"struct", KW_STRUCT},
+#line 35 "/home/alex/src/neutron/keywords.gperf"
       {"==",     OP_DOUBLEEQUALS},
 #line 16 "/home/alex/src/neutron/keywords.gperf"
       {"i64",    KW_I64},
-#line 40 "/home/alex/src/neutron/keywords.gperf"
+#line 41 "/home/alex/src/neutron/keywords.gperf"
       {"*=",     OP_MULASSIGN},
-      {""}, {""},
-#line 32 "/home/alex/src/neutron/keywords.gperf"
+      {""},
+#line 23 "/home/alex/src/neutron/keywords.gperf"
+      {"return", KW_RETURN},
+#line 33 "/home/alex/src/neutron/keywords.gperf"
       {"<=",     OP_LESSEREQUALS},
 #line 19 "/home/alex/src/neutron/keywords.gperf"
       {"f64",    KW_F64},
-#line 42 "/home/alex/src/neutron/keywords.gperf"
+#line 43 "/home/alex/src/neutron/keywords.gperf"
       {"%=",    OP_MODASSIGN},
 #line 25 "/home/alex/src/neutron/keywords.gperf"
       {"false",  KW_FALSE},
       {""},
-#line 30 "/home/alex/src/neutron/keywords.gperf"
+#line 31 "/home/alex/src/neutron/keywords.gperf"
       {"<<",     OP_SHIFTLEFT},
-#line 43 "/home/alex/src/neutron/keywords.gperf"
+#line 44 "/home/alex/src/neutron/keywords.gperf"
       {"<<=",    OP_SHIFTLEFTASSIGN},
-#line 37 "/home/alex/src/neutron/keywords.gperf"
+#line 38 "/home/alex/src/neutron/keywords.gperf"
       {"!=",     OP_NOTEQUALS},
       {""}, {""},
 #line 26 "/home/alex/src/neutron/keywords.gperf"
@@ -138,39 +140,39 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
 #line 15 "/home/alex/src/neutron/keywords.gperf"
       {"i32",    KW_I32 },
       {""}, {""}, {""},
-#line 47 "/home/alex/src/neutron/keywords.gperf"
+#line 48 "/home/alex/src/neutron/keywords.gperf"
       {"|=",     OP_BITORASSIGN},
 #line 18 "/home/alex/src/neutron/keywords.gperf"
       {"f32",    KW_F32},
       {""}, {""}, {""},
-#line 39 "/home/alex/src/neutron/keywords.gperf"
+#line 40 "/home/alex/src/neutron/keywords.gperf"
       {"-=",     OP_SUBASSIGN},
 #line 12 "/home/alex/src/neutron/keywords.gperf"
       {"u64",    KW_U64},
       {""}, {""}, {""},
-#line 38 "/home/alex/src/neutron/keywords.gperf"
+#line 39 "/home/alex/src/neutron/keywords.gperf"
       {"+=",     OP_ADDASSIGN},
 #line 14 "/home/alex/src/neutron/keywords.gperf"
       {"i16",    KW_I16 },
       {""}, {""}, {""},
-#line 45 "/home/alex/src/neutron/keywords.gperf"
-      {"&=",     OP_BITANDASSIGN},
 #line 46 "/home/alex/src/neutron/keywords.gperf"
-      {"^=",     OP_BITXORASSIGN},
+      {"&=",     OP_BITANDASSIGN},
+#line 22 "/home/alex/src/neutron/keywords.gperf"
+      {"let",    KW_LET},
       {""}, {""}, {""},
-#line 36 "/home/alex/src/neutron/keywords.gperf"
+#line 37 "/home/alex/src/neutron/keywords.gperf"
       {"||",     OP_OR},
 #line 11 "/home/alex/src/neutron/keywords.gperf"
       {"u32",    KW_U32 },
       {""}, {""}, {""},
 #line 20 "/home/alex/src/neutron/keywords.gperf"
       {"fn",     KW_FN},
-#line 41 "/home/alex/src/neutron/keywords.gperf"
+#line 42 "/home/alex/src/neutron/keywords.gperf"
       {"/=",     OP_DIVASSIGN},
       {""}, {""}, {""},
-#line 29 "/home/alex/src/neutron/keywords.gperf"
+#line 30 "/home/alex/src/neutron/keywords.gperf"
       {"--",     OP_MINUSMINUS},
-#line 48 "/home/alex/src/neutron/keywords.gperf"
+#line 49 "/home/alex/src/neutron/keywords.gperf"
       {"...",    OP_VARARGS},
       {""}, {""}, {""},
 #line 13 "/home/alex/src/neutron/keywords.gperf"
@@ -178,10 +180,10 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
 #line 10 "/home/alex/src/neutron/keywords.gperf"
       {"u16",    KW_U16 },
       {""}, {""}, {""},
-#line 28 "/home/alex/src/neutron/keywords.gperf"
+#line 29 "/home/alex/src/neutron/keywords.gperf"
       {"++",     OP_PLUSPLUS},
       {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
-#line 35 "/home/alex/src/neutron/keywords.gperf"
+#line 36 "/home/alex/src/neutron/keywords.gperf"
       {"&&",     OP_AND},
       {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
 #line 9 "/home/alex/src/neutron/keywords.gperf"
