@@ -32,7 +32,7 @@ u32 map_equals(DeclarationKey lhs, DeclarationKey rhs) {
     return lhs.fn_type == rhs.fn_type;
 }
 
-bool AST_Context::declare(DeclarationKey key, AST_Node* value) {
+bool AST_Context::declare(DeclarationKey key, AST_Node* value, bool sendmsg) {
     // Throw an error if another value with the same name has been declared
     AST_Node* prev_decl;
     if (declarations.find(key, &prev_decl)) {
@@ -44,6 +44,19 @@ bool AST_Context::declare(DeclarationKey key, AST_Node* value) {
     }
 
     declarations.insert(key, value);
+
+    if (sendmsg) {
+        assert(key.name);
+
+        NewDeclarationMessage msg;    
+        msg.msgtype = MSG_NEW_DECLARATION;
+        msg.context = this;
+        msg.name = key.name;
+        msg.node = value;
+
+        global->send_message(&msg);
+    }
+
     return true;
 }
 

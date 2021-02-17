@@ -1,5 +1,6 @@
 #include "context.h"
-
+#include "ast.h"
+#include <sstream>
 #include <iostream>
 
 void Job::add_dependency(Job* dependency) {
@@ -22,7 +23,8 @@ Job::Job(AST_GlobalContext *global) : global(global) {
 }
 
 void AST_GlobalContext::send_message(Message *msg) {
-    arr<Job*> receivers = subscribers[msg->msgtype];
+    arr<Job*>& receivers = subscribers[msg->msgtype];
+    wcout << "Sending message " << msg->msgtype << "\n";
 
     for (u32 i = 0; i < receivers.size; ) {
         if (receivers[i]->flags & JOB_DONE || receivers[i]->receive_message(msg)) {
@@ -54,8 +56,7 @@ bool AST_GlobalContext::run_jobs() {
     return jobs_count == 0;
 }
 
-
-ResolveJob::ResolveJob(AST_UnresolvedId *id, AST_Context *ctx) 
+ResolveJob::ResolveJob(AST_UnresolvedId **id, AST_Context *ctx) 
     : Job(ctx->global), id(id), context(ctx) 
 {
     // TODO JOB - we add a fake dependency to make sure the job doesnt get called
@@ -68,17 +69,47 @@ bool ResolveJob::run() {
 }
 
 bool ResolveJob::receive_message(Message *msg) {
-    assert (msg->msgtype == MSG_NEW_DECLARATION);
+    switch (msg->msgtype) {
+        case MSG_NEW_DECLARATION: {
+            NewDeclarationMessage *decl = (NewDeclarationMessage*)msg;
+            if (decl->context != context)
+                return false;
 
-    NewDeclarationMessage *decl = (NewDeclarationMessage*)msg;
-    if (decl->context != context)
-        return false;
+            if (!strcmp(decl->name, (*id)->name)) {
+                *(AST_Node**)id = decl->node;
+                return true;
+            }
 
+            return false;
+        }
+        case MSG_SCOPE_CLOSED: {
+            ScopeClosedMessage *sc = (ScopeClosedMessage*)msg;
+            if (sc->scope == context) {
+                context = context->parent;
+                if (!context) {
+                    // TODO ERROR
+                    NOT_IMPLEMENTED();
+                } else {
+                    AST_Node *decl;
+                    if (context->declarations.find({ .name = (*id)->name }, &decl)) {
+                        *(AST_Node**)id = decl;
+                        return true;
+                    }
+                }
+            }
+        }
+        default:
+            UNREACHABLE;
+    }
 
-
-    return false;
 }
 
 void Job::subscribe(MessageType msgtype) {
     global->subscribers[msgtype].push(this);
+}
+
+std::wstring ResolveJob::get_name() {
+    std::wostringstream stream;
+    stream << "resolve_job<" << (*id)->name << L">";
+    return stream.str();
 }

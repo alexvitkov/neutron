@@ -146,9 +146,7 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
 
         o << ')';
 
-
-        // TODO RETURNTYPE
-        AST_Type* rettype = (AST_Type*)fn->block.resolve({ "returntype" });
+        AST_Type* rettype = ((AST_FnType*)fn->type)->returntype;
         if (rettype)
             o << ": " << rettype;
 

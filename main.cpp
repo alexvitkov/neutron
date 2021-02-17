@@ -103,7 +103,6 @@ int main(int argc, const char** argv) {
     // Execute the main function
     if (exec_main) {
         MainExecJob *tir_exec_job = new MainExecJob(&tir_context);
-        global.add_job(tir_exec_job);
 
         for (auto& kvp : tir_context.fns) {
             if (kvp.key->name && !strcmp(kvp.key->name, "main")) {

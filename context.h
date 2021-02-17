@@ -60,7 +60,7 @@ struct AST_Context : AST_Node {
     AST_Context(AST_Context&&) = delete;
 
     AST_Node* resolve(DeclarationKey key);
-    bool declare(DeclarationKey key, AST_Node* value);
+    bool declare(DeclarationKey key, AST_Node* value, bool sendmsg);
     void error(Error err);
 
     template <typename T, typename ... Ts>
@@ -98,14 +98,17 @@ struct AST_Context : AST_Node {
 // Don't insert empty spaces here, it will waste memory
 enum MessageType : u8 {
     MSG_NEW_DECLARATION = 0,
+    MSG_SCOPE_CLOSED    = 1,
 
-    MESSAGES_COUNT_PLUS_ONE
+    MESSAGES_COUNT,
 };
-
-#define MESSAGES_COUNT (MESSAGES_COUNT_PLUS_ONE - 1)
 
 struct Message {
     MessageType msgtype;
+};
+
+struct ScopeClosedMessage : Message {
+    AST_Context *scope;
 };
 
 struct NewDeclarationMessage : Message {
@@ -201,12 +204,13 @@ T* AST_Context::alloc_temp(Ts &&...args) {
 }
 
 struct ResolveJob : Job {
-    AST_UnresolvedId *id;
-    AST_Context *context;
+    AST_UnresolvedId **id;
+    AST_Context       *context;
 
-    ResolveJob(AST_UnresolvedId *id, AST_Context *ctx);
+    ResolveJob(AST_UnresolvedId **id, AST_Context *ctx);
     bool run() override;
     bool receive_message(Message *msg) override;
+    std::wstring get_name() override;
 };
 
 Location location_of(AST_Context& ctx, AST_Node** node);
