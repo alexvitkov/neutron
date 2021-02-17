@@ -47,21 +47,9 @@ bool AST_Context::declare(DeclarationKey key, AST_Node* value) {
     return true;
 }
 
-AST_Node* AST_Context::resolve(DeclarationKey key) {
-    AST_Node* node;
-    if (!declarations.find(key, &node)) {
-        if (parent)
-            return parent->resolve(key);
-        return nullptr;
-    }
-    return node;
-}
-
 void AST_Context::error(Error err) {
     global->errors.push(err);
 }
-
-
 
 struct TypeSizeTuple {
     AST_Type* t;

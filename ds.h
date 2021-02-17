@@ -20,9 +20,15 @@ struct map {
         V value;
     };
 
+    enum BinState {
+        Free,
+        Taken,
+        Deleted
+    };
+
     struct bin : kvp {
         u32 hash;
-        bool haskey;
+        BinState binstate;
     };
 
     bin* bins;
@@ -62,7 +68,7 @@ struct map {
         this->numbins = numbins;
         this->numfreebins = (u32)(numbins * 0.65f);
         for (u32 i = 0; i < numbins; i++)
-            bins[i].haskey = false;
+            bins[i].binstate = Free;
     }
 
     void realloc() {
@@ -71,7 +77,7 @@ struct map {
         alloc_bins(numbins * 2);
 
         for (u32 i = 0; i < old_numbins; i++) {
-            if (old_bins[i].haskey) {
+            if (old_bins[i].binstate == Taken) {
                 // TODO we can avoid recalculating the hash here as its already stored inside the old bin
                 // but for now I'd like to reuse the insert function here so fuck it
                 insert(old_bins[i].key, std::move(old_bins[i].value));
@@ -87,7 +93,7 @@ struct map {
         u32 hash = map_hash(key);
         u32 bin_index = hash % numbins;
 
-        while (bins[bin_index].haskey) {
+        while (bins[bin_index].binstate != Free) {
             if (bins[bin_index].hash == hash)
                 if (map_equals(bins[bin_index].key, key))
                     return false;
@@ -98,47 +104,52 @@ struct map {
         }
         bins[bin_index].hash = hash;
         bins[bin_index].key = key;
-        bins[bin_index].haskey = true;
+        bins[bin_index].binstate = Taken;
         new (&bins[bin_index].value) V(std::move(value));
         return true;
+    }
+
+    i64 indexof(K key) {
+        u32 hash = map_hash(key);
+        u32 bin_index = hash % numbins;
+
+        while (bins[bin_index].binstate != Free) {
+            if (bins[bin_index].hash == hash) {
+                if (map_equals(bins[bin_index].key, key)) {
+                    return bin_index;
+                }
+            }
+            bin_index++;
+            if (bin_index >= numbins)
+                bin_index = 0;
+        }
+        return -1;
     }
     
     // If the key is in the map true is returned and out's value is set accordingly
     // If the key is not in the map, out's value is unchanged
     bool find(K key, V* out) {
-        u32 hash = map_hash(key);
-        u32 bin_index = hash % numbins;
+        i64 index = indexof(key);
+        if (index < 0)
+            return false;
 
-        while (bins[bin_index].haskey) {
-            if (bins[bin_index].hash == hash) {
-                if (map_equals(bins[bin_index].key, key)) {
-                    if (out)
-                        *out = bins[bin_index].value;
-                    return true;
-                }
-            }
-            bin_index++;
-            if (bin_index >= numbins)
-                bin_index = 0;
-        }
-        return false;
+        *out = bins[index].value;
+        return true;
     }
 
     V* find2(K key) {
-        u32 hash = map_hash(key);
-        u32 bin_index = hash % numbins;
+        i64 index = indexof(key);
+        return index < 0 ? nullptr : &bins[index].value;
+    }
 
-        while (bins[bin_index].haskey) {
-            if (bins[bin_index].hash == hash) {
-                if (map_equals(bins[bin_index].key, key)) {
-                    return &bins[bin_index].value;
-                }
-            }
-            bin_index++;
-            if (bin_index >= numbins)
-                bin_index = 0;
-        }
-        return nullptr;
+    void remove(K key) {
+        i64 index = indexof(key);
+        if (index < 0)
+            return;
+
+        bins[index].~V();
+        bins[index].binstate = Free;
+        assert(0);
     }
 
     V operator[](K key) const {
@@ -161,7 +172,7 @@ struct map {
         iterator& operator++() {
             do {
                 i++;
-            } while (i < a->numbins && !a->bins[i].haskey);
+            } while (i < a->numbins && a->bins[i].binstate != Taken);
             return *this;
         }
         kvp& operator*() const { return a->bins[i]; }
@@ -172,7 +183,7 @@ struct map {
     iterator begin() { 
         u32 i;
         for (i = 0; i < numbins; i++)
-            if (bins[i].haskey)
+            if (bins[i].binstate == Taken)
                 break;
         return { .a = this, .i = i };
     }
@@ -253,7 +264,6 @@ struct arr {
     void realloc() {
         capacity *= 2;
         T* new_buffer = (T*)malloc(sizeof(T) * capacity);
-        // memcpy(new_buffer, buffer, sizeof(T) * size);
         for (u32 i = 0; i < size; i++)
             new (&new_buffer[i]) T (std::move(buffer[i]));
         free(buffer);
@@ -284,7 +294,16 @@ struct arr {
         return buffer[size - 1];
     }
 
+    // Move the last element to tht index-th position,
+    // overriding the index-th element
+    void delete_unordered(u32 index) {
+        assert(size && "trying to delete_unordered an empty arr");
+        new (&buffer[index]) T (std::move(buffer[size - 1]));
+        size--;
+    }
+
     T pop() {
+        assert(size && "trying to pop an empty arr");
         return buffer[--size];
     }
 

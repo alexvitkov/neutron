@@ -644,7 +644,9 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             AST_StringLiteral* str = (AST_StringLiteral*)node;
 
             DeclarationKey key = { .string_literal = str };
-            AST_Var* strvar = (AST_Var*)fn.c.global.resolve(key);
+
+            AST_Var* strvar = (AST_Var*)fn.c.global.declarations.find2(key);
+            assert(strvar);
 
             TIR_Value val = fn.c.global_valmap[str];
 
@@ -795,7 +797,8 @@ TIR_Value pack_into_const(void *val, AST_Type *type) {
 
 
 TIR_ExecutionJob::TIR_ExecutionJob(TIR_Context *tir_context) 
-    : tir_context(tir_context) {}
+    : Job(&tir_context->global),
+      tir_context(tir_context) {}
 
 
 struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
@@ -886,7 +889,7 @@ void TIR_Context::compile_all() {
         switch (stmt->nodetype) {
             case AST_ASSIGNMENT: {
                 AST_BinaryOp *assignment = (AST_BinaryOp*)stmt;
-                global.add_job(new TIR_GlobalVarInitJob(*this, assignment));
+                new TIR_GlobalVarInitJob(*this, assignment);
                 break;
             }
             default:

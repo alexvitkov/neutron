@@ -82,7 +82,7 @@ bool implicit_cast(AST_Context& ctx, AST_Value** dst, AST_Type* type) {
 
             // If the same string literal has been seen before
             // There's already a static variable defined for it
-            AST_Var* string_static_var = (AST_Var*)ctx.resolve({ .string_literal = str });
+            AST_Var* string_static_var = (AST_Var*)ctx.declarations.find2({ .string_literal = str });
 
             if (!string_static_var) {
                 // Get an array type that's just big enough to fit the C string 

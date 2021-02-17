@@ -695,35 +695,35 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     return fn;
 }
 
-struct SYValue {
+struct ParseExprValue {
     AST_Value* val;
     Location loc;
 };
 
-struct SYState {
+struct ParseExprState {
     AST_Context& ctx;
     u32 brackets = 0;
-    arr<SYValue> output;
+    arr<ParseExprValue> output;
     arr<TokenType> stack;
 };
 
-bool pop(SYState& s) {
-    if (s.output.size < 2) {
-        s.ctx.error({
+bool pop(ParseExprState& state) {
+    if (state.output.size < 2) {
+        state.ctx.error({
             .code = ERR_INVALID_EXPRESSION
         });
         return false;
     }
 
-    TokenType op = s.stack.pop();
+    TokenType op = state.stack.pop();
 
     AST_BinaryOp* bin;
-    SYValue lhs = s.output[s.output.size - 2];
-    SYValue rhs = s.output[s.output.size - 1];
+    ParseExprValue lhs = state.output[state.output.size - 2];
+    ParseExprValue rhs = state.output[state.output.size - 1];
 
     if (prec[op] & ASSIGNMENT) {
         if (op == '=') {
-            bin = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
+            bin = state.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
             bin->nodetype = AST_ASSIGNMENT;
         }
         else {
@@ -741,15 +741,15 @@ bool pop(SYState& s) {
                 default:
                                           assert(0);
             }
-            rhs.val = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
-            bin = s.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, rhs.val);
+            rhs.val = state.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
+            bin = state.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, rhs.val);
             bin->nodetype = AST_ASSIGNMENT;
         }
     }
     else {
-        bin = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
+        bin = state.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
     }
-    s.output.pop();
+    state.output.pop();
 
     Location loc = {
         .file_id = lhs.loc.file_id,
@@ -759,9 +759,9 @@ bool pop(SYState& s) {
         }
     };
 
-    s.ctx.global->definition_locations[bin] = loc;
+    state.ctx.global->definition_locations[bin] = loc;
     
-    s.output[s.output.size - 1] = { bin, loc };
+    state.output[state.output.size - 1] = { bin, loc };
 
     return true;
 }
@@ -775,7 +775,7 @@ bool _token_is_value(TokenType t) {
 }
 
 AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
-    SYState s { .ctx = ctx };
+    ParseExprState s { .ctx = ctx };
 
     Token t;
     bool prev_was_value = false;
@@ -803,7 +803,11 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
 
                 switch (t.type) {
                     case TOK_ID:
-                        val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
+                        if (!ctx.declarations.find({ .name = t.name }, (AST_Node**)&val)) {
+                            val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
+                            ResolveJob *resolve_job = new ResolveJob((AST_UnresolvedId*)val, &ctx);
+                        }
+                        
                         break;
                     case TOK_NUMBER:
                         val = ctx.alloc<AST_Number>(t.number_data->u64_data);
@@ -860,7 +864,7 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                         return nullptr;
                     }
 
-                    SYValue fn = s.output.pop();
+                    ParseExprValue fn = s.output.pop();
                     AST_FnCall* fncall = ctx.alloc<AST_FnCall>(fn.val);
 
                     arr<Location> arg_locs;
@@ -926,7 +930,7 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                     s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                     return nullptr;
                 }
-                SYValue lhs = s.output.last();
+                ParseExprValue lhs = s.output.last();
 
                 AST_MemberAccess* ma = ctx.alloc<AST_MemberAccess>(lhs.val, nameToken.name);
 
@@ -945,7 +949,7 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                     return nullptr;
                 }
 
-                SYValue inner = s.output.last();
+                ParseExprValue inner = s.output.last();
 
                 // When we see foo[bar] we output (foo + bar)*
                 AST_BinaryOp* add = ctx.alloc<AST_BinaryOp>(TOK('+'), s.output.last().val, index);
@@ -970,7 +974,7 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                     return nullptr;
                 }
 
-                SYValue syval = s.output.last();
+                ParseExprValue syval = s.output.last();
                 AST_Value* top = syval.val;
 
                 Location loc = {
@@ -1030,7 +1034,7 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                                 s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
                                 return nullptr;
                             }
-                            SYValue last = s.output.last();
+                            ParseExprValue last = s.output.last();
                             last.loc.loc.end = r.pos_in_file;
 
                             s.output.last() = {
