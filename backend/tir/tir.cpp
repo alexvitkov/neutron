@@ -979,7 +979,9 @@ void TIR_ExecutionJob::call(TIR_Function *fn, arr<void*> &args) {
             });
 }
 
-bool TIR_ExecutionJob::run() {
+bool TIR_ExecutionJob::_run(Message *message) {
+    assert(!message);
+
 NextFrame:
     if (stackframes.size == 0) {
         on_complete(next_retval);

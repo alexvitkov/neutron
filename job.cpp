@@ -13,13 +13,7 @@ std::wstring Job::get_name() {
     return L"generic_job";
 }
 
-bool Job::receive_message(Message *msg) {
-    return false;
-}
-
 Job::Job(AST_GlobalContext *global) : global(global) {
-    global->jobs_count++;
-    global->ready_jobs.push(this);
 }
 
 void AST_GlobalContext::send_message(Message *msg) {
@@ -27,7 +21,7 @@ void AST_GlobalContext::send_message(Message *msg) {
     wcout << "Sending message " << msg->msgtype << "\n";
 
     for (u32 i = 0; i < receivers.size; ) {
-        if (receivers[i]->flags & JOB_DONE || receivers[i]->receive_message(msg)) {
+        if (receivers[i]->flags & JOB_DONE || receivers[i]->_run(msg)) {
             receivers.delete_unordered(i);
         } else {
             i++;
@@ -42,7 +36,7 @@ bool AST_GlobalContext::run_jobs() {
         if (job->dependencies_left != 0)
             continue;
 
-        if (job->run()) {
+        if (job->_run(nullptr)) {
             // wcout << dim << "finished " << resetstyle << job->get_name() << "\n";
             jobs_count--;
             for (Job *dependent_job : job->dependent_jobs) {
@@ -64,11 +58,15 @@ ResolveJob::ResolveJob(AST_UnresolvedId **id, AST_Context *ctx)
     this->dependencies_left ++;
 }
 
-bool ResolveJob::run() {
-    UNREACHABLE;
-}
+bool ResolveJob::_run(Message *msg) {
+    if (!msg) {
+        AST_Node *decl;
+        MUST (context->declarations.find({ .name = (*id)->name }, &decl));
 
-bool ResolveJob::receive_message(Message *msg) {
+        *(AST_Node**)id = decl;
+        return true;
+    }
+
     switch (msg->msgtype) {
         case MSG_NEW_DECLARATION: {
             NewDeclarationMessage *decl = (NewDeclarationMessage*)msg;
@@ -87,16 +85,12 @@ bool ResolveJob::receive_message(Message *msg) {
             if (sc->scope == context) {
                 context = context->parent;
                 if (!context) {
-                    // TODO ERROR
-                    NOT_IMPLEMENTED();
+                    NOT_IMPLEMENTED("TODO ERROR UNDEFINED IDENTIFIER");
                 } else {
-                    AST_Node *decl;
-                    if (context->declarations.find({ .name = (*id)->name }, &decl)) {
-                        *(AST_Node**)id = decl;
-                        return true;
-                    }
+                    return _run(nullptr);
                 }
             }
+            return false;
         }
         default:
             UNREACHABLE;
@@ -113,3 +107,4 @@ std::wstring ResolveJob::get_name() {
     stream << "resolve_job<" << (*id)->name << L">";
     return stream.str();
 }
+

@@ -825,21 +825,22 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                 AST_Value* val = nullptr;
 
                 switch (t.type) {
-                    case TOK_ID:
-                        if (!ctx.declarations.find({ .name = t.name }, (AST_Node**)&val)) {
+                    case TOK_ID: {
+                        if (!ctx.declarations.find({ .name = t.name }, (AST_Node**)&val))
                             val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
-                        }
-                        
                         break;
-                    case TOK_NUMBER:
+                    }
+                    case TOK_NUMBER: {
                         val = ctx.alloc<AST_Number>(t.number_data->u64_data);
                         break;
-                    case TOK_STRING_LITERAL:
+                    }
+                    case TOK_STRING_LITERAL: {
                         if (!ctx.global->literals.find(t.name, (AST_StringLiteral**)&val)) {
                             val = ctx.alloc<AST_StringLiteral>(t);
                             ctx.global->literals.insert(t.name, (AST_StringLiteral*)val);
                         }
                         break;
+                    }
                     default:
                         UNREACHABLE;
                 }

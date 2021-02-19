@@ -121,24 +121,7 @@ enum JobFlags : u32 {
     JOB_DONE = 0x01,
 };
 
-struct Job {
-    // those two return true if the job is finished after the run/receive_message call returns
-    virtual bool run() = 0;
-    virtual bool receive_message(Message *msg);
-
-    AST_GlobalContext *global;
-    JobFlags flags = (JobFlags)0;
-
-    arr<Job*> dependent_jobs;
-    u32 dependencies_left = 0;
-
-    void add_dependency(Job* dependency);
-    void subscribe(MessageType msgtype); // TODO this won't scale - MessageType is too coarse
-
-    Job(AST_GlobalContext *global);
-
-    virtual std::wstring get_name();
-};
+struct Job;
 
 struct AST_GlobalContext : AST_Context {
 	arr<Error> errors;
@@ -181,12 +164,48 @@ struct AST_GlobalContext : AST_Context {
     }
 
     arr<Job*> ready_jobs;
+
+    // subscribers[MSG_NEW_DECLARATION] are all the jobs waiting on MSG_NEW_DECLARATION
     arr<arr<Job*>> subscribers;
     u32 jobs_count;
 
     void add_job(Job *job);
     bool run_jobs();
     void send_message(Message *msg);
+};
+
+struct Job {
+    // returns true if the job is finished after the run call returns
+    virtual bool _run(Message *msg) = 0;
+    virtual std::wstring get_name();
+
+    // Jobs can often be completed on the first run so always allocating them on the heap doesn't make sense.
+    // you can declare a job on the stack and run it with this method, passing its type.
+    // If the job can't be completed immediately it will be moved to the heap and added to the job queue, 
+    // and the job on the heap will be returned so you can wait on it
+    template <typename JobT>
+    JobT *run_stackjob() {
+       if (_run(nullptr))
+           return nullptr;
+
+       global->jobs_count++;
+       global->ready_jobs.push(new JobT(std::move(*(JobT*)this)));
+
+       return nullptr;
+    }
+
+
+    AST_GlobalContext *global;
+    JobFlags flags = (JobFlags)0;
+
+    arr<Job*> dependent_jobs;
+    u32 dependencies_left = 0;
+
+    void add_dependency(Job* dependency);
+    void subscribe(MessageType msgtype); // TODO this won't scale - MessageType is too coarse
+
+    Job(AST_GlobalContext *global);
+    void error(Error err);
 };
 
 template <typename T, typename ... Ts>
@@ -208,13 +227,22 @@ struct ResolveJob : Job {
     AST_Context       *context;
 
     ResolveJob(AST_UnresolvedId **id, AST_Context *ctx);
-    bool run() override;
-    bool receive_message(Message *msg) override;
+    bool _run(Message *msg) override;
     std::wstring get_name() override;
+
 };
 
 Location location_of(AST_Context& ctx, AST_Node** node);
 bool parse_all(AST_Context& global);
 bool parse_source_file(AST_Context& global, SourceFile& sf);
+
+#define WAIT(job, jobtype) \
+    { \
+        Job *heap_job = job.run_stackjob<jobtype>(); \
+        if (heap_job) { \
+            add_dependency(heap_job); \
+            return false; \
+        } \
+    }
 
 #endif // guard

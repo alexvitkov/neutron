@@ -245,7 +245,7 @@ struct TIR_ExecutionJob : Job {
     arr<StackFrame> stackframes;
     void call(TIR_Function *tir_fn, arr<void*> &args);
 
-    virtual bool run() override;
+    virtual bool _run(Message *message) override;
     virtual void on_complete(void *value) = 0;
 };
 
