@@ -100,7 +100,7 @@ struct AST_GlobalContext : AST_Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
 
-    map<AST_Node*, AST_Node*> global_initial_values;
+    map<AST_Node*, AST_Node*> global_initial_nodes;
 
     map<const char*, AST_StringLiteral*> literals;
 

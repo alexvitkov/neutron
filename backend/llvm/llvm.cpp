@@ -28,6 +28,11 @@ llvm::Constant *get_constant(T2L_Context *ctx, TIR_Value tir_val) {
             assert(l_type);
             return ConstantInt::get(l_type, tir_val.offset, false);
         }
+        case TVS_C_STRING_LITERAL: {
+            llvm::Constant* l_val = llvm::ConstantDataArray::getString(ctx->lc, (const char*)tir_val.offset, true); // POINTERSIZE
+            auto l_var = new llvm::GlobalVariable(ctx->mod, l_val->getType(), true, GlobalValue::WeakAnyLinkage, l_val, "");
+            return l_var;
+        }
         default:
             return nullptr;
     }
@@ -126,6 +131,7 @@ llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value tir_val, bool a
         return modified_values[tir_val];
     }
     
+    // This is a special value don't mind it
     else if (will_modify && !ask_your_parents) {
         return (llvm::Value*)this;
     }
@@ -603,6 +609,9 @@ void T2L_Context::compile_all() {
     for (auto &kvp : tir_context.global_valmap) {
         AST_Var *var = (AST_Var*)kvp.key;
         if (!(var IS AST_VAR))
+            continue;
+
+        if (var->is_constant)
             continue;
 
         llvm::Type* l_type = get_llvm_type(var->type);

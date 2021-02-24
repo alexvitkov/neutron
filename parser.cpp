@@ -774,6 +774,8 @@ bool _token_is_value(TokenType t) {
     return false;
 }
 
+AST_Var *parse_let(AST_Context& ctx, TokenReader& r);
+
 AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
     SYState s { .ctx = ctx };
 
@@ -803,7 +805,14 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
 
                 switch (t.type) {
                     case TOK_ID:
-                        val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
+                        if (r.peek().type == TOK_COLON) {
+                            r.pos--;
+                            val = parse_let(ctx, r);
+                            MUST (val);
+                        }
+                        else {
+                            val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
+                        }
                         break;
                     case TOK_NUMBER:
                         val = ctx.alloc<AST_Number>(t.number_data->u64_data);
@@ -1082,10 +1091,7 @@ Done:
     return s.output[0].val;
 }
 
-bool parse_let(AST_Context& ctx, TokenReader& r) {
-    Token let_tok = r.expect_full(KW_LET);
-    MUST (let_tok.type);
-
+AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
     Token nameToken = r.expect_full(TOK_ID);
     MUST (nameToken.type);
 
@@ -1100,9 +1106,9 @@ bool parse_let(AST_Context& ctx, TokenReader& r) {
         MUST (initial_value);
 
         Location loc = {
-            .file_id = let_tok.file_id,
+            .file_id = nameToken.file_id,
             .loc = {
-                .start = let_tok.loc.start,
+                .start = nameToken.loc.start,
                 .end = r.pos_in_file,
             }
         };
@@ -1122,12 +1128,12 @@ bool parse_let(AST_Context& ctx, TokenReader& r) {
     ctx.global->definition_locations[var] = {
         .file_id = r.sf.id,
         .loc = {
-            .start = let_tok.loc.start,
+            .start = nameToken.loc.start,
             .end = r.pos_in_file,
         }
     };
 
-    return true;
+    return var;
 }
 
 AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
@@ -1165,6 +1171,7 @@ bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error) {
             return true;
         }
         case KW_LET: {
+            r.pop();
             if (!parse_let(ctx, r)) {
                 *error = true;
                 return false;

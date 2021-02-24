@@ -90,15 +90,16 @@ bool implicit_cast(AST_Context& ctx, AST_Value** dst, AST_Type* type) {
 
                 string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
                 string_static_var->type = string_array_type;
-                ctx.global->global_initial_values[string_static_var] = str;
+                string_static_var->is_constant = true;
+                ctx.global->global_initial_nodes[string_static_var] = str;
                 string_static_var->is_global = true;
 
                 MUST (ctx.global->declare({ .string_literal = str }, string_static_var));
             }
 
-            AST_Cast *cast = ctx.alloc<AST_Cast>(ctx.get_pointer_type(&t_i8), string_static_var);
-            cast->casttype = AST_Cast::StringLiteral_I8;
-            *dst = cast;
+            // AST_Cast *cast = ctx.alloc<AST_Cast>(ctx.get_pointer_type(&t_i8), string_static_var);
+            // cast->casttype = AST_Cast::StringLiteral_I8;
+            *dst = string_static_var;
             return true;
         }
 
@@ -683,9 +684,9 @@ bool typecheck(AST_Context& ctx, AST_Node* node) {
 
             // MUST (gettype(ctx, fn)); // This is done in a prepass
 
-            if (!fn->is_extern) {
+            // if (!fn->is_extern) {
                 MUST (typecheck(fn->block, &fn->block));
-            }
+            // }
             return true;
         }
 

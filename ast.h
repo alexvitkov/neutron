@@ -120,6 +120,7 @@ struct AST_Var : AST_Value {
     i64 argindex;
 
     bool is_global;
+    bool is_constant;
 
     // If anywhere we take the address of this variable it must explicitly be stored on the stack
     bool always_on_stack;

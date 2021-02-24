@@ -13,6 +13,7 @@ enum TIR_ValueSpace : u8 {
     TVS_TEMP,
     TVS_VALUE,
     TVS_STACK,
+    TVS_C_STRING_LITERAL,
 };
 
 enum TIR_Value_Flags : u32 {
@@ -76,7 +77,7 @@ enum TIR_OpCode : u16 {
     TOPC_SGT  = TOPC_GT  | TOPC_SIGNED,
     TOPC_SGTE = TOPC_GTE | TOPC_SIGNED,
 
-    TOPC_MOV        = 0x00 | TOPC_MODIFIES_DST_BIT,
+    TOPC_MOV        = 0x00 | TOPC_UNARY,
     TOPC_CALL,
     TOPC_GEP,
 
@@ -166,6 +167,8 @@ struct TIR_Block {
     arr<TIR_Block*> previous_blocks;
 
     TIR_Block();
+
+    void push_previous(TIR_Block *previous);
 };
 
 struct TIR_Function;

@@ -65,6 +65,10 @@ std::wostream& operator<< (std::wostream& o, TIR_Value val) {
             break;
         case TVS_GLOBAL:
             o << "@" << val.offset;
+            break;
+        case TVS_C_STRING_LITERAL:
+            o << '"' << (const char*)val.offset << '"'; // POINTERSIZE
+            break;
     }
     return o;
 }
@@ -310,11 +314,15 @@ void compile_block(TIR_Function &fn, TIR_Block *tir_block, AST_Context *ast_bloc
     }
 
     if (after) {
+        if (fn.writepoint->instructions.size > 0 && fn.writepoint->instructions.last().opcode == TOPC_RET) {
+            return;
+        }
         fn.emit({
             .opcode = TOPC_JMP,
             .jmp = { after }
         });
-        after->previous_blocks.push_unique(tir_block);
+        after->push_previous(tir_block);
+        std::wcout << after->id << " after " << tir_block->id << "\n";
     }
 }
 
@@ -336,12 +344,53 @@ TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
     }
 }
 
+
+void TIR_Block::push_previous(TIR_Block *previous) {
+    previous_blocks.push_unique(previous);
+    /*
+    std::wcout << id << " after " << previous->id << "\n";
+
+    for (TIR_Block *b : previous->previous_blocks) {
+        if (b->id == id) {
+            assert(!"AAAAAAAAA");
+        }
+    }
+    */
+}
+
 TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
     switch (node->nodetype) {
+        case AST_VAR: {
+            AST_Var *var = (AST_Var*)node;
+
+            if (var->is_constant) {
+                if (!var->is_global)
+                    NOT_IMPLEMENTED();
+                if (!dst)
+                    dst = fn.alloc_temp(((AST_Value*)node)->type);
+
+                TIR_Value src = fn.c._global_initial_values[fn.c.global_valmap[var].offset];
+
+                TIR_Value offset_0 = { .valuespace = TVS_VALUE, .offset = 0, .type = &t_u32 };
+                arr<TIR_Value> offsets = { offset_0, offset_0 };
+
+                fn.emit({ 
+                    .opcode =  TOPC_GEP, 
+                    .gep = { 
+                        .dst = dst, 
+                        .base = src, 
+                        .offsets = offsets.release(),
+                    },
+                });
+
+                return dst;
+            }
+            // FALLTHROUGH
+        }
         case AST_MEMBER_ACCESS:
-        case AST_VAR: 
         case AST_DEREFERENCE: 
         {
+
             TIR_Value src;
             if (get_location(fn, (AST_Value*)node, &src)) {
                 if (!dst)
@@ -582,8 +631,8 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                     .else_block = continuation,
                 }
             });
-            then_block->previous_blocks.push_unique(original_block);
-            continuation->previous_blocks.push_unique(original_block);
+            then_block->push_previous(original_block);
+            continuation->push_previous(original_block);
 
             fn.blocks.push(then_block);
             fn.blocks.push(continuation);
@@ -625,12 +674,12 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             // The while loop block always jups back to the condition block
             compile_block(fn, loop_block, &whiles->block, cond_block);
 
-            cond_block->previous_blocks.push_unique(original_block);
-            cond_block->previous_blocks.push_unique(loop_block);
+            cond_block->push_previous(original_block);
+            cond_block->push_previous(loop_block);
 
-            continuation->previous_blocks.push_unique(cond_block);
+            continuation->push_previous(cond_block);
 
-            loop_block->previous_blocks.push_unique(cond_block);
+            loop_block->push_previous(cond_block);
 
             fn.blocks.push(cond_block);
             fn.blocks.push(loop_block);
@@ -857,6 +906,7 @@ void TIR_Context::compile_all() {
         switch (decl.value->nodetype) {
             case AST_VAR: {
                 AST_Var* var = (AST_Var*)decl.value;
+
                 TIR_Value val = {
                     .valuespace = TVS_GLOBAL,
                     .offset = globals_count++,
@@ -880,6 +930,23 @@ void TIR_Context::compile_all() {
             }
             default: continue;
         }
+    }
+
+    for (auto &initial_node : global.global_initial_nodes) {
+        AST_Var *the_string_var = (AST_Var*)initial_node.key;
+        AST_StringLiteral *the_string_literal = (AST_StringLiteral*)initial_node.value;
+
+        assert(the_string_var IS AST_VAR);
+        assert(the_string_literal IS AST_STRING_LITERAL);
+
+        TIR_Value array_val = {
+            .valuespace = TVS_C_STRING_LITERAL,
+            .offset = (u64)the_string_literal->str, // POINTERSIZE
+            .type = &t_string_literal,
+        };
+
+        TIR_Value the_string_var_tir = global_valmap[the_string_var];
+        _global_initial_values[the_string_var_tir.offset] = array_val;
     }
 
     for (auto& stmt : global.statements) {

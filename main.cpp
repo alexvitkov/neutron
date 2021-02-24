@@ -74,7 +74,8 @@ int main(int argc, const char** argv) {
     }
     fflush(stdout);
 
-    /*
+    global.run_jobs();
+
        T2L_Context t2l_context(tir_context);
        t2l_context.compile_all();
 
@@ -98,7 +99,6 @@ int main(int argc, const char** argv) {
     link(lld, object_filename_w, output_filename_w);
     }
     }
-    */
 
     // Execute the main function
     if (exec_main) {
@@ -114,6 +114,5 @@ int main(int argc, const char** argv) {
         }
     }
 
-    global.run_jobs();
     return 0;
 }

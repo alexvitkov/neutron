@@ -1,0 +1,46 @@
+fn printf(x: i8*, ...): i32;
+
+fn fact(n: i32): i32 {
+    if n <= 1 {
+        return 1;
+    }
+    return n * fact(n - 1);
+}
+
+fn fib(n: i32): i32 {
+    i1: i32 = 0;
+    i2: i32 = 1;
+
+    if n == 0 {
+        return 0;
+    }
+
+    let i: i32 = 0;
+    while i < n {
+        let tmp: i32 = i2;
+        i2 += i1;
+        i1 = tmp;
+        i += 1;
+    }
+    return i2;
+}
+
+fn main(): i32 {
+
+    let n: i32 = 0;
+
+    while n <= 10 {
+        printf("fact(%d) = %d\n", n, fact(n));
+        n += 1;
+    }
+
+    printf("\nFibonacci sequence:\n");
+    n = 0;
+    while n <= 20 {
+        printf("%d, ", fib(n));
+        n += 1;
+    }
+    printf("\n");
+
+    return 0;
+}
