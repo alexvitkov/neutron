@@ -90,7 +90,6 @@ enum TokenType : u8 {
 	KW_F32,
 	KW_F64,
 
-
 	KW_FN,
 	KW_LET,
 	KW_STRUCT,
@@ -99,6 +98,7 @@ enum TokenType : u8 {
 	KW_FALSE,
     KW_IF,
     KW_WHILE,
+    KW_FOR,
     KW_TYPEOF,
 
 	TOK_ERROR,

@@ -582,6 +582,7 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
 
                 break;
             }
+
             default: {
                 if (delim == r.peek().type) {
                     r.pop();

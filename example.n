@@ -1,4 +1,11 @@
+// extern declarations to some libc functions
 fn printf(x: i8*, ...): i32;
+fn malloc(length: i32): i8*;
+fn free(ptr: i8*);
+
+// calculated @ compile time
+// fact hasn't yet been declared
+let const_fact_10: i32 = fact(10);
 
 fn fact(n: i32): i32 {
     if n <= 1 {
@@ -15,12 +22,28 @@ fn fib(n: i32): i32 {
     i2: i32 = 1;
 
     while n > 0 {
-        let tmp: i32 = i2;
+        tmp: i32 = i2;
         i2 += i1;
         i1 = tmp;
         n -= 1;
     }
     return i2;
+}
+
+fn fib_slow(n: i32): i32 {
+    if n == 0 { return 0; }
+    if n == 1 { return 1; }
+    return fib_slow(n - 1) + fib_slow(n - 2);
+}
+
+
+
+struct VeryCool {
+    x: i32,
+    y: i32
+}
+fn add(f: VeryCool): i32 {
+    return f.x + f.y;
 }
 
 
@@ -32,13 +55,35 @@ fn main(): i32 {
     }
     printf("\n");
 
-    printf("Fibonacci sequence:\n");
+    printf("fact(10), calculated at compile time: %d\n\n", const_fact_10);
+
+    printf("Fibonacci:\n");
     n = 0;
     while n <= 20 {
         printf("%d, ", fib(n));
         n += 1;
     }
-    printf("\n");
+    printf("\n\n");
+
+    printf("Calculated fib(42) very slowly: %d\n\n", fib_slow(42));
+
+
+    vc: VeryCool;
+    vc.x = 10;
+    vc.y = 5;
+    printf("10 + 5 = %d\n\n", add(vc));
+
+
+    // construct the string "ABC\n" manually
+    abc: i8* = malloc(6);
+    abc[0] = 65;     // A
+    abc[1] = 66;     // B
+    abc[2] = 67;     // C
+    abc[3] = 10;     // \n
+    (abc + 4)* = 10; // \n
+    (abc + 5)* = 0;  // \n
+    printf(abc);
+    free(abc);
 
     return 0;
 }
