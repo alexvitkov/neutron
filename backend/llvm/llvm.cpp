@@ -140,6 +140,8 @@ llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value tir_val, bool a
 
     if (this->tir_block->previous_blocks.size == 1) {
         return fn->block_translation[this->tir_block->previous_blocks[0]]->get_value(tir_val);
+    } else if (this->tir_block->previous_blocks.size == 0 && tir_val.valuespace == TVS_ARGUMENT) {
+        return fn->llvm_fn->arg_begin() + tir_val.offset;
     }
 
     llvm::Value *asdf = nullptr;
@@ -188,7 +190,9 @@ llvm::Value* T2L_BlockContext::get_value(TIR_Value tir_val) {
 
     switch (tir_val.valuespace) {
         case TVS_RET_VALUE:
-        case TVS_TEMP: {
+        case TVS_ARGUMENT:
+        case TVS_TEMP: 
+        {
 
             llvm::Value **intermediate = modified_values.find2(tir_val);
             if (intermediate)
@@ -202,9 +206,6 @@ llvm::Value* T2L_BlockContext::get_value(TIR_Value tir_val) {
             return ptr_val;
         }
 
-        case TVS_ARGUMENT: {
-            return fn->llvm_fn->arg_begin() + tir_val.offset;
-        }
 
         case TVS_STACK: {
             return fn->stack_pointers[tir_val];

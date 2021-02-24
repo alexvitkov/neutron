@@ -322,7 +322,6 @@ void compile_block(TIR_Function &fn, TIR_Block *tir_block, AST_Context *ast_bloc
             .jmp = { after }
         });
         after->push_previous(tir_block);
-        std::wcout << after->id << " after " << tir_block->id << "\n";
     }
 }
 

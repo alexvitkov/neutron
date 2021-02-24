@@ -1123,8 +1123,6 @@ AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
 
     MUST (ctx.declare({ nameToken.name }, var));
 
-    MUST (r.expect(TOK(';')).type);
-
     ctx.global->definition_locations[var] = {
         .file_id = r.sf.id,
         .loc = {
@@ -1176,6 +1174,7 @@ bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error) {
                 *error = true;
                 return false;
             }
+            MUST (r.expect(TOK(';')).type);
             return true;
         }
         case KW_STRUCT: {
