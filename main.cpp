@@ -45,7 +45,7 @@ int main(int argc, const char** argv) {
     }
 
     // Print the source code
-    if (debug_output) {
+    if (print_ast) {
         wcout << red << "--------- AST ---------\n" << resetstyle;
         for (const auto& decl : global.declarations) {
             print(wcout, decl.value, true);

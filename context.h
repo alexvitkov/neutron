@@ -10,8 +10,6 @@ struct AST_UnresolvedId;
 struct AST_FnType;
 struct AST_StringLiteral;
 
-#define DEBUG_JOBS
-
 // VOLATILE If you drastically change this, you will have to change the map_hash and map_equals functions defined in context.cpp
 struct DeclarationKey {
     // This must come first, as when we sometimes initialize the DeclarationKey like this: { the_name }

@@ -13,10 +13,10 @@ void Job::add_dependency(Job* dependency) {
 
     dependencies_left++;
     dependency->dependent_jobs.push(this);
-#ifdef DEBUG_JOBS
-    wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
-    wcout.flush();
-#endif
+    if (debug_jobs) {
+        wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
+        wcout.flush();
+    }
 
 }
 
@@ -29,10 +29,10 @@ Job::Job(AST_GlobalContext &global) : global(global) {
 
 void AST_GlobalContext::send_message(Message *msg) {
     arr<Job*>& receivers = subscribers[msg->msgtype];
-#ifdef DEBUG_JOBS
-    wcout << dim << "Sending message " << resetstyle << msg->msgtype << "\n";
-    wcout.flush();
-#endif
+    if (debug_jobs) {
+        wcout << dim << "Sending message " << resetstyle << msg->msgtype << "\n";
+        wcout.flush();
+    }
 
     for (u32 i = 0; i < receivers.size; ) {
         if (receivers[i]->flags & JOB_DONE || receivers[i]->run(msg)) {
@@ -50,10 +50,10 @@ void AST_GlobalContext::add_job(Job *job) {
             assert(!"Adding the same job twice");
     }
 
-#ifdef DEBUG_JOBS
-    wcout << dim << "Adding " << resetstyle << job->get_name() << "\n";
-    wcout.flush();
-#endif
+    if (debug_jobs) {
+        wcout << dim << "Adding " << resetstyle << job->get_name() << "\n";
+        wcout.flush();
+    }
     ready_jobs.push(job);
 }
 
@@ -72,10 +72,10 @@ bool AST_GlobalContext::run_jobs() {
         }
 
         if (job->run(nullptr)) {
-#ifdef DEBUG_JOBS
-            wcout << dim << "Finished " << resetstyle << job->get_name() << "\n";
-            wcout.flush();
-#endif
+            if (debug_jobs) {
+                wcout << dim << "Finished " << resetstyle << job->get_name() << "\n";
+                wcout.flush();
+            }
             jobs_count--;
             job->flags = (JobFlags)(job->flags | JOB_DONE);
 
@@ -164,10 +164,10 @@ std::wstring JobGroup::get_name() {
 }
 
 void Job::subscribe(MessageType msgtype) {
-#ifdef DEBUG_JOBS
-    wcout << get_name() << dim << " subscribed to " << resetstyle << msgtype << "\n";
-    wcout.flush();
-#endif
+    if (debug_jobs) {
+        wcout << get_name() << dim << " subscribed to " << resetstyle << msgtype << "\n";
+        wcout.flush();
+    }
     global.subscribers[msgtype].push(this);
 }
 

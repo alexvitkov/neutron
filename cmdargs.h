@@ -36,7 +36,7 @@ extern arr<SourceFile> sources;
 extern OutputType output_type;
 extern const char* output_file;
 extern Target target;
-extern bool debug_output, exec_main;
+extern bool print_llvm, print_tir, print_ast, exec_main, debug_jobs;
 
 bool add_source(std::wstring& filename, u32* out);
 bool parse_args(int argc, const char** argv);
