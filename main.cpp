@@ -66,6 +66,8 @@ int main(int argc, const char** argv) {
         if (decl.value->nodetype == AST_FN) {
             Job *j2 = tir_context.compile_fn((AST_Fn*)decl.value, j);
             all_tir_compiled_job->add_dependency(j2);
+        } else if (decl.value->nodetype == AST_VAR) {
+            tir_context.append_global((AST_Var*)decl.value);
         }
     }
 
@@ -84,15 +86,16 @@ int main(int argc, const char** argv) {
         }
     }
 
+    tir_context.compile_all();
     global.run_jobs();
 
-    // // Print the TIR
-    // if (debug_output) {
-    //     wcout << red << "\n--------- TIR ---------\n" << resetstyle;
-    //     for (auto& kvp : tir_context.fns)
-    //         kvp.value->print();
-    //     wcout.flush();
-    // }
+    // Print the TIR
+    if (print_tir) {
+        wcout << red << "\n--------- TIR ---------\n" << resetstyle;
+        for (auto& kvp : tir_context.fns)
+            kvp.value->print();
+        wcout.flush();
+    }
 
     // if (debug_output) {
     //     wcout << red << "\n------- LLVM IR -------\n" << resetstyle;

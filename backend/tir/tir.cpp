@@ -819,24 +819,23 @@ TIR_ExecutionJob::TIR_ExecutionJob(TIR_Context *tir_context)
 
 struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
     TIR_Function *pseudo_fn;
-    TIR_Value var;
+    TIR_Value     tir_var;
+    AST_Var      *ast_var;
+
     TIR_GlobalVarInitJob(TIR_Value var, TIR_Context *tir_context);
-
-    AST_Var *varr;
-
 
     TIR_GlobalVarInitJob(TIR_Context &tir_context, AST_BinaryOp *assignment) 
         : TIR_ExecutionJob(&tir_context) 
     {
-        var = tir_context.global_valmap[assignment->lhs];
-        varr = (AST_Var*)assignment->lhs;
+        tir_var = tir_context.global_valmap[assignment->lhs];
+        ast_var = (AST_Var*)assignment->lhs;
 
         // This function calculates the initial value and returns it
         TIR_Function *pseudo_fn = new TIR_Function(tir_context, nullptr);
         TIR_Block* entry = new TIR_Block();
         pseudo_fn->retval = {
             .valuespace = TVS_RET_VALUE,
-            .type = var.type,
+            .type = tir_var.type,
         };
         pseudo_fn->writepoint = entry;
         pseudo_fn->blocks.push(entry);
@@ -847,22 +846,22 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
         arr<void*> _args;
         call(pseudo_fn, _args);
 
-        tir_context.global_initializer_running_jobs[var.offset] = this;
+        tir_context.global_initializer_running_jobs[tir_var.offset] = this;
     }
 
     std::wstring get_name() override {
         std::wostringstream stream;
-        stream << L"init<" << varr->name << ">";
+        stream << L"TIR_GlobalVarInitJob<" << ast_var->name << ">";
         return stream.str();
     }
 
     virtual void on_complete(void *value) override {
-        tir_context->_global_initial_values[var.offset]
-            = pack_into_const(value, varr->type);
+        tir_context->_global_initial_values[tir_var.offset]
+            = pack_into_const(value, ast_var->type);
 
         // TODO DS DELETE
-        tir_context->global_initializer_running_jobs[var.offset] = nullptr;
-        tir_context->storage->global_values[var.offset] = value;
+        tir_context->global_initializer_running_jobs[tir_var.offset] = nullptr;
+        tir_context->storage.global_values[tir_var.offset] = value;
 
         wcout.flush();
     }
@@ -875,58 +874,34 @@ Job *TIR_Context::compile_fn(AST_Fn *fn, Job *fn_typecheck_job) {
     TIR_FnCompileJob *compile_job = new TIR_FnCompileJob(tir_fn);
     compile_job->add_dependency(fn_typecheck_job);
     tir_fn->c.global.add_job(compile_job);
+
+    tir_fn->compile_job = compile_job;
     return compile_job;
 }
 
+
+void TIR_Context::append_global(AST_Var *var) {
+    TIR_Value val = {
+        .valuespace = TVS_GLOBAL,
+        .offset = globals_count++,
+        .type = global.get_pointer_type(var->type),
+    };
+    global_valmap[var] = val;
+}
+
 void TIR_Context::compile_all() {
-    storage = new TIR_ExecutionStorage();
-
-    // Run through the global variables and assign them TIR_Values
-    for(auto& decl : global.declarations) {
-        switch (decl.value->nodetype) {
-            case AST_VAR: {
-                AST_Var* var = (AST_Var*)decl.value;
-                TIR_Value val = {
-                    .valuespace = TVS_GLOBAL,
-                    .offset = globals_count++,
-                    .type = global.get_pointer_type(((AST_Var*)decl.value)->type),
-                };
-                global_valmap[var] = val;
-                break;
-            }
-            default: continue;
-        }
-    }
-
-    for(auto& decl : global.declarations) {
-        switch (decl.value->nodetype) {
-            case AST_FN: {
-                AST_Fn* fn = (AST_Fn*)decl.value;
-                TIR_Function* tir_fn = new TIR_Function(*this, fn);
-                tir_fn->compile_signature();
-                fns.insert(fn, tir_fn);
-                break;
-            }
-            default: continue;
-        }
-    }
-
     for (auto& stmt : global.statements) {
         switch (stmt->nodetype) {
             case AST_ASSIGNMENT: {
                 AST_BinaryOp *assignment = (AST_BinaryOp*)stmt;
-                new TIR_GlobalVarInitJob(*this, assignment);
+                Job *init = new TIR_GlobalVarInitJob(*this, assignment);
+                global.add_job(init);
                 break;
             }
             default:
                 UNREACHABLE;
         }
     }
-
-
-    //for (auto& fn : fns) {
-        //fn.value->compile();
-    //}
 }
 
 void TIR_ExecutionJob::StackFrame::set_value(TIR_Value key, void *val) {
@@ -994,7 +969,7 @@ void *TIR_ExecutionJob::StackFrame::get_value(TIR_Value key) {
 }
 
 void TIR_ExecutionJob::call(TIR_Function *fn, arr<void*> &args) {
-    StackFrame &sf = stackframes.push({
+    stackframes.push({
         .fn = fn,
         .block = nullptr,
         .next_instruction = 0,
@@ -1015,6 +990,7 @@ NextFrame:
 
     while (true) {
         StackFrame &sf = stackframes.last();
+
         if (!sf.block)
             sf.block = sf.fn->blocks[0];
 
@@ -1072,7 +1048,7 @@ NextFrame:
                     switch (instr.un.dst.valuespace) {
                         case TVS_GLOBAL:
                             NOT_IMPLEMENTED("not here");
-                            tir_context->storage->global_values[instr.un.dst.offset] 
+                            tir_context->storage.global_values[instr.un.dst.offset] 
                                 = sf.get_value(instr.un.src);
                             break;
                         default:
@@ -1086,7 +1062,7 @@ NextFrame:
                         case TVS_GLOBAL:
                             void *val;
                             // If there is already a value assigned, use that
-                            if (tir_context->storage->global_values.find(instr.un.src.offset, &val)) {
+                            if (tir_context->storage.global_values.find(instr.un.src.offset, &val)) {
                                 sf.set_value(instr.un.dst, val);
                             } else {
                                 // If there's no value assigned to the global, look for a initial value.
@@ -1123,6 +1099,12 @@ NextFrame:
                         }
 
                         call(instr.call.fn, args);
+
+                        if (instr.call.fn->blocks.size == 0) {
+                            add_dependency (instr.call.fn->compile_job);
+                            return false;
+                        }
+
                         goto NextFrame;
                     }
                 }

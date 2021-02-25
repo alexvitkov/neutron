@@ -184,12 +184,14 @@ struct TIR_Context {
 
     map<u64, TIR_Value> _global_initial_values;
 
-    map<u64, Job*>      global_initializer_running_jobs;
+    map<u64, Job*> global_initializer_running_jobs;
 
-    TIR_ExecutionStorage *storage;
+    TIR_ExecutionStorage storage;
 
     void compile_all(); // TODO DELETE
     Job *compile_fn(AST_Fn *fn, Job *fn_typecheck_job);
+
+    void append_global(AST_Var *var);
 };
 
 
@@ -200,6 +202,7 @@ struct TIR_Function {
     TIR_Value retval = { .valuespace = TVS_RET_VALUE };
     TIR_Block* writepoint;
     u64 temps_count = 0;
+    Job *compile_job;
 
     struct VarValTuple {
         AST_Var *var;
