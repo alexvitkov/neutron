@@ -27,7 +27,6 @@ AST_PrimitiveType t_any8 (PRIMITIVE_UNIQUE, 8, "any8");
 struct GetTypeJob : Job {
     AST_Context &ctx;
     AST_Value   *node;
-    AST_Type    *result;
 
     AST_Type *cache_lhs, *cache_rhs;
 
@@ -191,7 +190,6 @@ bool validate_fn_type(AST_Context& ctx, AST_Fn* fn) {
 
 bool GetTypeJob::run(Message *msg) {
     if (node->type) {
-        result = node->type;
         return true;
     }
 
@@ -200,7 +198,7 @@ bool GetTypeJob::run(Message *msg) {
         case AST_FN_TYPE:
         case AST_POINTER_TYPE:
         {
-            result = &t_type;
+            node->type = &t_type;
             return true;
         }
 
@@ -245,7 +243,7 @@ bool GetTypeJob::run(Message *msg) {
                 }
 
                 fncall->type = fntype->returntype;
-                result = fntype->returntype;
+                node->type = fntype->returntype;
                 return true;
             }
             else {
@@ -307,17 +305,17 @@ bool GetTypeJob::run(Message *msg) {
             WAIT (rhs_job, GetTypeJob);
 
             if (!is_valid_lvalue(bin->lhs)) {
-                error({ .code = ERR_NOT_AN_LVALUE, .nodes = { lhs_job.result, } });
+                error({ .code = ERR_NOT_AN_LVALUE, .nodes = { lhs_job.node->type, } });
                 return false;
             }
 
-            if (!implicit_cast(ctx, &bin->rhs, lhs_job.result)) {
+            if (!implicit_cast(ctx, &bin->rhs, lhs_job.node->type)) {
                 // TODO ERROR
                 error({});
                 return false;
             }
             
-            result = bin->type = lhs_job.result;
+            bin->type = lhs_job.node->type;
             return true;
         }
 
@@ -331,7 +329,7 @@ bool GetTypeJob::run(Message *msg) {
             WAIT (rhs_job, GetTypeJob);
 
             // Handle pointer arithmetic
-            if (lhs_job.result IS AST_POINTER_TYPE || rhs_job.result IS AST_POINTER_TYPE) {
+            if (lhs_job.node->type IS AST_POINTER_TYPE || rhs_job.node->type IS AST_POINTER_TYPE) {
                 if (bin->op != '+' && bin->op != '-') {
                     error({
                         .code = ERR_INVALID_ASSIGNMENT,
@@ -349,21 +347,21 @@ bool GetTypeJob::run(Message *msg) {
                 // Pointer  - Pointer  -- valid
                 // Integral - Pointer  -- invalid
 
-                if (lhs_job.result IS AST_POINTER_TYPE) {
+                if (lhs_job.node->type IS AST_POINTER_TYPE) {
                     // If LHS is a pointer and operator is +, RHS can only be an integral type
-                    if (bin->op == '+' && !is_integral_type(rhs_job.result))
+                    if (bin->op == '+' && !is_integral_type(rhs_job.node->type))
                         goto Error;
 
                     if (bin->op == '-') {
                         // Pointer Pointer subtraction is valid if the pointers the same type
-                        if (rhs_job.result IS AST_POINTER_TYPE) {
-                            if (lhs_job.result != rhs_job.result)
+                        if (rhs_job.node->type IS AST_POINTER_TYPE) {
+                            if (lhs_job.node->type != rhs_job.node->type)
                                 goto Error;
                             bin->op = OP_SUB_PTR_PTR;
                         }
                         // The other valid case is Pointer - Integral
                         else {
-                            if (!is_integral_type(rhs_job.result))
+                            if (!is_integral_type(rhs_job.node->type))
                                 goto Error;
                             bin->op = OP_SUB_PTR_INT;
                         }
@@ -375,7 +373,7 @@ bool GetTypeJob::run(Message *msg) {
 
                 } else {
                     // LHS is not a pointer => the only valid case is Integral + Pointer
-                    if (!is_integral_type(lhs_job.result) || bin->op != '+')
+                    if (!is_integral_type(lhs_job.node->type) || bin->op != '+')
                         goto Error;
 
                     // In order to simplify code generation
@@ -386,7 +384,7 @@ bool GetTypeJob::run(Message *msg) {
 
                 // After this is all done, the type of the binary expression
                 // is the same as the pointer type
-                bin->type = lhs_job.result IS AST_POINTER_TYPE ? lhs_job.result : rhs_job.result;
+                bin->type = lhs_job.node->type IS AST_POINTER_TYPE ? lhs_job.node->type : rhs_job.node->type;
                 return bin->type;
 
                 NOT_IMPLEMENTED("TODO ERROR");
@@ -395,11 +393,15 @@ bool GetTypeJob::run(Message *msg) {
 
             // Handle regular human arithmetic between numbers
             else {
-                if (implicit_cast(ctx, &bin->rhs, lhs_job.result))
-                    return (bin->type = lhs_job.result);
+                if (implicit_cast(ctx, &bin->rhs, lhs_job.node->type)) {
+                    bin->type = lhs_job.node->type;
+                    return true;
+                }
 
-                if (implicit_cast(ctx, &bin->lhs, rhs_job.result))
-                    return (bin->type = rhs_job.result);
+                if (implicit_cast(ctx, &bin->lhs, rhs_job.node->type)) {
+                    bin->type = rhs_job.node->type;
+                    return true;
+                }
             }
 
 Error:
@@ -416,7 +418,7 @@ Error:
             GetTypeJob type_job(ctx, ma->lhs);
             WAIT (type_job, GetTypeJob);
 
-            AST_Struct* s = (AST_Struct*)type_job.result;
+            AST_Struct* s = (AST_Struct*)type_job.node->type;
             MUST (s);
 
             if (s->nodetype != AST_STRUCT) {
@@ -444,7 +446,7 @@ Error:
             GetTypeJob inner_type_job(ctx, deref->ptr);
             WAIT (inner_type_job, GetTypeJob);
 
-            if (inner_type_job.result->nodetype != AST_POINTER_TYPE) {
+            if (inner_type_job.node->type->nodetype != AST_POINTER_TYPE) {
                 error({
                     .code = ERR_INVALID_DEREFERENCE,
                     .nodes = { deref },
@@ -452,7 +454,7 @@ Error:
                 return false;
             }
 
-            result = deref->type = ((AST_PointerType*)inner_type_job.result)->pointed_type;
+            node->type = deref->type = ((AST_PointerType*)inner_type_job.node->type)->pointed_type;
             return true;
         }
 
@@ -462,13 +464,13 @@ Error:
             GetTypeJob inner_type_job(ctx, addrof->inner);
             WAIT (inner_type_job, GetTypeJob);
 
-            addrof->type = ctx.get_pointer_type(inner_type_job.result);
+            addrof->type = ctx.get_pointer_type(inner_type_job.node->type);
 
             if (addrof->inner IS AST_VAR) {
                 ((AST_Var*)addrof->inner)->always_on_stack = true;
             }
 
-            result = addrof->type;
+            node->type = addrof->type;
             return true;
         }
 
