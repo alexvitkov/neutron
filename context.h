@@ -10,6 +10,7 @@ struct AST_UnresolvedId;
 struct AST_FnType;
 struct AST_StringLiteral;
 
+#define DEBUG_JOBS
 
 // VOLATILE If you drastically change this, you will have to change the map_hash and map_equals functions defined in context.cpp
 struct DeclarationKey {
@@ -181,19 +182,24 @@ struct Job {
     virtual bool _run(Message *msg) = 0;
     virtual std::wstring get_name();
 
-    // Jobs can often be completed on the first run so always allocating them on the heap doesn't make sense.
-    // you can declare a job on the stack and run it with this method, passing its type.
-    // If the job can't be completed immediately it will be moved to the heap and added to the job queue, 
-    // and the job on the heap will be returned so you can wait on it
+    // Jobs can often be completed immediately
+    // so allocating them on the heap often doesn't make sense.
+    //
+    // job on the stack can be run with this method, you need to pass it its type
+    // If it can't be completed immediately it will be moved to the heap and
+    // added to the job queue. in that case, the pointer on the heap is returned
+    // so you can wait on it
     template <typename JobT>
     JobT *run_stackjob() {
        if (_run(nullptr))
            return nullptr;
 
        global->jobs_count++;
-       global->ready_jobs.push(new JobT(std::move(*(JobT*)this)));
 
-       return nullptr;
+       JobT *heap_job = new JobT(std::move(*(JobT*)this));
+       global->ready_jobs.push(heap_job);
+
+       return heap_job;
     }
 
 
@@ -246,13 +252,16 @@ Location location_of(AST_Context& ctx, AST_Node** node);
 bool parse_all(AST_Context& global);
 bool parse_source_file(AST_Context& global, SourceFile& sf);
 
-#define WAIT(job, jobtype) \
-    { \
+#define WAIT(job, jobtype)                           \
+    {                                                \
         Job *heap_job = job.run_stackjob<jobtype>(); \
-        if (heap_job) { \
-            add_dependency(heap_job); \
-            return false; \
-        } \
+        if (heap_job) {                              \
+            add_dependency(heap_job);                \
+            return false;                            \
+        } else if (job.flags & JOB_ERROR) {          \
+            flags = (JobFlags)(flags | JOB_ERROR);   \
+            return false;                            \
+        }                                            \
     }
 
 #endif // guard

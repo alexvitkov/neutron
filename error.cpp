@@ -44,7 +44,14 @@ struct ERR_OfType {
 };
 
 std::wostream& operator<< (std::wostream& o, ERR_OfType rhs) {
-    o << red << rhs.val << resetstyle << " (of type " << rhs.val->type << ')';
+
+    o << red << rhs.val << resetstyle << " (of type ";
+    if (rhs.val->type) {
+        o << rhs.val->type;
+    } else {
+        o << "NULL";
+    }
+    o << ")";
     return o; 
 }
 
@@ -238,10 +245,8 @@ void print_err(AST_Context &global, Error& err) {
         }
 
         case ERR_NOT_DEFINED: {
-            wcout << red;
-            print(wcout, err.nodes[0], false);
-            wcout << resetstyle << " is not defined.\n";
-            print_code_segment(global, nullptr, &err.nodes, nullptr);
+            wcout << red << *err.node_ptrs[0] << resetstyle << " is not defined.\n";
+            print_code_segment(global, nullptr, nullptr, &err.node_ptrs);
             break;
         }
 

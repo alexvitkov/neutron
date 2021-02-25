@@ -677,6 +677,12 @@ bool TypeCheckJob::_run(Message *msg) {
             return true;
         }
 
+        case AST_UNRESOLVED_ID: {
+            AST_UnresolvedId *id = (AST_UnresolvedId*)node;
+            add_dependency(id->job);
+            return false;
+        }
+
         default: {
             if (node->nodetype & AST_VALUE_BIT) {
                 GetTypeJob gettype(ctx, (AST_Value*)node);

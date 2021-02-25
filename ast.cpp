@@ -96,6 +96,8 @@ std::wostream& operator<< (std::wostream& o, AST_Context* bl) {
 }
 
 void print(std::wostream& o, AST_Node* node, bool decl) {
+    assert(node && "Attempting to print a null node");
+
     switch (node->nodetype) {
         case AST_FN:             print(o, (AST_Fn*)node, decl); break;
         case AST_BINARY_OP:      print(o, (AST_BinaryOp*)node, false); break;

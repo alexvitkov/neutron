@@ -53,13 +53,13 @@ int main(int argc, const char** argv) {
         }
     }
 
-    JobGroup *typecheck_all_job = new JobGroup(&global, L"typecheck_all");
-    global.add_job(typecheck_all_job);
+    //JobGroup *typecheck_all_job = new JobGroup(&global, L"typecheck_all");
+    //global.add_job(typecheck_all_job);
 
     for (auto &decl : global.declarations) {
         TypeCheckJob *j = new TypeCheckJob(global, decl.value);
         global.add_job(j);
-        typecheck_all_job->add_dependency(j);
+        //typecheck_all_job->add_dependency(j);
     }
 
     global.run_jobs();

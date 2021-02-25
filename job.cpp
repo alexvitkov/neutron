@@ -4,9 +4,19 @@
 #include <iostream>
 
 void Job::add_dependency(Job* dependency) {
+    assert(!(dependency->flags & JOB_DONE));
+
+    if (dependency->flags & JOB_ERROR) {
+        flags = (JobFlags)(flags | JOB_ERROR);
+        return;
+    }
+
     dependencies_left++;
     dependency->dependent_jobs.push(this);
+#ifdef DEBUG_JOBS
     wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
+#endif
+
 }
 
 std::wstring Job::get_name() {
@@ -35,7 +45,9 @@ void AST_GlobalContext::add_job(Job *job) {
             assert(!"Adding the same job twice");
     }
 
+#ifdef DEBUG_JOBS
     wcout << dim << "Adding " << resetstyle << job->get_name() << "\n";
+#endif
     ready_jobs.push(job);
 }
 
@@ -46,7 +58,6 @@ bool AST_GlobalContext::run_jobs() {
         if (job->dependencies_left != 0 || (job->flags & JOB_DONE))
             continue;
 
-
         if (job->flags & JOB_ERROR) {
             for (Job * j : job->dependent_jobs) {
                 j->flags = (JobFlags)(j->flags | JOB_ERROR);
@@ -55,7 +66,9 @@ bool AST_GlobalContext::run_jobs() {
         }
 
         if (job->_run(nullptr)) {
+#ifdef DEBUG_JOBS
             wcout << dim << "Finished " << resetstyle << job->get_name() << "\n";
+#endif
             jobs_count--;
             job->flags = (JobFlags)(job->flags | JOB_DONE);
 
@@ -105,7 +118,11 @@ bool ResolveJob::_run(Message *msg) {
             if (sc->scope == context) {
                 context = context->parent;
                 if (!context) {
-                    NOT_IMPLEMENTED("TODO ERROR UNDEFINED IDENTIFIER");
+                    error({
+                        .code = ERR_NOT_DEFINED,
+                        .node_ptrs = { (AST_Node**)id }
+                    });
+                    return false;
                 } else {
                     return _run(nullptr);
                 }
@@ -145,7 +162,7 @@ void Job::subscribe(MessageType msgtype) {
 
 std::wstring ResolveJob::get_name() {
     std::wostringstream stream;
-    stream << "resolve_job<" << (*id)->name << L">";
+    stream << "ResolveJob<" << (*id)->name << L">";
     return stream.str();
 }
 
