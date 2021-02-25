@@ -179,7 +179,7 @@ struct AST_GlobalContext : AST_Context {
 
 struct Job {
     // returns true if the job is finished after the run call returns
-    virtual bool _run(Message *msg) = 0;
+    virtual bool run(Message *msg) = 0;
     virtual std::wstring get_name();
 
     // Jobs can often be completed immediately
@@ -191,7 +191,7 @@ struct Job {
     // so you can wait on it
     template <typename JobT>
     JobT *run_stackjob() {
-       if (_run(nullptr))
+       if (run(nullptr))
            return nullptr;
 
        global.jobs_count++;
@@ -235,7 +235,7 @@ struct ResolveJob : Job {
     AST_Context       *context;
 
     ResolveJob(AST_Context &ctx, AST_UnresolvedId **id);
-    bool _run(Message *msg) override;
+    bool run(Message *msg) override;
     std::wstring get_name() override;
 };
 
@@ -243,7 +243,7 @@ struct ResolveJob : Job {
 struct JobGroup : Job {
     std::wstring name;
 
-    bool _run(Message *msg) override;
+    bool run(Message *msg) override;
     JobGroup(AST_GlobalContext &ctx, std::wstring name);
     std::wstring get_name() override;
 };

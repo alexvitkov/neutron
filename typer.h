@@ -29,7 +29,7 @@ struct TypeCheckJob : Job {
     TypeCheckJob(AST_Context& ctx, AST_Node* node);
 
     std::wstring get_name() override;
-    bool _run(Message *msg) override;
+    bool run(Message *msg) override;
 };
 
 #endif // guard

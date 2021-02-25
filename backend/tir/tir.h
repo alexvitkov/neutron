@@ -183,12 +183,13 @@ struct TIR_Context {
     map<AST_Value*, TIR_Value> global_valmap;
 
     map<u64, TIR_Value> _global_initial_values;
-    map<u64, Job*> _global_running_jobs;
+
+    map<u64, Job*>      global_initializer_running_jobs;
 
     TIR_ExecutionStorage *storage;
 
     void compile_all(); // TODO DELETE
-    void compile_fn(AST_Fn *fn, Job *fn_typecheck_job);
+    Job *compile_fn(AST_Fn *fn, Job *fn_typecheck_job);
 };
 
 
@@ -228,11 +229,12 @@ struct TIR_Function {
 
 struct TIR_ExecutionJob : Job {
     struct StackFrame {
-        TIR_Block *block;
-        void      *retval;
-        u32        next_instruction;
-        u8        *stack;
-        arr<void*> args, tmp;
+        TIR_Function *fn;
+        TIR_Block    *block;
+        void         *retval;
+        u32           next_instruction;
+        u8           *stack;
+        arr<void*>    args, tmp;
 
         void  set_value(TIR_Value key, void *val);
         void *get_value(TIR_Value key); // TODO POINTERSIZE
@@ -247,7 +249,7 @@ struct TIR_ExecutionJob : Job {
     arr<StackFrame> stackframes;
     void call(TIR_Function *tir_fn, arr<void*> &args);
 
-    virtual bool _run(Message *message) override;
+    virtual bool run(Message *message) override;
     virtual void on_complete(void *value) = 0;
 };
 

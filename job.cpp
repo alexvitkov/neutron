@@ -15,6 +15,7 @@ void Job::add_dependency(Job* dependency) {
     dependency->dependent_jobs.push(this);
 #ifdef DEBUG_JOBS
     wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
+    wcout.flush();
 #endif
 
 }
@@ -30,10 +31,11 @@ void AST_GlobalContext::send_message(Message *msg) {
     arr<Job*>& receivers = subscribers[msg->msgtype];
 #ifdef DEBUG_JOBS
     wcout << dim << "Sending message " << resetstyle << msg->msgtype << "\n";
+    wcout.flush();
 #endif
 
     for (u32 i = 0; i < receivers.size; ) {
-        if (receivers[i]->flags & JOB_DONE || receivers[i]->_run(msg)) {
+        if (receivers[i]->flags & JOB_DONE || receivers[i]->run(msg)) {
             receivers[i]->flags = (JobFlags)(receivers[i]->flags | JOB_DONE);
             receivers.delete_unordered(i);
         } else {
@@ -50,6 +52,7 @@ void AST_GlobalContext::add_job(Job *job) {
 
 #ifdef DEBUG_JOBS
     wcout << dim << "Adding " << resetstyle << job->get_name() << "\n";
+    wcout.flush();
 #endif
     ready_jobs.push(job);
 }
@@ -68,9 +71,10 @@ bool AST_GlobalContext::run_jobs() {
             continue;
         }
 
-        if (job->_run(nullptr)) {
+        if (job->run(nullptr)) {
 #ifdef DEBUG_JOBS
             wcout << dim << "Finished " << resetstyle << job->get_name() << "\n";
+            wcout.flush();
 #endif
             jobs_count--;
             job->flags = (JobFlags)(job->flags | JOB_DONE);
@@ -94,7 +98,7 @@ ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id)
     this->dependencies_left ++;
 }
 
-bool ResolveJob::_run(Message *msg) {
+bool ResolveJob::run(Message *msg) {
     if (!msg) {
         AST_Node *decl;
         MUST (context->declarations.find({ .name = (*id)->name }, &decl));
@@ -127,7 +131,7 @@ bool ResolveJob::_run(Message *msg) {
                     });
                     return false;
                 } else {
-                    return _run(nullptr);
+                    return run(nullptr);
                 }
             }
             return false;
@@ -152,7 +156,7 @@ void Job::error(Error err) {
 JobGroup::JobGroup(AST_GlobalContext &ctx, std::wstring name) 
     : Job(ctx), name(name) { }
 
-bool JobGroup::_run(Message *msg) {
+bool JobGroup::run(Message *msg) {
     return !msg;
 }
 std::wstring JobGroup::get_name() {
@@ -162,6 +166,7 @@ std::wstring JobGroup::get_name() {
 void Job::subscribe(MessageType msgtype) {
 #ifdef DEBUG_JOBS
     wcout << get_name() << dim << " subscribed to " << resetstyle << msgtype << "\n";
+    wcout.flush();
 #endif
     global.subscribers[msgtype].push(this);
 }

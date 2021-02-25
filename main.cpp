@@ -23,7 +23,7 @@ struct MainExecJob : TIR_ExecutionJob {
         wcout << "main returned " << (i64)value << "\n";
     }
 
-    std::wstring get_name() override { return L"main_exec"; };
+    std::wstring get_name() override { return L"MainExecJob"; };
 
     MainExecJob(TIR_Context *tir_context) : TIR_ExecutionJob(tir_context) {}
 };
@@ -53,19 +53,38 @@ int main(int argc, const char** argv) {
         }
     }
 
-    //JobGroup *typecheck_all_job = new JobGroup(&global, L"typecheck_all");
-    //global.add_job(typecheck_all_job);
+    JobGroup *all_tir_compiled_job = new JobGroup(global, L"all_tir_compiled");
+    global.add_job(all_tir_compiled_job);
+    
+    TIR_Context tir_context { .global = global };
 
     for (auto &decl : global.declarations) {
         TypeCheckJob *j = new TypeCheckJob(global, decl.value);
         global.add_job(j);
         //typecheck_all_job->add_dependency(j);
+
+        if (decl.value->nodetype == AST_FN) {
+            Job *j2 = tir_context.compile_fn((AST_Fn*)decl.value, j);
+            all_tir_compiled_job->add_dependency(j2);
+        }
+    }
+
+    // Execute the main function
+    if (exec_main) {
+        MainExecJob *main_exec_job = new MainExecJob(&tir_context);
+        main_exec_job->add_dependency(all_tir_compiled_job);
+        global.add_job(main_exec_job);
+
+        for (auto& kvp : tir_context.fns) {
+            if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
+                arr<void*> _args;
+                main_exec_job->call(kvp.value, _args);
+                break;
+            }
+        }
     }
 
     global.run_jobs();
-
-    // TIR_Context tir_context { .global = global };
-    // tir_context.compile_all();
 
     // // Print the TIR
     // if (debug_output) {
@@ -107,18 +126,6 @@ int main(int argc, const char** argv) {
     // }
     // */
 
-    // // Execute the main function
-    // if (exec_main) {
-    //     MainExecJob *tir_exec_job = new MainExecJob(&tir_context);
-
-    //     for (auto& kvp : tir_context.fns) {
-    //         if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
-    //             arr<void*> _args;
-    //             tir_exec_job->call(kvp.value, _args);
-    //             break;
-    //         }
-    //     }
-    // }
 
     return 0;
 }

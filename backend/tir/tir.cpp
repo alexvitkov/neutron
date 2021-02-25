@@ -321,7 +321,9 @@ void compile_block(TIR_Function &fn, TIR_Block *tir_block, AST_Context *ast_bloc
 struct TIR_FnCompileJob : Job {
     TIR_Function *tir_fn;
 
-    bool _run(Message *msg) override {
+    bool run(Message *msg) override {
+        tir_fn->compile_signature();
+
         AST_Type* rettype = ((AST_FnType*)tir_fn->ast_fn->type)->returntype;
         if (rettype) 
             tir_fn->retval.type = rettype;
@@ -845,7 +847,7 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
         arr<void*> _args;
         call(pseudo_fn, _args);
 
-        tir_context._global_running_jobs[var.offset] = this;
+        tir_context.global_initializer_running_jobs[var.offset] = this;
     }
 
     std::wstring get_name() override {
@@ -859,21 +861,21 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
             = pack_into_const(value, varr->type);
 
         // TODO DS DELETE
-        tir_context->_global_running_jobs[var.offset] = nullptr;
+        tir_context->global_initializer_running_jobs[var.offset] = nullptr;
         tir_context->storage->global_values[var.offset] = value;
 
         wcout.flush();
     }
 };
 
-void TIR_Context::compile_fn(AST_Fn *fn, Job *fn_typecheck_job) {
+Job *TIR_Context::compile_fn(AST_Fn *fn, Job *fn_typecheck_job) {
     TIR_Function* tir_fn = new TIR_Function(*this, fn);
-    tir_fn->compile_signature();
     fns.insert(fn, tir_fn);
 
     TIR_FnCompileJob *compile_job = new TIR_FnCompileJob(tir_fn);
-    tir_fn->c.global.add_job((compile_job));
     compile_job->add_dependency(fn_typecheck_job);
+    tir_fn->c.global.add_job(compile_job);
+    return compile_job;
 }
 
 void TIR_Context::compile_all() {
@@ -992,18 +994,17 @@ void *TIR_ExecutionJob::StackFrame::get_value(TIR_Value key) {
 }
 
 void TIR_ExecutionJob::call(TIR_Function *fn, arr<void*> &args) {
-    assert(fn->blocks.size);
-
     StackFrame &sf = stackframes.push({
-            .block = fn->blocks[0],
-            .next_instruction = 0,
-            .stack = (u8*)malloc(fn->stack_size),
-            .args = args,
-            .tmp = arr<void*>(fn->temps_count),
-            });
+        .fn = fn,
+        .block = nullptr,
+        .next_instruction = 0,
+        .stack = (u8*)malloc(fn->stack_size),
+        .args = args,
+        .tmp = arr<void*>(fn->temps_count),
+    });
 }
 
-bool TIR_ExecutionJob::_run(Message *message) {
+bool TIR_ExecutionJob::run(Message *message) {
     assert(!message);
 
 NextFrame:
@@ -1014,6 +1015,8 @@ NextFrame:
 
     while (true) {
         StackFrame &sf = stackframes.last();
+        if (!sf.block)
+            sf.block = sf.fn->blocks[0];
 
         TIR_Instruction &instr = sf.block->instructions[sf.next_instruction];
 
@@ -1090,7 +1093,7 @@ NextFrame:
                                 // The initial value is assigned via a job that may not be completed, 
                                 // so if the job isn't done we have to wait on it
                                 Job *job;
-                                if (tir_context->_global_running_jobs.find(instr.un.src.offset, &job)) {
+                                if (tir_context->global_initializer_running_jobs.find(instr.un.src.offset, &job)) {
                                     // TODO DS DELETE
                                     assert(job);
                                     this->add_dependency(job);

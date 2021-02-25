@@ -34,7 +34,7 @@ struct GetTypeJob : Job {
     GetTypeJob(AST_Context &ctx, AST_Value *node) 
         : ctx(ctx), node(node), Job(ctx.global) { }
 
-    bool _run(Message *msg) override;
+    bool run(Message *msg) override;
 };
 
 TypeCheckJob::TypeCheckJob(AST_Context& ctx, AST_Node* node) 
@@ -189,7 +189,7 @@ bool validate_fn_type(AST_Context& ctx, AST_Fn* fn) {
 }
 
 
-bool GetTypeJob::_run(Message *msg) {
+bool GetTypeJob::run(Message *msg) {
     if (node->type) {
         result = node->type;
         return true;
@@ -530,7 +530,7 @@ bool validate_type(AST_Context& ctx, AST_Type** type) {
     return true;
 };
 
-bool TypeCheckJob::_run(Message *msg) {
+bool TypeCheckJob::run(Message *msg) {
     switch (node->nodetype) {
         case AST_BLOCK: {
             AST_Context* block = (AST_Context*)node;
