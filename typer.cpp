@@ -236,6 +236,7 @@ bool GetTypeJob::run(Message *msg) {
                             .nodes = {
                                 param_type,
                                 fncall->args[i],
+                                node,
                             }
                         });
                         return false;
