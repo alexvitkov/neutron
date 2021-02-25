@@ -5,7 +5,7 @@
 AST_Context::AST_Context(AST_Context* parent)
     : AST_Node(AST_BLOCK),
       parent(parent), 
-      global(parent ? parent->global : (AST_GlobalContext*)this), 
+      global(parent ? parent->global : *(AST_GlobalContext*)this), 
       fn(parent ? parent->fn : nullptr) 
 { 
     if (parent)
@@ -55,14 +55,14 @@ bool AST_Context::declare(DeclarationKey key, AST_Node* value, bool sendmsg) {
         msg.name = key.name;
         msg.node = value;
 
-        global->send_message(&msg);
+        global.send_message(&msg);
     }
 
     return true;
 }
 
 void AST_Context::error(Error err) {
-    global->errors.push(err);
+    global.errors.push(err);
 }
 
 struct TypeSizeTuple {
@@ -98,9 +98,9 @@ u32 map_hash(AST_FnType* fn_type) {
 // TODO RESOLUTION we should check if it's a AST_UnresolvedId
 AST_PointerType* AST_Context::get_pointer_type(AST_Type* pointed_type) {
     AST_PointerType* pt;
-    if (!global->pointer_types.find(pointed_type, &pt)) {
-        pt = alloc<AST_PointerType>(pointed_type, global->target.pointer_size);
-        global->pointer_types.insert(pointed_type, pt);
+    if (!global.pointer_types.find(pointed_type, &pt)) {
+        pt = alloc<AST_PointerType>(pointed_type, global.target.pointer_size);
+        global.pointer_types.insert(pointed_type, pt);
     }
     return pt;
 }
@@ -117,12 +117,12 @@ AST_ArrayType* AST_Context::get_array_type(AST_Type* base_type, u64 size) {
 
 AST_FnType* AST_Context::make_function_type_unique(AST_FnType* temp_type) {
     AST_FnType* result;
-    if (global->fn_types_hash.find(temp_type, &result)) {
+    if (global.fn_types_hash.find(temp_type, &result)) {
         return result;
     }
     else {
         AST_FnType* newtype = alloc<AST_FnType>(std::move(*temp_type));
-        global->fn_types_hash.insert(newtype, newtype);
+        global.fn_types_hash.insert(newtype, newtype);
         return newtype;
     }
 }

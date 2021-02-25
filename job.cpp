@@ -23,7 +23,7 @@ std::wstring Job::get_name() {
     return L"generic_job";
 }
 
-Job::Job(AST_GlobalContext *global) : global(global) {
+Job::Job(AST_GlobalContext &global) : global(global) {
 }
 
 void AST_GlobalContext::send_message(Message *msg) {
@@ -86,8 +86,8 @@ bool AST_GlobalContext::run_jobs() {
     return jobs_count == 0;
 }
 
-ResolveJob::ResolveJob(AST_UnresolvedId **id, AST_Context *ctx) 
-    : Job(ctx->global), id(id), context(ctx) 
+ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id) 
+    : Job(ctx.global), id(id), context(&ctx) 
 {
     // TODO JOB - we add a fake dependency to make sure the job doesnt get called
     // we're actually waiting for a message
@@ -140,8 +140,8 @@ bool ResolveJob::_run(Message *msg) {
 
 void Job::error(Error err) {
     wcout << "Error from job " << get_name() << ":\n";
-    global->error(err);
-    print_err(*global, err);
+    global.error(err);
+    print_err(global, err);
 
     flags = (JobFlags)(flags | JOB_ERROR);
     for (Job *job : dependent_jobs) {
@@ -149,7 +149,7 @@ void Job::error(Error err) {
     }
 }
 
-JobGroup::JobGroup(AST_GlobalContext *ctx, std::wstring name) 
+JobGroup::JobGroup(AST_GlobalContext &ctx, std::wstring name) 
     : Job(ctx), name(name) { }
 
 bool JobGroup::_run(Message *msg) {
@@ -163,7 +163,7 @@ void Job::subscribe(MessageType msgtype) {
 #ifdef DEBUG_JOBS
     wcout << get_name() << dim << " subscribed to " << resetstyle << msgtype << "\n";
 #endif
-    global->subscribers[msgtype].push(this);
+    global.subscribers[msgtype].push(this);
 }
 
 std::wstring ResolveJob::get_name() {

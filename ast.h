@@ -48,7 +48,7 @@ struct AST_UnresolvedId : AST_Value {
     inline AST_UnresolvedId(const char* typeName, AST_Context& ctx) 
         : AST_Value(AST_UNRESOLVED_ID, nullptr), name(typeName), ctx(ctx) 
     {
-        ctx.global->unresolved.push(this);
+        ctx.global.unresolved.push(this);
     }
 };
 

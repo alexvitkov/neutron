@@ -174,6 +174,7 @@ struct TIR_ExecutionStorage {
     map<u64, void*> global_values;
 };
 
+
 struct TIR_Context {
     AST_GlobalContext &global;
     map<AST_Fn*, TIR_Function*> fns;
@@ -186,7 +187,8 @@ struct TIR_Context {
 
     TIR_ExecutionStorage *storage;
 
-    void compile_all();
+    void compile_all(); // TODO DELETE
+    void compile_fn(AST_Fn *fn, Job *fn_typecheck_job);
 };
 
 

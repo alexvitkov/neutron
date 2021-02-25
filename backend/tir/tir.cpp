@@ -3,8 +3,7 @@
 #include <iostream>
 #include <sstream>
 
-TIR_Value::operator bool() { return valuespace;
-}
+TIR_Value::operator bool() { return valuespace; }
 bool operator== (TIR_Value& lhs, TIR_Value& rhs) {
     return lhs.valuespace == rhs.valuespace && lhs.offset == rhs.offset;
 }
@@ -13,6 +12,7 @@ bool operator!= (TIR_Value& lhs, TIR_Value& rhs) {
 }
 u32 map_hash(TIR_Value data)                  { return data.valuespace ^ data.offset; }
 bool map_equals(TIR_Value lhs, TIR_Value rhs) { return lhs == rhs; }
+
 
 
 void TIR_Function::emit(TIR_Instruction inst) {
@@ -317,6 +317,31 @@ void compile_block(TIR_Function &fn, TIR_Block *tir_block, AST_Context *ast_bloc
         after->previous_blocks.push_unique(tir_block);
     }
 }
+
+struct TIR_FnCompileJob : Job {
+    TIR_Function *tir_fn;
+
+    bool _run(Message *msg) override {
+        AST_Type* rettype = ((AST_FnType*)tir_fn->ast_fn->type)->returntype;
+        if (rettype) 
+            tir_fn->retval.type = rettype;
+
+        if (!tir_fn->ast_fn->is_extern) {
+            TIR_Block* entry = new TIR_Block();
+            tir_fn->blocks.push(entry);
+            compile_block(*tir_fn, entry, &tir_fn->ast_fn->block, nullptr);
+        }
+        return true;
+    }
+
+    std::wstring get_name() override {
+        std::wostringstream s;
+        s << L"TIR_FnCompileJob<" << tir_fn->ast_fn->name << L">";
+        return s.str();
+    }
+
+    TIR_FnCompileJob(TIR_Function *tir_fn) : tir_fn(tir_fn), Job(tir_fn->c.global) {}
+};
 
 TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
     switch (arr->nodetype) {
@@ -746,7 +771,7 @@ void TIR_Function::compile_signature() {
                 .type = arg_type,
             };
 
-            // TODO DS
+            // TODO DS - RESERVE
             while (parameters.size <= vardecl->argindex)
                 parameters.push({});
             parameters[vardecl->argindex] = val;
@@ -754,17 +779,6 @@ void TIR_Function::compile_signature() {
     }
 }
 
-void TIR_Function::compile() {
-    AST_Type* rettype = ((AST_FnType*)ast_fn->type)->returntype;
-    if (rettype) 
-        retval.type = rettype;
-
-    if (!ast_fn->is_extern) {
-        TIR_Block* entry = new TIR_Block();
-        blocks.push(entry);
-        compile_block(*this, entry, &ast_fn->block, nullptr);
-    }
-}
 
 TIR_Value pack_into_const(void *val, AST_Type *type) {
     switch (type->nodetype) {
@@ -797,7 +811,7 @@ TIR_Value pack_into_const(void *val, AST_Type *type) {
 
 
 TIR_ExecutionJob::TIR_ExecutionJob(TIR_Context *tir_context) 
-    : Job(&tir_context->global),
+    : Job(tir_context->global),
       tir_context(tir_context) {}
 
 
@@ -852,6 +866,16 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
     }
 };
 
+void TIR_Context::compile_fn(AST_Fn *fn, Job *fn_typecheck_job) {
+    TIR_Function* tir_fn = new TIR_Function(*this, fn);
+    tir_fn->compile_signature();
+    fns.insert(fn, tir_fn);
+
+    TIR_FnCompileJob *compile_job = new TIR_FnCompileJob(tir_fn);
+    tir_fn->c.global.add_job((compile_job));
+    compile_job->add_dependency(fn_typecheck_job);
+}
+
 void TIR_Context::compile_all() {
     storage = new TIR_ExecutionStorage();
 
@@ -898,9 +922,9 @@ void TIR_Context::compile_all() {
     }
 
 
-    for (auto& fn : fns) {
-        fn.value->compile();
-    }
+    //for (auto& fn : fns) {
+        //fn.value->compile();
+    //}
 }
 
 void TIR_ExecutionJob::StackFrame::set_value(TIR_Value key, void *val) {

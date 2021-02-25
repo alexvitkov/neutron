@@ -166,9 +166,9 @@ u8 prec[148] = {
 
 Location location_of(AST_Context& ctx, AST_Node** node) {
     Location loc;
-    if (ctx.global->reference_locations.find(node, &loc)) {
+    if (ctx.global.reference_locations.find(node, &loc)) {
         return loc;
-    } else if (ctx.global->definition_locations.find(*node, &loc)) {
+    } else if (ctx.global.definition_locations.find(*node, &loc)) {
         return loc;
     } 
     DIE("The AST_Node doesn't have a location");
@@ -531,7 +531,7 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
                 }
                 block.statements.push(ret);
 
-                r.ctx.global->definition_locations[ret] = {
+                r.ctx.global.definition_locations[ret] = {
                     .file_id = r.sf.id,
                     .loc = {
                         .start = return_tok.loc.start,
@@ -550,7 +550,7 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
                 MUST (parse_block(ifs->then_block, r));
                 block.statements.push(ifs);
 
-                r.ctx.global->definition_locations[ifs] = {
+                r.ctx.global.definition_locations[ifs] = {
                     .file_id = r.sf.id,
                     .loc = {
                         .start = if_tok.loc.start,
@@ -568,7 +568,7 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
                 MUST (parse_block(whiles->block, r));
                 block.statements.push(whiles);
 
-                r.ctx.global->definition_locations[whiles] = {
+                r.ctx.global.definition_locations[whiles] = {
                     .file_id = r.sf.id,
                     .loc = {
                         .start = while_tok.loc.start,
@@ -588,7 +588,7 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
                     ScopeClosedMessage msg;
                     msg.msgtype = MSG_SCOPE_CLOSED;
                     msg.scope = &block;
-                    block.global->send_message(&msg);
+                    block.global.send_message(&msg);
                     return true;
                 }
                 AST_Node *& expr = block.statements.push(nullptr);
@@ -623,7 +623,7 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     }
 
     AST_Fn* fn = ctx.alloc<AST_Fn>(&ctx, name);
-    AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global->target.pointer_size);
+    AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global.target.pointer_size);
 
     fn->type = temp_fn_type;
 
@@ -656,7 +656,7 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
         TokenType p = r.peek().type;
 
         AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, argindex++);
-        ctx.global->definition_locations[var] = {
+        ctx.global.definition_locations[var] = {
             .file_id = r.sf.id,
             .loc = {
                .start = nameToken.loc.start,
@@ -697,7 +697,7 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
         MUST (parse_block(fn->block, r));
     }
 
-    ctx.global->definition_locations[fn] = {
+    ctx.global.definition_locations[fn] = {
         .file_id = r.sf.id,
         .loc = {
            .start = fn_kw.loc.start,
@@ -724,7 +724,7 @@ struct ParseExprState {
         *out = val.val;
 
         if (val.val IS AST_UNRESOLVED_ID) {
-            ResolveJob *resolve_job = new ResolveJob((AST_UnresolvedId**)out, &ctx);
+            ResolveJob *resolve_job = new ResolveJob(ctx, (AST_UnresolvedId**)out);
             ((AST_UnresolvedId*)val.val)->job = resolve_job;
             resolve_job->subscribe(MSG_NEW_DECLARATION);
             resolve_job->subscribe(MSG_SCOPE_CLOSED);
@@ -790,7 +790,7 @@ bool pop_operator(ParseExprState& state) {
             rhs.loc.loc.end,
         }
     };
-    state.ctx.global->definition_locations[bin] = loc;
+    state.ctx.global.definition_locations[bin] = loc;
     state._output.push({ bin, loc });
 
     return true;
@@ -842,9 +842,9 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                         break;
                     }
                     case TOK_STRING_LITERAL: {
-                        if (!ctx.global->literals.find(t.name, (AST_StringLiteral**)&val)) {
+                        if (!ctx.global.literals.find(t.name, (AST_StringLiteral**)&val)) {
                             val = ctx.alloc<AST_StringLiteral>(t);
-                            ctx.global->literals.insert(t.name, (AST_StringLiteral*)val);
+                            ctx.global.literals.insert(t.name, (AST_StringLiteral*)val);
                         }
                         break;
                     }
@@ -859,8 +859,8 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
 
                 // TODO ALLOCATION we should not be storing the node locations
                 // for the unresolved IDs here, as they'll get discarded
-                if (!ctx.global->definition_locations.find2(val))
-                    ctx.global->definition_locations[val] = loc;
+                if (!ctx.global.definition_locations.find2(val))
+                    ctx.global.definition_locations[val] = loc;
 
                 state._output.push({val, loc });
                 break;
@@ -914,7 +914,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                     r.pop(); // discard the closing bracket
 
                     for (u32 i = 0; i < arg_locs.size; i++) {
-                        ctx.global->reference_locations[(AST_Node**)&fncall->args[i]] = arg_locs[i];
+                        ctx.global.reference_locations[(AST_Node**)&fncall->args[i]] = arg_locs[i];
                     }
 
                     Location loc = {
@@ -925,7 +925,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                         }
                     };
 
-                    r.ctx.global->definition_locations[fncall] = loc;
+                    r.ctx.global.definition_locations[fncall] = loc;
                     state._output.push({ fncall, loc });
                 }
                 
@@ -996,7 +996,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                 };
 
                 state._output.push({ deref, loc });
-                ctx.global->definition_locations[deref] = loc;
+                ctx.global.definition_locations[deref] = loc;
                 break;
             }
             
@@ -1018,7 +1018,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                 };
 
                 state._output.push({addrof, loc});
-                ctx.global->definition_locations[addrof] = loc;
+                ctx.global.definition_locations[addrof] = loc;
 
                 break;
             }
@@ -1063,7 +1063,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                                 deref,
                                 last.loc,
                             });
-                            state.ctx.global->definition_locations[deref] = last.loc;
+                            state.ctx.global.definition_locations[deref] = last.loc;
                             prev_was_value = true;
                             break;
                         }
@@ -1136,18 +1136,18 @@ bool parse_let(AST_Context& ctx, TokenReader& r) {
             }
         };
 
-        ctx.global->definition_locations[assignment] = loc;
+        ctx.global.definition_locations[assignment] = loc;
         assignment->nodetype = AST_ASSIGNMENT;
         ctx.statements.push(assignment);
     };
 
-    var->is_global = ctx.global == &ctx;
+    var->is_global = &ctx.global == &ctx;
 
-    bool declare_succeeded = ctx.declare({ nameToken.name }, var, &ctx == ctx.global);
+    bool declare_succeeded = ctx.declare({ nameToken.name }, var, &ctx == &ctx.global);
 
     MUST (r.expect(TOK(';')).type);
 
-    ctx.global->definition_locations[var] = {
+    ctx.global.definition_locations[var] = {
         .file_id = r.sf.id,
         .loc = {
             .start = let_tok.loc.start,

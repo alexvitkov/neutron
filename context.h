@@ -51,7 +51,7 @@ struct AST_Context : AST_Node {
     map<DeclarationKey, AST_Node*> declarations;
     bucketed_arr<AST_Node*> statements;
 
-    AST_GlobalContext* global;
+    AST_GlobalContext &global;
     AST_Context* parent;
 
     AST_Fn* fn; // the function that this context is a part of
@@ -194,16 +194,16 @@ struct Job {
        if (_run(nullptr))
            return nullptr;
 
-       global->jobs_count++;
+       global.jobs_count++;
 
        JobT *heap_job = new JobT(std::move(*(JobT*)this));
-       global->ready_jobs.push(heap_job);
+       global.ready_jobs.push(heap_job);
 
        return heap_job;
     }
 
 
-    AST_GlobalContext *global;
+    AST_GlobalContext &global;
     JobFlags flags = (JobFlags)0;
 
     arr<Job*> dependent_jobs;
@@ -212,20 +212,20 @@ struct Job {
     void add_dependency(Job* dependency);
     void subscribe(MessageType msgtype); // TODO this won't scale - MessageType is too coarse
 
-    Job(AST_GlobalContext *global);
+    Job(AST_GlobalContext &global);
     void error(Error err);
 };
 
 template <typename T, typename ... Ts>
 T* AST_Context::alloc(Ts &&...args) {
-    T* buf = (T*)global->allocator.alloc(sizeof(T));
+    T* buf = (T*)global.allocator.alloc(sizeof(T));
     new (buf) T (args...);
     return buf;
 }
 
 template <typename T, typename ... Ts>
 T* AST_Context::alloc_temp(Ts &&...args) {
-    T* buf = (T*)global->temp_allocator.alloc(sizeof(T));
+    T* buf = (T*)global.temp_allocator.alloc(sizeof(T));
     new (buf) T (args...);
     return buf;
 }
@@ -234,7 +234,7 @@ struct ResolveJob : Job {
     AST_UnresolvedId **id;
     AST_Context       *context;
 
-    ResolveJob(AST_UnresolvedId **id, AST_Context *ctx);
+    ResolveJob(AST_Context &ctx, AST_UnresolvedId **id);
     bool _run(Message *msg) override;
     std::wstring get_name() override;
 };
@@ -244,7 +244,7 @@ struct JobGroup : Job {
     std::wstring name;
 
     bool _run(Message *msg) override;
-    JobGroup(AST_GlobalContext *ctx, std::wstring name);
+    JobGroup(AST_GlobalContext &ctx, std::wstring name);
     std::wstring get_name() override;
 };
 

@@ -119,10 +119,10 @@ bool implicit_cast(AST_Context &ctx, AST_Value **dst, AST_Type *type) {
 
                 string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
                 string_static_var->type = string_array_type;
-                ctx.global->global_initial_values[string_static_var] = str;
+                ctx.global.global_initial_values[string_static_var] = str;
                 string_static_var->is_global = true;
 
-                MUST (ctx.global->declare({ .string_literal = str }, string_static_var, false));
+                MUST (ctx.global.declare({ .string_literal = str }, string_static_var, false));
             }
 
             AST_Cast *cast = ctx.alloc<AST_Cast>(ctx.get_pointer_type(&t_i8), string_static_var);
@@ -511,7 +511,7 @@ bool validate_type(AST_Context& ctx, AST_Type** type) {
             Location loc = location_of(ctx, (AST_Node**)&deref);
 
             *type = ctx.get_pointer_type((AST_Type*)deref->ptr);
-            ctx.global->reference_locations[(AST_Node**)type] = loc;
+            ctx.global.reference_locations[(AST_Node**)type] = loc;
 
             return true;
         }
