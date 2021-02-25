@@ -44,7 +44,7 @@ struct ERR_OfType {
 };
 
 std::wostream& operator<< (std::wostream& o, ERR_OfType rhs) {
-    o << red << rhs.val << dim << " (of type " << rhs.val->type << ')' << resetstyle;
+    o << red << rhs.val << resetstyle << " (of type " << rhs.val->type << ')';
     return o; 
 }
 
@@ -204,14 +204,21 @@ void print_err(AST_Context &global, Error& err) {
             break;
         }
 
-        case ERR_INVALID_INITIAL_VALUE: {
-            AST_Var* var = (AST_Var*)err.nodes[0];
-            AST_Value* src = (AST_Value*)err.nodes[1];
+        case ERR_CANNOT_IMPLICIT_CAST: {
+            AST_Node* dsttype     = (AST_Value*)err.nodes[0];
+            AST_Node* the_value   = (AST_Value*)err.nodes[1];
+            AST_Node* parent_stmt = (AST_Value*)err.nodes[2];
 
-            wcout << "Cannot assign " << oftype(src) << " to " << oftype(var) << ":\n";
+            switch (parent_stmt->nodetype) {
+                case AST_RETURN:
+                    wcout << "Cannot return " << oftype(the_value) << ", the return type is " << dsttype << ":\n";
+                    break;
+                default:
+                    wcout << "Cannot implicitly cast " << oftype(the_value) << " to " << dsttype << ":\n";
+                    break;
+            }
 
-            arr<AST_Node*> nodes = { err.nodes[0] };
-
+            arr<AST_Node*> nodes = { parent_stmt };
             print_code_segment(global, nullptr, &nodes, nullptr);
             break;
         }

@@ -367,6 +367,27 @@ struct bucketed_arr {
         size ++;
         return ref;
     }
+
+    struct iterator {
+        bucketed_arr* a;
+        u32 bucket, i;
+        
+        iterator& operator++() {
+            i++;
+            if (i == BUCKET_SIZE) {
+                i = 0;
+                bucket++;
+            }
+            return *this;
+        }
+
+        T& operator*() const { return a->buckets[bucket][i]; }
+        bool operator==(const iterator& other) { return a == other.a && bucket == other.bucket && i == other.i; }
+        bool operator!=(const iterator& other) { return a != other.a || bucket != other.bucket || i != other.i; }
+    };
+
+    iterator begin() { return { .a = this, .bucket = 0,                .i = 0 }; }
+    iterator end()   { return { .a = this, .bucket = buckets.size - 1, .i = last_bucket_size }; }
 };
 
 
@@ -386,8 +407,6 @@ struct linear_alloc {
     linear_alloc& operator=(const linear_alloc& other) = delete;
     linear_alloc& operator=(linear_alloc&& other) = delete;
 };
-
-
 
 
 #endif // guard

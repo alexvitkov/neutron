@@ -81,7 +81,7 @@ u32 map_equals(TypeSizeTuple lhs, TypeSizeTuple rhs) {
     return lhs.t == rhs.t && lhs.u == rhs.u;
 }
 
-u32 hash(AST_Type* returntype, arr<AST_Type*>& param_types) {
+u32 hash(AST_Type* returntype, bucketed_arr<AST_Type*>& param_types) {
     u32 hash = map_hash(returntype);
 
     for (AST_Type* param : param_types)

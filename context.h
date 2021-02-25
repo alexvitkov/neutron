@@ -10,6 +10,7 @@ struct AST_UnresolvedId;
 struct AST_FnType;
 struct AST_StringLiteral;
 
+
 // VOLATILE If you drastically change this, you will have to change the map_hash and map_equals functions defined in context.cpp
 struct DeclarationKey {
     // This must come first, as when we sometimes initialize the DeclarationKey like this: { the_name }
@@ -47,7 +48,7 @@ struct Namespace {
 
 struct AST_Context : AST_Node {
     map<DeclarationKey, AST_Node*> declarations;
-    arr<AST_Node*> statements;
+    bucketed_arr<AST_Node*> statements;
 
     AST_GlobalContext* global;
     AST_Context* parent;
@@ -118,7 +119,8 @@ struct NewDeclarationMessage : Message {
 };
 
 enum JobFlags : u32 {
-    JOB_DONE = 0x01,
+    JOB_DONE  = 0x01,
+    JOB_ERROR = 0x02,
 };
 
 struct Job;
@@ -229,7 +231,15 @@ struct ResolveJob : Job {
     ResolveJob(AST_UnresolvedId **id, AST_Context *ctx);
     bool _run(Message *msg) override;
     std::wstring get_name() override;
+};
 
+
+struct JobGroup : Job {
+    std::wstring name;
+
+    bool _run(Message *msg) override;
+    JobGroup(AST_GlobalContext *ctx, std::wstring name);
+    std::wstring get_name() override;
 };
 
 Location location_of(AST_Context& ctx, AST_Node** node);

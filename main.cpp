@@ -44,10 +44,6 @@ int main(int argc, const char** argv) {
         exit_with_error();
     }
 
-    if (!typecheck_all(global)) {
-        exit_with_error();
-    }
-
     // Print the source code
     if (debug_output) {
         wcout << red << "--------- AST ---------\n" << resetstyle;
@@ -57,62 +53,72 @@ int main(int argc, const char** argv) {
         }
     }
 
-    TIR_Context tir_context { .global = global };
-    tir_context.compile_all();
+    JobGroup *typecheck_all_job = new JobGroup(&global, L"typecheck_all");
+    global.add_job(typecheck_all_job);
 
-    // Print the TIR
-    if (debug_output) {
-        wcout << red << "\n--------- TIR ---------\n" << resetstyle;
-        for (auto& kvp : tir_context.fns)
-            kvp.value->print();
-        wcout.flush();
-    }
-
-    if (debug_output) {
-        wcout << red << "\n------- LLVM IR -------\n" << resetstyle;
-        // The LLVM IR is pritned by the compile_all function
-    }
-    fflush(stdout);
-
-    /*
-       T2L_Context t2l_context(tir_context);
-       t2l_context.compile_all();
-
-       const char* object_filename = t2l_context.output_object();
-
-       if (output_type == OUTPUT_LINKED_EXECUTABLE) {
-    // TODO ENCODING
-    std::string of = object_filename;
-    std::wstring object_filename_w(of.begin(), of.end());
-
-    std::string ouf = output_file;
-    std::wstring output_filename_w(ouf.begin(), ouf.end());
-
-    if (has_msvc_linker) {
-    link(msvc_linker, object_filename_w, output_filename_w);
-    }
-    else if (has_gnu_ld) {
-    link(gnu_ld, object_filename_w, output_filename_w);
-    }
-    else if (has_lld) {
-    link(lld, object_filename_w, output_filename_w);
-    }
-    }
-    */
-
-    // Execute the main function
-    if (exec_main) {
-        MainExecJob *tir_exec_job = new MainExecJob(&tir_context);
-
-        for (auto& kvp : tir_context.fns) {
-            if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
-                arr<void*> _args;
-                tir_exec_job->call(kvp.value, _args);
-                break;
-            }
-        }
+    for (auto &decl : global.declarations) {
+        TypeCheckJob *j = new TypeCheckJob(global, decl.value);
+        global.add_job(j);
+        typecheck_all_job->add_dependency(j);
     }
 
     global.run_jobs();
+
+    // TIR_Context tir_context { .global = global };
+    // tir_context.compile_all();
+
+    // // Print the TIR
+    // if (debug_output) {
+    //     wcout << red << "\n--------- TIR ---------\n" << resetstyle;
+    //     for (auto& kvp : tir_context.fns)
+    //         kvp.value->print();
+    //     wcout.flush();
+    // }
+
+    // if (debug_output) {
+    //     wcout << red << "\n------- LLVM IR -------\n" << resetstyle;
+    //     // The LLVM IR is pritned by the compile_all function
+    // }
+    // fflush(stdout);
+
+    // /*
+    //    T2L_Context t2l_context(tir_context);
+    //    t2l_context.compile_all();
+
+    //    const char* object_filename = t2l_context.output_object();
+
+    //    if (output_type == OUTPUT_LINKED_EXECUTABLE) {
+    // // TODO ENCODING
+    // std::string of = object_filename;
+    // std::wstring object_filename_w(of.begin(), of.end());
+
+    // std::string ouf = output_file;
+    // std::wstring output_filename_w(ouf.begin(), ouf.end());
+
+    // if (has_msvc_linker) {
+    // link(msvc_linker, object_filename_w, output_filename_w);
+    // }
+    // else if (has_gnu_ld) {
+    // link(gnu_ld, object_filename_w, output_filename_w);
+    // }
+    // else if (has_lld) {
+    // link(lld, object_filename_w, output_filename_w);
+    // }
+    // }
+    // */
+
+    // // Execute the main function
+    // if (exec_main) {
+    //     MainExecJob *tir_exec_job = new MainExecJob(&tir_context);
+
+    //     for (auto& kvp : tir_context.fns) {
+    //         if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
+    //             arr<void*> _args;
+    //             tir_exec_job->call(kvp.value, _args);
+    //             break;
+    //         }
+    //     }
+    // }
+
     return 0;
 }

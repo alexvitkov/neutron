@@ -1,6 +1,7 @@
 #include "typer.h"
 #include "ast.h"
 #include "error.h"
+#include <sstream>
 
 AST_PrimitiveType t_bool (PRIMITIVE_BOOL,     1, "bool");
 AST_PrimitiveType t_u8   (PRIMITIVE_UNSIGNED, 1, "u8");
@@ -36,14 +37,19 @@ struct GetTypeJob : Job {
     bool _run(Message *msg) override;
 };
 
-struct TypeCheckJob : Job {
-    AST_Context &ctx; 
-    AST_Node    *node;
+TypeCheckJob::TypeCheckJob(AST_Context& ctx, AST_Node* node) 
+    : ctx(ctx), node(node), Job(ctx.global) 
+{
+    assert(node);
+}
 
-    TypeCheckJob(AST_Context& ctx, AST_Node* node) : ctx(ctx), node(node), Job(ctx.global) {}
-
-    bool _run(Message *msg) override;
-};
+std::wstring TypeCheckJob::get_name() {
+    std::wostringstream s;
+    s << "TypeCheckJob<";
+    print(s, this->node, false);
+    s << ">";
+    return s.str();
+}
 
 bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     MUST (lhs->returntype == rhs->returntype);
@@ -225,7 +231,13 @@ bool GetTypeJob::_run(Message *msg) {
 
                     if (!implicit_cast(ctx, &fncall->args[i], param_type)) {
                         // TODO ERROR
-                        error({});
+                        error({ 
+                            .code = ERR_CANNOT_IMPLICIT_CAST, 
+                            .nodes = {
+                                param_type,
+                                fncall->args[i],
+                            }
+                        });
                         return false;
                     }
                 }
@@ -584,8 +596,14 @@ bool TypeCheckJob::_run(Message *msg) {
             }
 
             if (rettype != &t_void && !implicit_cast(ctx, &ret->value, rettype)) {
-                // TODO ERROR
-                error({});
+                error({
+                    .code = ERR_CANNOT_IMPLICIT_CAST, 
+                    .nodes = {
+                        rettype,
+                        ret->value,
+                        ret
+                    }
+                });
                 return false;
             }
 

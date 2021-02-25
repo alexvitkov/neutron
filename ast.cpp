@@ -48,7 +48,7 @@ AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_L
     str = stringToken.name;
 }
 
-std::wostream& operator<< (std::wostream& o, arr<StructElement>& tl) {
+std::wostream& operator<< (std::wostream& o, bucketed_arr<StructElement>& tl) {
     for (const auto& entry : tl) {
         o << entry.name << ": " << entry.type << ", ";
     }

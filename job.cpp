@@ -6,7 +6,7 @@
 void Job::add_dependency(Job* dependency) {
     dependencies_left++;
     dependency->dependent_jobs.push(this);
-    // wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
+    wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
 }
 
 std::wstring Job::get_name() {
@@ -18,7 +18,7 @@ Job::Job(AST_GlobalContext *global) : global(global) {
 
 void AST_GlobalContext::send_message(Message *msg) {
     arr<Job*>& receivers = subscribers[msg->msgtype];
-    wcout << "Sending message " << msg->msgtype << "\n";
+    // wcout << "Sending message " << msg->msgtype << "\n";
 
     for (u32 i = 0; i < receivers.size; ) {
         if (receivers[i]->flags & JOB_DONE || receivers[i]->_run(msg)) {
@@ -29,16 +29,36 @@ void AST_GlobalContext::send_message(Message *msg) {
     }
 }
 
+void AST_GlobalContext::add_job(Job *job) {
+    for (Job *j : ready_jobs) {
+        if (j == job)
+            assert(!"Adding the same job twice");
+    }
+
+    wcout << dim << "Adding " << resetstyle << job->get_name() << "\n";
+    ready_jobs.push(job);
+}
+
 bool AST_GlobalContext::run_jobs() {
     while (ready_jobs.size) {
         Job *job = ready_jobs.pop();
 
-        if (job->dependencies_left != 0)
+        if (job->dependencies_left != 0 || (job->flags & JOB_DONE))
             continue;
 
+
+        if (job->flags & JOB_ERROR) {
+            for (Job * j : job->dependent_jobs) {
+                j->flags = (JobFlags)(j->flags | JOB_ERROR);
+            }
+            continue;
+        }
+
         if (job->_run(nullptr)) {
-            // wcout << dim << "finished " << resetstyle << job->get_name() << "\n";
+            wcout << dim << "Finished " << resetstyle << job->get_name() << "\n";
             jobs_count--;
+            job->flags = (JobFlags)(job->flags | JOB_DONE);
+
             for (Job *dependent_job : job->dependent_jobs) {
                 dependent_job->dependencies_left --;
                 if (job->dependencies_left == 0)
@@ -96,6 +116,27 @@ bool ResolveJob::_run(Message *msg) {
             UNREACHABLE;
     }
 
+}
+
+void Job::error(Error err) {
+    wcout << "Error from job " << get_name() << ":\n";
+    global->error(err);
+    print_err(*global, err);
+
+    flags = (JobFlags)(flags | JOB_ERROR);
+    for (Job *job : dependent_jobs) {
+        job->flags = (JobFlags)(job->flags | JOB_ERROR);
+    }
+}
+
+JobGroup::JobGroup(AST_GlobalContext *ctx, std::wstring name) 
+    : Job(ctx), name(name) { }
+
+bool JobGroup::_run(Message *msg) {
+    return !msg;
+}
+std::wstring JobGroup::get_name() {
+    return L"JobGroup<" + name + L">";
 }
 
 void Job::subscribe(MessageType msgtype) {

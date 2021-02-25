@@ -78,9 +78,9 @@ struct AST_Cast : AST_Value {
 // Read the comment before AST_Cast before changing this
 struct AST_FnCall : AST_Value {
     AST_Value* fn;
-    arr<AST_Value*> args;
+    bucketed_arr<AST_Value*> args;
 
-    inline AST_FnCall(AST_Value* fn) : AST_Value(AST_FN_CALL, nullptr), fn(fn), args(4) {}
+    inline AST_FnCall(AST_Value* fn) : AST_Value(AST_FN_CALL, nullptr), fn(fn), args() {}
 };
 
 struct AST_PrimitiveType : AST_Type {
@@ -95,7 +95,8 @@ struct AST_PrimitiveType : AST_Type {
 // If you add stuff to this, you MUST update map_hash and map_equals for (defined in typer.cpp)
 struct AST_FnType : AST_Type {
     AST_Type* returntype;
-    arr<AST_Type*> param_types;
+    // TODO we can probably get away with a regular arr here
+    bucketed_arr<AST_Type*> param_types;
     bool is_variadic;
 
     inline AST_FnType(u64 size) : AST_Type(AST_FN_TYPE, size), is_variadic(false) {}
@@ -143,14 +144,14 @@ struct AST_Number : AST_Value {
 };
 
 struct AST_If : AST_Node {
-    AST_Node* condition;
+    AST_Value* condition;
     AST_Context then_block;
 
     inline AST_If(AST_Context* parent_ctx) : AST_Node(AST_IF), then_block(parent_ctx) {}
 };
 
 struct AST_While : AST_Node {
-    AST_Node* condition;
+    AST_Value* condition;
     AST_Context block;
 
     inline AST_While(AST_Context* parent_ctx) : AST_Node(AST_WHILE), block(parent_ctx) {}
@@ -189,7 +190,7 @@ struct AST_Fn : AST_Value {
 
 struct AST_Struct : AST_Type {
     const char* name;
-    arr<StructElement> members;
+    bucketed_arr<StructElement> members;
     u64 alignment;
     inline AST_Struct(const char* name) 
         : AST_Type(AST_STRUCT, 0), 
