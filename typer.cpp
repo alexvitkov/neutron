@@ -1,6 +1,7 @@
 #include "typer.h"
 #include "ast.h"
 #include "error.h"
+#include <sstream>
 
 AST_PrimitiveType t_bool (PRIMITIVE_BOOL,     1, "bool");
 AST_PrimitiveType t_u8   (PRIMITIVE_UNSIGNED, 1, "u8");
@@ -23,6 +24,32 @@ AST_PrimitiveType t_string_literal (PRIMITIVE_UNIQUE,  0, "string_literal");
 AST_PrimitiveType t_any8 (PRIMITIVE_UNIQUE, 8, "any8");
 
 
+struct GetTypeJob : Job {
+    AST_Context &ctx;
+    AST_Value   *node;
+
+    AST_Type *cache_lhs, *cache_rhs;
+
+    GetTypeJob(AST_Context &ctx, AST_Value *node) 
+        : ctx(ctx), node(node), Job(ctx.global) { }
+
+    bool run(Message *msg) override;
+};
+
+TypeCheckJob::TypeCheckJob(AST_Context& ctx, AST_Node* node) 
+    : ctx(ctx), node(node), Job(ctx.global) 
+{
+    assert(node);
+}
+
+std::wstring TypeCheckJob::get_name() {
+    std::wostringstream s;
+    s << "TypeCheckJob<";
+    print(s, this->node, false);
+    s << ">";
+    return s.str();
+}
+
 bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     MUST (lhs->returntype == rhs->returntype);
     MUST (lhs->param_types.size == rhs->param_types.size);
@@ -34,8 +61,9 @@ bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
     return true;
 }
 
-bool implicit_cast(AST_Context& ctx, AST_Value** dst, AST_Type* type) {
-    AST_Type* dstt = gettype(ctx, *dst);
+bool implicit_cast(AST_Context &ctx, AST_Value **dst, AST_Type *type) {
+    AST_Type *dstt = (*dst)->type;
+
     MUST (dstt);
 
     if (dstt == type) 
@@ -82,7 +110,7 @@ bool implicit_cast(AST_Context& ctx, AST_Value** dst, AST_Type* type) {
 
             // If the same string literal has been seen before
             // There's already a static variable defined for it
-            AST_Var* string_static_var = (AST_Var*)ctx.resolve({ .string_literal = str });
+            AST_Var* string_static_var = (AST_Var*)ctx.declarations.find2({ .string_literal = str });
 
             if (!string_static_var) {
                 // Get an array type that's just big enough to fit the C string 
@@ -91,10 +119,11 @@ bool implicit_cast(AST_Context& ctx, AST_Value** dst, AST_Type* type) {
                 string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
                 string_static_var->type = string_array_type;
                 string_static_var->is_constant = true;
-                ctx.global->global_initial_nodes[string_static_var] = str;
+                ctx.global.global_initial_nodes[string_static_var] = str;
+
                 string_static_var->is_global = true;
 
-                MUST (ctx.global->declare({ .string_literal = str }, string_static_var));
+                MUST (ctx.global.declare({ .string_literal = str }, string_static_var, false));
             }
 
             // AST_Cast *cast = ctx.alloc<AST_Cast>(ctx.get_pointer_type(&t_i8), string_static_var);
@@ -124,168 +153,6 @@ bool is_valid_lvalue(AST_Node* expr) {
         default:
             return false;
     }
-}
-
-bool resolve_unresolved_references(AST_GlobalContext& global, AST_Node** nodeptr);
-
-bool resolve_unresolved_references(AST_Context* block) {
-    for (const auto& decl : block->declarations)
-        MUST (resolve_unresolved_references(*block->global, (AST_Node**)&decl.value));
-
-    for (auto& stmt : block->statements)
-        MUST (resolve_unresolved_references(*block->global, &stmt));
-    return true;
-}
-
-bool resolve_unresolved_references(AST_GlobalContext& global, AST_Node** nodeptr) {
-    AST_Node* node = *nodeptr;
-    if (!node)
-        return true;
-
-    switch (node->nodetype) {
-        case AST_UNRESOLVED_ID: {
-            AST_UnresolvedId* id = (AST_UnresolvedId*)node;
-            AST_Node* resolved = id->ctx.resolve({ id->name });
-            if (!resolved) {
-                id->ctx.error({
-                    .code = ERR_NOT_DEFINED,
-                    .nodes = { id }
-                });
-                return false;
-            }
-
-            *nodeptr = resolved;
-            return true;
-        }
-
-        case AST_VAR: {
-            AST_Var* var = (AST_Var*)node; 
-            MUST (resolve_unresolved_references(global, (AST_Node**)&var->type));
-            break;
-        }
-
-        case AST_CAST: {
-            AST_Cast* cast = (AST_Cast*)node;
-            MUST (resolve_unresolved_references(global, (AST_Node**)&cast->inner));
-            MUST (resolve_unresolved_references(global, (AST_Node**)&cast->type));
-            break;
-        }
-
-        case AST_FN_CALL: {
-            AST_FnCall* fncall = (AST_FnCall*)node;
-            MUST (resolve_unresolved_references(global, (AST_Node**)&fncall->fn));
-            for (auto& arg : fncall->args)
-                MUST (resolve_unresolved_references(global, (AST_Node**)&arg));
-            break;
-        }
-
-        case AST_FN: {
-            AST_Fn* fn = (AST_Fn*)node;
-            AST_FnType* fntype = (AST_FnType*)fn->type;
-
-            for (auto& param_type : fntype->param_types)
-                MUST (resolve_unresolved_references(global, (AST_Node**)&param_type));
-
-            for (u32 i = 0; i < fn->argument_names.size; i++) {
-                AST_Var* argvar = global.alloc<AST_Var>(fn->argument_names[i], i);
-                argvar->type = fntype->param_types[i];
-
-                MUST (fn->block.declare({ .name = argvar->name }, argvar));
-            }
-
-            MUST (resolve_unresolved_references(&fn->block));
-            break;
-        }
-
-        case AST_ASSIGNMENT:
-        case AST_BINARY_OP: 
-        {
-            AST_BinaryOp* op = (AST_BinaryOp*)node;
-            MUST (resolve_unresolved_references(global, (AST_Node**)&op->lhs));
-            MUST (resolve_unresolved_references(global, (AST_Node**)&op->rhs));
-            break;
-        }
-
-        case AST_DEREFERENCE: {
-            AST_Dereference* deref = (AST_Dereference*)node;
-            MUST (resolve_unresolved_references(global, (AST_Node**)&deref->ptr));
-            return true;
-        }
-
-        case AST_ADDRESS_OF: {
-            AST_AddressOf* addrof = (AST_AddressOf*)node;
-            MUST (resolve_unresolved_references(global, (AST_Node**)&addrof->inner));
-            return true;
-        }
-
-        case AST_RETURN: {
-            AST_Return* ret = (AST_Return*)node;
-            MUST (resolve_unresolved_references(global, (AST_Node**)&ret->value));
-            break;
-        }
-
-        case AST_IF: {
-            AST_If* ifs = (AST_If*)node;
-            MUST (resolve_unresolved_references(&ifs->then_block));
-            MUST (resolve_unresolved_references(global, &ifs->condition));
-            break;
-        }
-
-        case AST_WHILE: {
-            AST_While* whiles = (AST_While*)node;
-            MUST (resolve_unresolved_references(&whiles->block));
-            MUST (resolve_unresolved_references(global, &whiles->condition));
-            break;
-        }
-
-        case AST_BLOCK: {
-            MUST (resolve_unresolved_references((AST_Context*)node));
-            break;
-        }
-        case AST_STRUCT: {
-            AST_Struct* str = (AST_Struct*)node;
-            for (auto& mem : str->members)
-                MUST (resolve_unresolved_references(global, (AST_Node**)&mem.type));
-            break;
-        }
-
-        case AST_MEMBER_ACCESS: {
-            AST_MemberAccess* access = (AST_MemberAccess*)node;
-            MUST (resolve_unresolved_references(global, (AST_Node**)&access->lhs));
-            break;
-        }
-
-        case AST_POINTER_TYPE: {
-            AST_PointerType* pt = (AST_PointerType*)node;
-            if (pt->pointed_type IS AST_UNRESOLVED_ID) {
-                MUST (resolve_unresolved_references(global, (AST_Node**)&pt->pointed_type));
-
-                *nodeptr = global.get_pointer_type(pt->pointed_type);
-                // TODO ALLOCATION free the temp pointer type here
-            }
-            break;
-        }
-
-        case AST_TYPEOF: {
-            AST_Typeof *t = (AST_Typeof*)node;
-            MUST (resolve_unresolved_references(global, (AST_Node**)&t->inner));
-            break;
-        }
-
-        case AST_NONE:
-        case AST_TEMP_REF:
-            assert(!"Not supported");
-
-        case AST_NUMBER:
-        case AST_PRIMITIVE_TYPE:
-        case AST_STRING_LITERAL:
-            break;
-
-
-        default:
-            NOT_IMPLEMENTED();
-    }
-    return true;
 }
 
 bool is_integral_type(AST_Type* type) {
@@ -323,16 +190,18 @@ bool validate_fn_type(AST_Context& ctx, AST_Fn* fn) {
 }
 
 
-AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
-    if (node->type)
-        return node->type;
+bool GetTypeJob::run(Message *msg) {
+    if (node->type) {
+        return true;
+    }
 
     switch (node->nodetype) {
         case AST_PRIMITIVE_TYPE: 
         case AST_FN_TYPE:
         case AST_POINTER_TYPE:
         {
-            return &t_type;
+            node->type = &t_type;
+            return true;
         }
 
         case AST_FN: {
@@ -353,32 +222,32 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
 
                 if ((!fntype->is_variadic && num_args != num_params) || (fntype->is_variadic && num_args < num_params)) {
                     // TODO ERROR
-                    ctx.error({ .code = ERR_BAD_FN_CALL });
-                    return nullptr;
+                    error({ .code = ERR_BAD_FN_CALL });
+                    return false;
                 }
 
                 for (int i = 0; i < num_args; i++) {
-
                     AST_Type* param_type = i < num_params ? fntype->param_types[i] : &t_any8;
+                    GetTypeJob arg_gettype(ctx, fncall->args[i]);
+                    WAIT (arg_gettype, GetTypeJob);
 
                     if (!implicit_cast(ctx, &fncall->args[i], param_type)) {
-                        ctx.error({
-                            .code = ERR_BAD_FN_CALL,
-                            .node_ptrs = { 
-                                (AST_Node**)&fncall->args[i] 
-                            },
-                            .args = {{  
-                                .arg_name = fn->argument_names[i],
-                                .arg_type= param_type,
-                                .arg_index = (u64)i
-                            }}
+                        // TODO ERROR
+                        error({ 
+                            .code = ERR_CANNOT_IMPLICIT_CAST, 
+                            .nodes = {
+                                param_type,
+                                fncall->args[i],
+                                node,
+                            }
                         });
-                        return nullptr;
+                        return false;
                     }
                 }
 
                 fncall->type = fntype->returntype;
-                return fntype->returntype;
+                node->type = fntype->returntype;
+                return true;
             }
             else {
                 MUST (validate_type(ctx, (AST_Type**)(&fncall->fn)));
@@ -391,8 +260,8 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
                 
                 if (fncall->args.size != 1) {
                     // TODO ERROR
-                    ctx.error({ .code = ERR_BAD_FN_CALL });
-                    return nullptr;
+                    error({ .code = ERR_BAD_FN_CALL });
+                    return false;
                 }
                 
                 AST_Cast* cast = (AST_Cast*)fncall;
@@ -402,7 +271,10 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
                 cast->inner = fncall->args[0];
                 
                 MUST (validate_type(ctx, &cast->type));
-                MUST (gettype(ctx, cast->inner));
+
+                // Make sure the cast has a type
+                GetTypeJob inner_type_job(ctx, cast->inner);
+                WAIT (inner_type_job, GetTypeJob);
                 
                 if ((cast->type IS AST_POINTER_TYPE || cast->type IS AST_ARRAY_TYPE)
                     && (cast->inner->type IS AST_POINTER_TYPE || cast->inner->type IS AST_ARRAY_TYPE))
@@ -420,8 +292,8 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
                 }
                 else {
                     // TODO ERROR
-                    ctx.error({ .code = ERR_INVALID_CAST });
-                    return nullptr;;
+                    error({ .code = ERR_INVALID_CAST });
+                    return false;
                 }
             }
         }
@@ -429,49 +301,44 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
         case AST_ASSIGNMENT: {
             AST_BinaryOp* bin = (AST_BinaryOp*)node;
 
-            AST_Type* lhst = gettype(ctx, bin->lhs);
-            AST_Type* rhst = gettype(ctx, bin->rhs);
-            MUST (lhst && rhst);
+            GetTypeJob lhs_job(ctx, bin->lhs);
+            WAIT (lhs_job, GetTypeJob);
+
+            GetTypeJob rhs_job(ctx, bin->rhs);
+            WAIT (rhs_job, GetTypeJob);
 
             if (!is_valid_lvalue(bin->lhs)) {
-                ctx.error({ .code = ERR_NOT_AN_LVALUE, .nodes = { lhst, } });
-                return nullptr;
+                error({ .code = ERR_NOT_AN_LVALUE, .nodes = { lhs_job.node->type, } });
+                return false;
             }
 
-            if (implicit_cast(ctx, &bin->rhs, lhst)) {
-                bin->type = lhst;
-                return bin->type;
+            if (!implicit_cast(ctx, &bin->rhs, lhs_job.node->type)) {
+                // TODO ERROR
+                error({});
+                return false;
             }
-
-            ctx.error({ 
-                .code = ERR_INVALID_ASSIGNMENT, 
-                .nodes = {
-                    bin
-                },
-                .node_ptrs = { 
-                    (AST_Node**)&bin->lhs, 
-                    (AST_Node**)&bin->rhs, 
-                }
-            });
-
-            return nullptr;;
+            
+            bin->type = lhs_job.node->type;
+            return true;
         }
 
         case AST_BINARY_OP: {
             AST_BinaryOp* bin = (AST_BinaryOp*)node;
 
-            AST_Type* lhst = gettype(ctx, bin->lhs);
-            AST_Type* rhst = gettype(ctx, bin->rhs);
-            MUST (lhst && rhst);
+            GetTypeJob lhs_job(ctx, bin->lhs);
+            WAIT (lhs_job, GetTypeJob);
+
+            GetTypeJob rhs_job(ctx, bin->rhs);
+            WAIT (rhs_job, GetTypeJob);
 
             // Handle pointer arithmetic
-            if (lhst IS AST_POINTER_TYPE || rhst IS AST_POINTER_TYPE) {
+            if (lhs_job.node->type IS AST_POINTER_TYPE || rhs_job.node->type IS AST_POINTER_TYPE) {
                 if (bin->op != '+' && bin->op != '-') {
-                    ctx.error({
+                    error({
                         .code = ERR_INVALID_ASSIGNMENT,
                         .nodes = { bin->lhs, bin-> rhs }
                     });
-                    return nullptr;
+                    return false;
                 }
 
                 // There are 6 cases here
@@ -483,21 +350,21 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
                 // Pointer  - Pointer  -- valid
                 // Integral - Pointer  -- invalid
 
-                if (lhst IS AST_POINTER_TYPE) {
+                if (lhs_job.node->type IS AST_POINTER_TYPE) {
                     // If LHS is a pointer and operator is +, RHS can only be an integral type
-                    if (bin->op == '+' && !is_integral_type(rhst))
+                    if (bin->op == '+' && !is_integral_type(rhs_job.node->type))
                         goto Error;
 
                     if (bin->op == '-') {
                         // Pointer Pointer subtraction is valid if the pointers the same type
-                        if (rhst IS AST_POINTER_TYPE) {
-                            if (lhst != rhst)
+                        if (rhs_job.node->type IS AST_POINTER_TYPE) {
+                            if (lhs_job.node->type != rhs_job.node->type)
                                 goto Error;
                             bin->op = OP_SUB_PTR_PTR;
                         }
                         // The other valid case is Pointer - Integral
                         else {
-                            if (!is_integral_type(rhst))
+                            if (!is_integral_type(rhs_job.node->type))
                                 goto Error;
                             bin->op = OP_SUB_PTR_INT;
                         }
@@ -509,7 +376,7 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
 
                 } else {
                     // LHS is not a pointer => the only valid case is Integral + Pointer
-                    if (!is_integral_type(lhst) || bin->op != '+')
+                    if (!is_integral_type(lhs_job.node->type) || bin->op != '+')
                         goto Error;
 
                     // In order to simplify code generation
@@ -520,38 +387,47 @@ AST_Type* gettype(AST_Context& ctx, AST_Value* node) {
 
                 // After this is all done, the type of the binary expression
                 // is the same as the pointer type
-                bin->type = lhst IS AST_POINTER_TYPE ? lhst : rhst;
+                bin->type = lhs_job.node->type IS AST_POINTER_TYPE ? lhs_job.node->type : rhs_job.node->type;
                 return bin->type;
 
-                return nullptr;
+                NOT_IMPLEMENTED("TODO ERROR");
+                return false;
             }
 
             // Handle regular human arithmetic between numbers
             else {
-                if (implicit_cast(ctx, &bin->rhs, lhst))
-                    return (bin->type = lhst);
+                if (implicit_cast(ctx, &bin->rhs, lhs_job.node->type)) {
+                    bin->type = lhs_job.node->type;
+                    return true;
+                }
 
-                if (implicit_cast(ctx, &bin->lhs, rhst))
-                    return (bin->type = rhst);
+                if (implicit_cast(ctx, &bin->lhs, rhs_job.node->type)) {
+                    bin->type = rhs_job.node->type;
+                    return true;
+                }
             }
 
 Error:
-            ctx.error({
+            error({
                 .code = ERR_BAD_BINARY_OP,
                 .nodes = { bin->lhs, bin->rhs }
             });
-            return nullptr;
+            return false;
         }
 
         case AST_MEMBER_ACCESS: {
             AST_MemberAccess* ma = (AST_MemberAccess*)node;
 
-            AST_Struct* s = (AST_Struct*)gettype(ctx, ma->lhs);
+            GetTypeJob type_job(ctx, ma->lhs);
+            WAIT (type_job, GetTypeJob);
+
+            AST_Struct* s = (AST_Struct*)type_job.node->type;
             MUST (s);
+
             if (s->nodetype != AST_STRUCT) {
                 // TODO ERROR
-                ctx.error({ .code = ERR_NO_SUCH_MEMBER, });
-                return nullptr;
+                error({ .code = ERR_NO_SUCH_MEMBER, });
+                return false;
             }
 
             for (u32 i = 0; i < s->members.size; i++) {
@@ -563,39 +439,48 @@ Error:
                 }
             }
 
-            ctx.error({ .code = ERR_NO_SUCH_MEMBER, });
-            return nullptr;
+            error({ .code = ERR_NO_SUCH_MEMBER, });
+            return false;
         }
 
         case AST_DEREFERENCE: {
             AST_Dereference* deref = (AST_Dereference*)node;
 
-            AST_Type* inner_type = gettype(ctx, deref->ptr);
-            MUST (inner_type);
+            GetTypeJob inner_type_job(ctx, deref->ptr);
+            WAIT (inner_type_job, GetTypeJob);
 
-            if (inner_type->nodetype != AST_POINTER_TYPE) {
-                ctx.error({
+            if (inner_type_job.node->type->nodetype != AST_POINTER_TYPE) {
+                error({
                     .code = ERR_INVALID_DEREFERENCE,
                     .nodes = { deref },
                 });
+                return false;
             }
 
-            deref->type = ((AST_PointerType*)inner_type)->pointed_type;
-            return deref->type;
+            node->type = deref->type = ((AST_PointerType*)inner_type_job.node->type)->pointed_type;
+            return true;
         }
 
         case AST_ADDRESS_OF: {
             AST_AddressOf* addrof = (AST_AddressOf*)node;
 
-            AST_Type* inner_type = gettype(ctx, addrof->inner);
-            MUST (inner_type);
+            GetTypeJob inner_type_job(ctx, addrof->inner);
+            WAIT (inner_type_job, GetTypeJob);
 
-            addrof->type = ctx.get_pointer_type(inner_type);
+            addrof->type = ctx.get_pointer_type(inner_type_job.node->type);
 
             if (addrof->inner IS AST_VAR) {
                 ((AST_Var*)addrof->inner)->always_on_stack = true;
             }
-            return addrof->type;
+
+            node->type = addrof->type;
+            return true;
+        }
+
+        case AST_UNRESOLVED_ID: {
+            AST_UnresolvedId *unres = (AST_UnresolvedId*)node;
+            add_dependency(unres->job);
+            return false;
         }
 
         default:
@@ -631,16 +516,12 @@ bool validate_type(AST_Context& ctx, AST_Type** type) {
             Location loc = location_of(ctx, (AST_Node**)&deref);
 
             *type = ctx.get_pointer_type((AST_Type*)deref->ptr);
-            ctx.global->reference_locations[(AST_Node**)type] = loc;
+            ctx.global.reference_locations[(AST_Node**)type] = loc;
 
             return true;
         }
         case AST_TYPEOF: {
-            AST_Typeof *t = (AST_Typeof*)val;
-            AST_Type *the_type = gettype(ctx, t->inner);
-            MUST (the_type);
-            *type = the_type;
-            return true;
+            NOT_IMPLEMENTED();
         }
         default: {
             ctx.error({
@@ -654,7 +535,7 @@ bool validate_type(AST_Context& ctx, AST_Type** type) {
     return true;
 };
 
-bool typecheck(AST_Context& ctx, AST_Node* node) {
+bool TypeCheckJob::run(Message *msg) {
     switch (node->nodetype) {
         case AST_BLOCK: {
             AST_Context* block = (AST_Context*)node;
@@ -663,7 +544,8 @@ bool typecheck(AST_Context& ctx, AST_Node* node) {
                 if (decl.value IS AST_VAR) {
                     AST_Var* var = (AST_Var*)decl.value;
 
-                    MUST (typecheck(*block, var));
+                    TypeCheckJob var_typecheck(*block, var); 
+                    WAIT (var_typecheck, TypeCheckJob);
 
                     // TODO STRUCT
                     // Right now structures are always on the stack
@@ -674,25 +556,36 @@ bool typecheck(AST_Context& ctx, AST_Node* node) {
                 }
             }
 
-            for (const auto& stmt : block->statements)
-                MUST (typecheck(*block, stmt));
+            for (const auto& stmt : block->statements) {
+                TypeCheckJob stmt_typecheck(*block, stmt); 
+                WAIT (stmt_typecheck, TypeCheckJob);
+            }
             return true;
         }
 
         case AST_FN: {
             AST_Fn* fn = (AST_Fn*)node;
 
-            // MUST (gettype(ctx, fn)); // This is done in a prepass
+            GetTypeJob gettype(ctx, fn);
+            WAIT (gettype, GetTypeJob);
 
-            // if (!fn->is_extern) {
-                MUST (typecheck(fn->block, &fn->block));
-            // }
+            // TODO EXTERN maybe this check shouldn't be here
+            if (!fn->is_extern) {
+                TypeCheckJob fn_typecheck(fn->block, &fn->block); 
+                WAIT (fn_typecheck, TypeCheckJob);
+            }
             return true;
         }
 
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
-            MUST (validate_type(ctx, &var->type));
+            if (var->type) {
+                MUST (validate_type(ctx, &var->type));
+            } else {
+                assert(var->argindex >= 0);
+                AST_FnType *fntype = (AST_FnType*)this->ctx.fn->type;
+                var->type = fntype->param_types[var->argindex];
+            }
             return true;
         }
 
@@ -700,11 +593,13 @@ bool typecheck(AST_Context& ctx, AST_Node* node) {
             AST_Return *ret = (AST_Return*)node;
             AST_Type *rettype = ((AST_FnType*)ctx.fn->type)->returntype;
 
-            if (ret->value)
-                MUST (typecheck(ctx, ret->value));
+            if (ret->value) {
+                TypeCheckJob ret_typecheck(ctx, ret->value); 
+                WAIT (ret_typecheck, TypeCheckJob);
+            }
 
             if (rettype != &t_void && !ret->value) {
-                ctx.error({
+                error({
                     .code = ERR_RETURN_TYPE_MISSING,
                     .nodes = {
                         ret,
@@ -713,15 +608,23 @@ bool typecheck(AST_Context& ctx, AST_Node* node) {
                 });
                 return false;
             }
-            if ((rettype != &t_void && !implicit_cast(ctx, &ret->value, rettype))
-                || (rettype == &t_void && ret->value))
-            {
-                ctx.error({
-                    .code = ERR_RETURN_TYPE_INVALID,
+
+            if (rettype != &t_void && !implicit_cast(ctx, &ret->value, rettype)) {
+                error({
+                    .code = ERR_CANNOT_IMPLICIT_CAST, 
                     .nodes = {
-                        ret,
-                        ctx.fn,
+                        rettype,
+                        ret->value,
+                        ret
                     }
+                });
+                return false;
+            }
+
+            if (rettype == &t_void && ret->value) {
+                error({
+                    .code = ERR_RETURN_TYPE_INVALID,
+                    .nodes = { ret, ctx.fn }
                 });
                 return false;
             }
@@ -730,15 +633,25 @@ bool typecheck(AST_Context& ctx, AST_Node* node) {
 
         case AST_IF: {
             AST_If* ifs = (AST_If*)node;
-            MUST (typecheck(ctx, ifs->condition));
-            MUST (typecheck(ctx, &ifs->then_block));
+
+            TypeCheckJob cond_typecheck(ctx, ifs->condition); 
+            WAIT (cond_typecheck, TypeCheckJob);
+
+            TypeCheckJob then_typecheck(ctx, &ifs->then_block); 
+            WAIT (then_typecheck, TypeCheckJob);
+
             return true;
         }
 
         case AST_WHILE: {
             AST_While* whiles = (AST_While*)node;
-            MUST (typecheck(ctx, whiles->condition));
-            MUST (typecheck(ctx, &whiles->block));
+
+            TypeCheckJob cond_typecheck(ctx, whiles->condition); 
+            WAIT (cond_typecheck, TypeCheckJob);
+
+            TypeCheckJob block_typecheck(ctx, &whiles->block); 
+            WAIT (block_typecheck, TypeCheckJob);
+
             return true;
         }
 
@@ -747,7 +660,9 @@ bool typecheck(AST_Context& ctx, AST_Node* node) {
             s->size = 0;
 
             for (auto& member : s->members) {
-                MUST(typecheck(ctx, member.type));
+                TypeCheckJob block_typecheck(ctx, member.type); 
+                WAIT (block_typecheck, TypeCheckJob);
+
                 u64 member_size = member.type->size;
 
                 // For most types, alignment = size
@@ -776,24 +691,26 @@ bool typecheck(AST_Context& ctx, AST_Node* node) {
             return true;
         }
 
+        case AST_UNRESOLVED_ID: {
+            AST_UnresolvedId *id = (AST_UnresolvedId*)node;
+            add_dependency(id->job);
+            return false;
+        }
+
         default: {
             if (node->nodetype & AST_VALUE_BIT) {
-                return gettype(ctx, (AST_Value*)node);
+                GetTypeJob gettype(ctx, (AST_Value*)node);
+                WAIT (gettype, GetTypeJob);
+                return true;
             }
             NOT_IMPLEMENTED();
         }
 
     }
-
-
 }
 
+/*
 bool typecheck_all(AST_GlobalContext& global) {
-    for (auto& decl : global.declarations)
-        MUST (resolve_unresolved_references(global, &decl.value));
-
-    for (AST_Node*& stmt : global.statements)
-        MUST (resolve_unresolved_references(global, &stmt));
 
     // During typechecking we can declare more stuff
     // so it's not safe to iterate over global.declarations as it may relocate
@@ -816,10 +733,11 @@ bool typecheck_all(AST_GlobalContext& global) {
     for (AST_Node*& stmt : global.statements)
         MUST (typecheck(global, stmt));
 
-    global.temp_allocator.free_all();
+    // global.temp_allocator.free_all();
 
     for (auto& decl : declarations_copy)
         MUST (typecheck(global, decl));
 
     return true;
 }
+*/

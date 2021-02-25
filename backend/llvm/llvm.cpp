@@ -115,8 +115,7 @@ llvm::Type *T2L_Context::get_llvm_type(AST_Type* type) {
 void T2L_BlockContext::prepass() {
     for (auto& instr : tir_block->instructions) {
         if (instr.opcode & TOPC_MODIFIES_DST_BIT) {
-            TIR_Value dst = instr.un.dst;
-            values_to_modify[dst] = &instr;
+            TIR_Value dst = instr.un.dst; values_to_modify[dst] = &instr;
         }
     }
 }
@@ -711,7 +710,7 @@ void T2L_Context::compile_all() {
 
     ModuleAnalysisManager mam;
 
-    if (debug_output) {
+    if (print_llvm) {
         auto p = PrintModulePass();
         p.run(mod, mam);
     }

@@ -44,8 +44,28 @@ struct ERR_OfType {
 };
 
 std::wostream& operator<< (std::wostream& o, ERR_OfType rhs) {
-    o << red << rhs.val << dim << " (of type " << rhs.val->type << ')' << resetstyle;
+    o << red << rhs.val << resetstyle << " (of type ";
+    if (rhs.val->type) {
+        o << rhs.val->type;
+    } else {
+        o << "NULL";
+    }
+    o << ")";
     return o; 
+}
+
+std::wostream& operator<< (std::wostream& o, TokenType tt) {
+    switch (tt) {
+        case ':':      o << "a type"; break;
+        case ';':      o << "a semicolon"; break;
+        case TOK_NONE: o << "end of file"; break; 
+        case TOK_ID:   o << "an identifier";  break;
+        default: {
+            o << "TOK(" << (int)tt << ")";
+            break;
+        }
+    }
+    return o;
 }
 
 ERR_OfType oftype(AST_Node* node) {
@@ -74,7 +94,7 @@ void print_code_segment(AST_Context& global, arr<Token>* tokens, arr<AST_Node*>*
 
             SourceFile* sf = &sources[loc.file_id];
 
-            if (!grouped.find(sf, nullptr)) {
+            if (!grouped.find2(sf)) {
                 grouped.insert(sf, arr<Location>());
             }
             grouped[sf].push(loc);
@@ -127,19 +147,6 @@ void print_code_segment(AST_Context& global, arr<Token>* tokens, arr<AST_Node*>*
     }
 }
 
-std::ostream& operator<< (std::ostream& o, TokenType& tt) {
-    switch (tt) {
-        case ':':      o << "type"; break;
-        case ';':      o << "semicolon"; break;
-        case TOK_NONE: o << "end of file"; break; 
-        case TOK_ID:   o << "identifier";  break;
-        default: {
-            o << "TOK(" << (int)tt << ")";
-            break;
-        }
-    }
-    return o;
-}
 
 void th(u64 n) {
     static const char* first_10[10] = {
@@ -169,8 +176,8 @@ void print_err(AST_Context &global, Error& err) {
     switch (err.code) {
 
         case ERR_ALREADY_DEFINED: {
-            wcout << red << err.tokens[0].name << resetstyle << " is defined multiple times:\n";
-            print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
+            wcout << red << err.key->name << resetstyle << " is defined multiple times:\n";
+            print_code_segment(global, nullptr, &err.nodes, nullptr);
             break;
         }
 
@@ -204,14 +211,21 @@ void print_err(AST_Context &global, Error& err) {
             break;
         }
 
-        case ERR_INVALID_INITIAL_VALUE: {
-            AST_Var* var = (AST_Var*)err.nodes[0];
-            AST_Value* src = (AST_Value*)err.nodes[1];
+        case ERR_CANNOT_IMPLICIT_CAST: {
+            AST_Node* dsttype     = (AST_Value*)err.nodes[0];
+            AST_Node* the_value   = (AST_Value*)err.nodes[1];
+            AST_Node* parent_stmt = (AST_Value*)err.nodes[2];
 
-            wcout << "Cannot assign " << oftype(src) << " to " << oftype(var) << ":\n";
+            switch (parent_stmt->nodetype) {
+                case AST_RETURN:
+                    wcout << "Cannot return " << oftype(the_value) << ", the return type is " << dsttype << ":\n";
+                    break;
+                default:
+                    wcout << "Cannot implicitly cast " << oftype(the_value) << " to " << dsttype << ":\n";
+                    break;
+            }
 
-            arr<AST_Node*> nodes = { err.nodes[0] };
-
+            arr<AST_Node*> nodes = { parent_stmt };
             print_code_segment(global, nullptr, &nodes, nullptr);
             break;
         }
@@ -220,7 +234,7 @@ void print_err(AST_Context &global, Error& err) {
             Token actual = err.tokens[0];
             Token expected = err.tokens[1];
 
-            wcout << "Unexpected "         << red << actual.type << resetstyle
+            wcout << "Unexpected "         << red << actual.type   << resetstyle
                   << " while looking for " << red << expected.type << resetstyle << ":\n";
 
             arr<Token> toks = { actual };
@@ -231,10 +245,8 @@ void print_err(AST_Context &global, Error& err) {
         }
 
         case ERR_NOT_DEFINED: {
-            wcout << red;
-            print(wcout, err.nodes[0], false);
-            wcout << resetstyle << " is not defined.\n";
-            print_code_segment(global, nullptr, &err.nodes, nullptr);
+            wcout << red << *err.node_ptrs[0] << resetstyle << " is not defined.\n";
+            print_code_segment(global, nullptr, nullptr, &err.node_ptrs);
             break;
         }
 

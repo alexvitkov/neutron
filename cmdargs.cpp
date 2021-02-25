@@ -1,8 +1,7 @@
 #include "util.h"
 #include "cmdargs.h"
 
-bool debug_output = false;
-bool exec_main = false;
+bool print_llvm, print_tir, print_ast, exec_main, debug_jobs;
 
 const char* output_file = nullptr;
 OutputType output_type;
@@ -84,28 +83,45 @@ bool parse_args(int argc, const char** argv) {
                     exec_main = true;
                 }
             }
-            else if (strlen(a) == 2) {
-                switch (a[1]) {
-                    case 'o': {
-                        if (i >= argc - 1) {
-                            fprintf(stderr, "missing -o argument\n");
-                            return false;
+            else {
+                for (const char *flag = a + 1; *flag; flag++) {
+                    switch (*flag) {
+                        case 'o': {
+                            if (i >= argc - 1) {
+                                fprintf(stderr, "missing -o argument\n");
+                                return false;
+                            }
+                            else {
+                                output_file = argv[++i];
+                                break;
+                            }
+                            break;
                         }
-                        else {
-                            output_file = argv[++i];
-                            continue;
+                        case 'l': {
+                            print_llvm = true;
+                            break;
                         }
-                        break;
-                    }
-                    case 'd': {
-                        debug_output = true;
-                        continue;
-                    }
-                    case 'e': {
-                        exec_main = true;
-                        continue;
+                        case 't': {
+                            print_tir = true;
+                            break;
+                        }
+                        case 'a': {
+                            print_ast = true;
+                            break;
+                        }
+                        case 'j': {
+                            debug_jobs = true;
+                            break;
+                        }
+                        case 'e': {
+                            exec_main = true;
+                            break;
+                        }
+                        default:
+                            assert(!"UNKNOWN FLAG AAAAAAA");
                     }
                 }
+                continue;
             }
         } 
 

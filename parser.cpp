@@ -166,9 +166,9 @@ u8 prec[148] = {
 
 Location location_of(AST_Context& ctx, AST_Node** node) {
     Location loc;
-    if (ctx.global->reference_locations.find(node, &loc)) {
+    if (ctx.global.reference_locations.find(node, &loc)) {
         return loc;
-    } else if (ctx.global->definition_locations.find(*node, &loc)) {
+    } else if (ctx.global.definition_locations.find(*node, &loc)) {
         return loc;
     } 
     DIE("The AST_Node doesn't have a location");
@@ -479,9 +479,9 @@ void unexpected_token(AST_Context& ctx, Token actual, TokenType expected_tt) {
 }
 
 bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error);
-AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim = TOK_NONE);
+bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType delim);
 
-bool parse_type_list(AST_Context& ctx, TokenReader& r, TokenType delim, arr<StructElement>* tl) {
+bool parse_type_list(AST_Context& ctx, TokenReader& r, TokenType delim, bucketed_arr<StructElement>* tl) {
     SmallToken t = r.peek();
     if (t.type == delim) {
         r.pop();
@@ -494,10 +494,9 @@ bool parse_type_list(AST_Context& ctx, TokenReader& r, TokenType delim, arr<Stru
 
         MUST (r.expect(TOK(':')).type);
 
-        AST_Value* type = parse_expr(ctx, r);
-        MUST (type);
 
-        auto& ref = tl->push({ .name = nameToken.name, .type = (AST_Type*)type });
+        auto& ref = tl->push({ .name = nameToken.name, .type = nullptr });
+        MUST (parse_expr(ctx, (AST_Value**)&ref.type, r, {}));
 
         t = r.peek();
         if (t.type == delim) {
@@ -526,14 +525,13 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
                 AST_Return *ret;
                 if (r.peek().type == TOK(';')) {
                     ret = block.alloc<AST_Return>(nullptr);
+                } else {
+                    ret = block.alloc<AST_Return>(nullptr);
+                    MUST (parse_expr(block, &ret->value, r, {}));
                 }
-                else {
-                    ret = block.alloc<AST_Return>(parse_expr(block, r));
-                    MUST (ret->value);
-                }
-                block.statements.push((AST_Node*)ret);
+                block.statements.push(ret);
 
-                r.ctx.global->definition_locations[ret] = {
+                r.ctx.global.definition_locations[ret] = {
                     .file_id = r.sf.id,
                     .loc = {
                         .start = return_tok.loc.start,
@@ -548,12 +546,11 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
                 Token if_tok = r.pop_full();
 
                 AST_If* ifs = block.alloc<AST_If>(&block);
-                ifs->condition = parse_expr(block, r);
-                MUST (ifs->condition);
+                MUST (parse_expr(block, &ifs->condition, r, {}));
                 MUST (parse_block(ifs->then_block, r));
                 block.statements.push(ifs);
 
-                r.ctx.global->definition_locations[ifs] = {
+                r.ctx.global.definition_locations[ifs] = {
                     .file_id = r.sf.id,
                     .loc = {
                         .start = if_tok.loc.start,
@@ -567,12 +564,11 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
                 Token while_tok = r.pop_full();
 
                 AST_While* whiles = block.alloc<AST_While>(&block);
-                whiles->condition = parse_expr(block, r);
-                MUST (whiles->condition);
+                MUST (parse_expr(block, &whiles->condition, r, {}));
                 MUST (parse_block(whiles->block, r));
                 block.statements.push(whiles);
 
-                r.ctx.global->definition_locations[whiles] = {
+                r.ctx.global.definition_locations[whiles] = {
                     .file_id = r.sf.id,
                     .loc = {
                         .start = while_tok.loc.start,
@@ -586,12 +582,19 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
             default: {
                 if (delim == r.peek().type) {
                     r.pop();
+                    // TODO this is wrong
+                    // First of all it breaks on multiple files because global scope
+                    // is closed when it shouldnt be
+                    // And it won't work for macroexpand alter on
+                    ScopeClosedMessage msg;
+                    msg.msgtype = MSG_SCOPE_CLOSED;
+                    msg.scope = &block;
+                    block.global.send_message(&msg);
                     return true;
                 }
-                AST_Node* expr = parse_expr(block, r);
-                MUST (expr);
+                AST_Node *& expr = block.statements.push(nullptr);
+                MUST (parse_expr(block, (AST_Value**)&expr, r, {}));
                 MUST (r.expect(TOK(';')).type);
-                block.statements.push(expr);
                 break;
             }
         }
@@ -607,7 +610,7 @@ bool parse_block(AST_Context& block, TokenReader& r) {
 AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     Token fn_kw = r.expect_full(KW_FN);
 
-    // This only ever gets called if the 'struct' keyword
+    // parse_fn only ever gets called if the 'fn' keyword
     // has been peeked, no need for MUST check
     assert (fn_kw.type);
 
@@ -621,18 +624,19 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     }
 
     AST_Fn* fn = ctx.alloc<AST_Fn>(&ctx, name);
-    AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global->target.pointer_size);
+    AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global.target.pointer_size);
 
     fn->type = temp_fn_type;
-    fn->block.fn = fn;
 
+    bool decl_succeeded = true;
     if (decl) {
-        MUST (ctx.declare({ name }, fn));
+        decl_succeeded = ctx.declare({ name }, fn, true);
     }
 
     MUST (r.expect(TOK('(')).type);
 
     // Parse the function arguments
+    i64 argindex = 0;
     while (r.peek().type != TOK_CLOSEBRACKET) {
 
         if (r.peek().type == OP_VARARGS) {
@@ -641,18 +645,28 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
             break;
         }
 
-        SmallToken nameToken = r.expect(TOK_ID);
+        Token nameToken = r.expect_full(TOK_ID);
         MUST (nameToken.type);
 
         MUST (r.expect(TOK(':')).type);
 
-        AST_Value* type = parse_expr(ctx, r);
-        MUST (type);
-
-        temp_fn_type->param_types.push((AST_Type*)type);
+        AST_Type *& type = temp_fn_type->param_types.push(nullptr);
+        MUST (parse_expr(ctx, (AST_Value**)&type, r, {}));
         fn->argument_names.push(nameToken.name);
         
         TokenType p = r.peek().type;
+
+        AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, argindex++);
+        ctx.global.definition_locations[var] = {
+            .file_id = r.sf.id,
+            .loc = {
+               .start = nameToken.loc.start,
+               .end = r.pos_in_file,
+            }
+        };
+
+        // the type of the AST_Var is set by the typer
+        MUST (fn->block.declare({ nameToken.name }, var, false));
 
         if (p == TOK_CLOSEBRACKET) {
             break;
@@ -669,9 +683,8 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     // Parse the return type
     if (r.peek().type == TOK(':')) {
         r.pop();
-        MUST (temp_fn_type->returntype = (AST_Type*)parse_expr(ctx, r));
+        MUST (parse_expr(ctx, (AST_Value**)&temp_fn_type->returntype, r, {}));
     }
-
 
     // If it's a declaration without body, it's implictly extern
     if (decl) {
@@ -685,7 +698,7 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
         MUST (parse_block(fn->block, r));
     }
 
-    ctx.global->definition_locations[fn] = {
+    ctx.global.definition_locations[fn] = {
         .file_id = r.sf.id,
         .loc = {
            .start = fn_kw.loc.start,
@@ -693,38 +706,54 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
         }
     };
 
-    return fn;
+    return decl_succeeded ? fn : nullptr;
 }
 
-struct SYValue {
-    AST_Value* val;
-    Location loc;
+struct ParseExprValue {
+    AST_Value *val;
+    Location   loc;
 };
 
-struct SYState {
-    AST_Context& ctx;
+struct ParseExprState {
+    AST_Context &ctx;
     u32 brackets = 0;
-    arr<SYValue> output;
+    arr<ParseExprValue> _output;
     arr<TokenType> stack;
+
+    ParseExprValue pop_into(AST_Value **out) {
+        ParseExprValue val = _output.pop();
+        *out = val.val;
+
+        if (val.val IS AST_UNRESOLVED_ID) {
+            ResolveJob *resolve_job = new ResolveJob(ctx, (AST_UnresolvedId**)out);
+            ((AST_UnresolvedId*)val.val)->job = resolve_job;
+            resolve_job->subscribe(MSG_NEW_DECLARATION);
+            resolve_job->subscribe(MSG_SCOPE_CLOSED);
+        }
+
+        return val;
+    };
 };
 
-bool pop(SYState& s) {
-    if (s.output.size < 2) {
-        s.ctx.error({
+
+bool pop_operator(ParseExprState& state) {
+    if (state._output.size < 2) {
+        state.ctx.error({
             .code = ERR_INVALID_EXPRESSION
         });
         return false;
     }
 
-    TokenType op = s.stack.pop();
+    TokenType op = state.stack.pop();
 
     AST_BinaryOp* bin;
-    SYValue lhs = s.output[s.output.size - 2];
-    SYValue rhs = s.output[s.output.size - 1];
+    ParseExprValue lhs, rhs;
 
     if (prec[op] & ASSIGNMENT) {
         if (op == '=') {
-            bin = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
+            bin = state.ctx.alloc<AST_BinaryOp>(op, nullptr, nullptr);
+            rhs = state.pop_into(&bin->rhs);
+            lhs = state.pop_into(&bin->lhs);
             bin->nodetype = AST_ASSIGNMENT;
         }
         else {
@@ -740,17 +769,20 @@ bool pop(SYState& s) {
                 case OP_BITXORASSIGN:     op = TOK('|');      break;
                 case OP_BITORASSIGN:      op = TOK('^');      break;
                 default:
-                                          assert(0);
+                    UNREACHABLE;
             }
-            rhs.val = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
-            bin = s.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, rhs.val);
-            bin->nodetype = AST_ASSIGNMENT;
+
+            NOT_IMPLEMENTED();
+            //rhs.val = state.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
+            //bin = state.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, rhs.val);
+            //bin->nodetype = AST_ASSIGNMENT;
         }
     }
     else {
-        bin = s.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
+        bin = state.ctx.alloc<AST_BinaryOp>(op, nullptr, nullptr);
+        rhs = state.pop_into(&bin->rhs);
+        lhs = state.pop_into(&bin->lhs);
     }
-    s.output.pop();
 
     Location loc = {
         .file_id = lhs.loc.file_id,
@@ -759,10 +791,8 @@ bool pop(SYState& s) {
             rhs.loc.loc.end,
         }
     };
-
-    s.ctx.global->definition_locations[bin] = loc;
-    
-    s.output[s.output.size - 1] = { bin, loc };
+    state.ctx.global.definition_locations[bin] = loc;
+    state._output.push({ bin, loc });
 
     return true;
 }
@@ -777,8 +807,8 @@ bool _token_is_value(TokenType t) {
 
 AST_Var *parse_let(AST_Context& ctx, TokenReader& r);
 
-AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
-    SYState s { .ctx = ctx };
+bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType delim) {
+    ParseExprState state { .ctx = ctx };
 
     Token t;
     bool prev_was_value = false;
@@ -798,14 +828,14 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
             {
                 if (prev_was_value) {
                     unexpected_token(r.ctx, t, TOK_NONE);
-                    return nullptr;
+                    return false;
                 }
                 prev_was_value = true;
 
                 AST_Value* val = nullptr;
 
                 switch (t.type) {
-                    case TOK_ID:
+                    case TOK_ID: {
                         if (r.peek().type == TOK_COLON) {
                             r.pos--;
                             val = parse_let(ctx, r);
@@ -813,17 +843,22 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                         }
                         else {
                             val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
+                            if (!ctx.declarations.find({ .name = t.name }, (AST_Node**)&val))
+                                val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
                         }
                         break;
-                    case TOK_NUMBER:
+                    }
+                    case TOK_NUMBER: {
                         val = ctx.alloc<AST_Number>(t.number_data->u64_data);
                         break;
-                    case TOK_STRING_LITERAL:
-                        if (!ctx.global->literals.find(t.name, (AST_StringLiteral**)&val)) {
+                    }
+                    case TOK_STRING_LITERAL: {
+                        if (!ctx.global.literals.find(t.name, (AST_StringLiteral**)&val)) {
                             val = ctx.alloc<AST_StringLiteral>(t);
-                            ctx.global->literals.insert(t.name, (AST_StringLiteral*)val);
+                            ctx.global.literals.insert(t.name, (AST_StringLiteral*)val);
                         }
                         break;
+                    }
                     default:
                         UNREACHABLE;
                 }
@@ -835,13 +870,14 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
 
                 // TODO ALLOCATION we should not be storing the node locations
                 // for the unresolved IDs here, as they'll get discarded
-                if (!ctx.global->definition_locations.find(val, nullptr))
-                    ctx.global->definition_locations[val] = loc;
+                if (!ctx.global.definition_locations.find2(val))
+                    ctx.global.definition_locations[val] = loc;
 
-                s.output.push({val, loc });
+                state._output.push({val, loc });
                 break;
             }
 
+            /*
             case KW_TYPEOF: {
                 MUST (r.expect(TOK('(')).type);
                 AST_Value *inner = parse_expr(ctx, r, TOK(')'));
@@ -855,30 +891,30 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                     }
                 };
 
-                AST_Typeof* ast_typeof = ctx.alloc<AST_Typeof>(inner);
+                AST_Typeof* ast_typeof = ctx.alloc<AST_Typeof>(nullptr);
                 ctx.global->definition_locations[ast_typeof] = loc;
 
-                s.output.push({ ast_typeof, loc });
+                state._output.push({ ast_typeof, loc });
                 break;
             }
+            */
 
             case TOK_OPENBRACKET: {
                 // Value followed by a open brackets means function call
                 if (prev_was_value) {
-                    if (s.output.size == 0) {
-                        s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
-                        return nullptr;
+                    if (state._output.size == 0) {
+                        state.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                        return false;
                     }
 
-                    SYValue fn = s.output.pop();
-                    AST_FnCall* fncall = ctx.alloc<AST_FnCall>(fn.val);
+                    AST_FnCall* fncall = ctx.alloc<AST_FnCall>(nullptr);
+                    ParseExprValue fn = state.pop_into(&fncall->fn);
 
                     arr<Location> arg_locs;
 
                     while (r.peek().type != TOK(')')) {
-                        AST_Value* arg = parse_expr(ctx, r);
-                        MUST (arg);
-                        fncall->args.push(arg);
+                        AST_Value *& arg = fncall->args.push(nullptr);
+                        MUST (parse_expr(ctx, &arg, r, {}));
 
                         Location argloc = location_of(ctx, (AST_Node**)&arg);
                         arg_locs.push(argloc);
@@ -889,7 +925,7 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                     r.pop(); // discard the closing bracket
 
                     for (u32 i = 0; i < arg_locs.size; i++) {
-                        ctx.global->reference_locations[(AST_Node**)&fncall->args[i]] = arg_locs[i];
+                        ctx.global.reference_locations[(AST_Node**)&fncall->args[i]] = arg_locs[i];
                     }
 
                     Location loc = {
@@ -900,30 +936,30 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                         }
                     };
 
-                    r.ctx.global->definition_locations[fncall] = loc;
-                    s.output.push({ fncall, loc });
+                    r.ctx.global.definition_locations[fncall] = loc;
+                    state._output.push({ fncall, loc });
                 }
                 
                 // If previous isn't a value, do the shunting yard thing
                 else {
                     prev_was_value = false;
-                    s.stack.push(t.type);
-                    s.brackets++;
+                    state.stack.push(t.type);
+                    state.brackets++;
                 }
                 break;
             }
 
             case TOK_CLOSEBRACKET: {
-                if (s.brackets == 0) {
+                if (state.brackets == 0) {
                     // This should only happen when we're the last argument of a fn call
                     // We rewind the bracket so the parent parse_expr can consume it
                     r.pos--;
                     goto Done;
                 }
-                while (s.stack.last() != TOK('('))
-                    MUST (pop(s));
-                s.brackets--;
-                s.stack.pop(); // disacrd the (
+                while (state.stack.last() != TOK('('))
+                    MUST (pop_operator(state));
+                state.brackets--;
+                state.stack.pop(); // disacrd the (
                 prev_was_value = true;
                 break;
             }
@@ -932,33 +968,34 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                 Token nameToken = r.expect_full(TOK_ID);
                 MUST (nameToken.type);
 
-                if (s.output.size == 0) {
-                    s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
-                    return nullptr;
+                if (state._output.size == 0) {
+                    state.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                    return false;
                 }
-                SYValue lhs = s.output.last();
 
-                AST_MemberAccess* ma = ctx.alloc<AST_MemberAccess>(lhs.val, nameToken.name);
+                AST_MemberAccess* ma = ctx.alloc<AST_MemberAccess>(nullptr, nameToken.name);
+                ParseExprValue lhs = state.pop_into(&ma->lhs);
 
                 lhs.loc.loc.end = r.pos_in_file;
 
-                s.output.last() = { ma, lhs.loc };
+                state._output.push({ ma, lhs.loc });
                 break;
             }
 
-            case TOK_OPENSQUARE: { AST_Value* index = parse_expr(ctx, r);
-                MUST (index);
+            case TOK_OPENSQUARE: { 
+                // When we see foo[bar] we output (foo + bar)*
+                AST_BinaryOp* add = ctx.alloc<AST_BinaryOp>(TOK('+'), nullptr, nullptr);
+
+                MUST (parse_expr(ctx, &add->rhs, r, {}));
                 MUST (r.expect(TOK(']')).type);
 
-                if (s.output.size == 0) {
-                    s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
-                    return nullptr;
+                if (state._output.size == 0) {
+                    state.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                    return false;
                 }
 
-                SYValue inner = s.output.last();
 
-                // When we see foo[bar] we output (foo + bar)*
-                AST_BinaryOp* add = ctx.alloc<AST_BinaryOp>(TOK('+'), s.output.last().val, index);
+                ParseExprValue inner = state.pop_into(&add->lhs);
                 AST_Dereference* deref = ctx.alloc<AST_Dereference>(add);
 
                 Location loc = {
@@ -969,19 +1006,19 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                     }
                 };
 
-                s.output.last() = { deref, loc };
-                ctx.global->definition_locations[deref] = loc;
+                state._output.push({ deref, loc });
+                ctx.global.definition_locations[deref] = loc;
                 break;
             }
             
             case TOK_AMPERSAND: {
-                if (s.output.size == 0) {
-                    s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
-                    return nullptr;
+                if (state._output.size == 0) {
+                    state.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                    return false;
                 }
 
-                SYValue syval = s.output.last();
-                AST_Value* top = syval.val;
+                AST_AddressOf *addrof = ctx.alloc<AST_AddressOf>(nullptr);
+                ParseExprValue syval = state.pop_into(&addrof->inner);
 
                 Location loc = {
                     .file_id = syval.loc.file_id,
@@ -991,35 +1028,23 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                     }
                 };
 
-                if (top IS AST_DEREFERENCE) {
-                    // TODO ALLOCATION FREE we're leaking the Dereference node here
-
-                    // foo*& is the same as x
-                    // we hadnle this here because foo[123] is expanded to (foo + 123)* (look the '[' case on this switch)
-                    // and without this foo[123]& would become (foo + 123)*& which is ridiculous
-                    s.output.last() = { ((AST_Dereference*)top)->ptr, loc };
-                } else {
-                    u64 loc_start = location_of(ctx, (AST_Node**)&s.output.last()).loc.start;
-
-                    s.output.last() = { ctx.alloc<AST_AddressOf>((AST_Value*)top), loc };
-
-                    ctx.global->definition_locations[s.output.last().val] = loc;
-                }
+                state._output.push({addrof, loc});
+                ctx.global.definition_locations[addrof] = loc;
 
                 break;
             }
 
-            case KW_U8:   s.output.push({ &t_u8,   kwloc }); prev_was_value = true; break;
-            case KW_U16:  s.output.push({ &t_u16,  kwloc }); prev_was_value = true; break;
-            case KW_U32:  s.output.push({ &t_u32,  kwloc }); prev_was_value = true; break;
-            case KW_U64:  s.output.push({ &t_u64,  kwloc }); prev_was_value = true; break;
-            case KW_I8:   s.output.push({ &t_i8,   kwloc }); prev_was_value = true; break;
-            case KW_I16:  s.output.push({ &t_i16,  kwloc }); prev_was_value = true; break;
-            case KW_I32:  s.output.push({ &t_i32,  kwloc }); prev_was_value = true; break;
-            case KW_I64:  s.output.push({ &t_i64,  kwloc }); prev_was_value = true; break;
-            case KW_BOOL: s.output.push({ &t_bool, kwloc }); prev_was_value = true; break;
-            case KW_F32:  s.output.push({ &t_f32,  kwloc }); prev_was_value = true; break;
-            case KW_F64:  s.output.push({ &t_f64,  kwloc }); prev_was_value = true; break;
+            case KW_U8:   state._output.push({ &t_u8,   kwloc }); prev_was_value = true; break;
+            case KW_U16:  state._output.push({ &t_u16,  kwloc }); prev_was_value = true; break;
+            case KW_U32:  state._output.push({ &t_u32,  kwloc }); prev_was_value = true; break;
+            case KW_U64:  state._output.push({ &t_u64,  kwloc }); prev_was_value = true; break;
+            case KW_I8:   state._output.push({ &t_i8,   kwloc }); prev_was_value = true; break;
+            case KW_I16:  state._output.push({ &t_i16,  kwloc }); prev_was_value = true; break;
+            case KW_I32:  state._output.push({ &t_i32,  kwloc }); prev_was_value = true; break;
+            case KW_I64:  state._output.push({ &t_i64,  kwloc }); prev_was_value = true; break;
+            case KW_BOOL: state._output.push({ &t_bool, kwloc }); prev_was_value = true; break;
+            case KW_F32:  state._output.push({ &t_f32,  kwloc }); prev_was_value = true; break;
+            case KW_F64:  state._output.push({ &t_f64,  kwloc }); prev_was_value = true; break;
 
             default: {
                 if (delim == t.type) {
@@ -1036,31 +1061,33 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                         // If the next token type is value, the * is infix
                         // if it's an operator, the * is postfix
                         if (!_token_is_value(next)) {
-                            if (s.output.size == 0) {
-                                s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
-                                return nullptr;
+                            if (state._output.size == 0) {
+                                state.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                                return false;
                             }
-                            SYValue last = s.output.last();
+
+                            AST_Dereference *deref = ctx.alloc<AST_Dereference>(nullptr);
+                            ParseExprValue last = state.pop_into(&deref->ptr);
                             last.loc.loc.end = r.pos_in_file;
 
-                            s.output.last() = {
-                                ctx.alloc<AST_Dereference>(s.output.last().val),
-                                last.loc
-                            };
-                            s.ctx.global->definition_locations[s.output.last().val] = last.loc;
+                            state._output.push({
+                                deref,
+                                last.loc,
+                            });
+                            state.ctx.global.definition_locations[deref] = last.loc;
                             prev_was_value = true;
                             break;
                         }
                     }
 
-                    while (s.stack.size && s.stack.last() != TOK('(') 
-                            && PREC(s.stack.last()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
+                    while (state.stack.size && state.stack.last() != TOK('(') 
+                            && PREC(state.stack.last()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
                     {
-                        MUST (pop(s));
+                        MUST (pop_operator(state));
                     }
 
                     prev_was_value = false;
-                    s.stack.push(t.type);
+                    state.stack.push(t.type);
                 }
                 else {
                     if (prev_was_value) {
@@ -1070,8 +1097,8 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
                         goto Done;
                     }
                     else {
-                        s.ctx.error({ .code = ERR_INVALID_EXPRESSION });
-                        return nullptr;
+                        state.ctx.error({ .code = ERR_INVALID_EXPRESSION });
+                        return false;
                     }
                 }
             }
@@ -1080,16 +1107,18 @@ AST_Value* parse_expr(AST_Context& ctx, TokenReader& r, TokenType delim) {
     }
 
 Done:
-    while (s.stack.size) 
-        MUST (pop(s));
+    while (state.stack.size) 
+        MUST (pop_operator(state));
 
-    if (s.output.size != 1) {
-        s.ctx.error({
+    if (state._output.size != 1) {
+        state.ctx.error({
             .code = ERR_INVALID_EXPRESSION
         });
-        return nullptr;
+        return false;
     }
-    return s.output[0].val;
+
+    state.pop_into(out);
+    return true;
 }
 
 AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
@@ -1099,12 +1128,13 @@ AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
     AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, -1);
 
     MUST (r.expect(TOK(':')).type);
-    MUST (var->type = (AST_Type*)parse_expr(ctx, r, TOK('=')));
+
+    MUST (parse_expr(ctx, (AST_Value**)&var->type, r, TOK('=')));
 
     if (r.peek().type == TOK('=')) {
         r.pop();
-        AST_Value *initial_value = (AST_Value*)parse_expr(ctx, r);
-        MUST (initial_value);
+        AST_BinaryOp *assignment = ctx.alloc<AST_BinaryOp>(TOK('='), var, nullptr);
+        MUST (parse_expr(ctx, &assignment->rhs, r, {}));
 
         Location loc = {
             .file_id = nameToken.file_id,
@@ -1114,17 +1144,20 @@ AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
             }
         };
 
-        AST_BinaryOp *assignment = ctx.alloc<AST_BinaryOp>(TOK('='), var, initial_value);
-        ctx.global->definition_locations[assignment] = loc;
+        ctx.global.definition_locations[assignment] = loc;
         assignment->nodetype = AST_ASSIGNMENT;
         ctx.statements.push(assignment);
-    };
+    } else {
+        MUST (r.expect(TOK(';')).type);
+    }
 
-    var->is_global = ctx.global == &ctx;
 
-    MUST (ctx.declare({ nameToken.name }, var));
+    var->is_global = &ctx.global == &ctx;
 
-    ctx.global->definition_locations[var] = {
+    bool declare_succeeded = ctx.declare({ nameToken.name }, var, &ctx == &ctx.global);
+
+
+    ctx.global.definition_locations[var] = {
         .file_id = r.sf.id,
         .loc = {
             .start = nameToken.loc.start,
@@ -1132,7 +1165,7 @@ AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
         }
     };
 
-    return var;
+    return declare_succeeded ? var : nullptr;
 }
 
 AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
@@ -1143,12 +1176,14 @@ AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
     // parse_struct only ever gets called if the 'struct' keyword has been peeked
     assert (struct_kw.type);
 
+    bool declare_succeeded = true;
+
     if (decl) {
         Token nameToken = r.expect_full(TOK_ID);
         MUST (nameToken.type); 
 
         st = ctx.alloc<AST_Struct>(nameToken.name);
-        MUST (ctx.declare({ .name = st->name }, st));
+        declare_succeeded = ctx.declare({ .name = st->name }, st, true);
     }
     else {
         st = ctx.alloc<AST_Struct>(nullptr);
@@ -1157,7 +1192,7 @@ AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
     MUST (r.expect(TOK('{')).type);
     MUST (parse_type_list(ctx, r, TOK('}'), &st->members));
 
-    return st;
+    return declare_succeeded ? st : nullptr;
 }
 
 bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error) {

@@ -48,7 +48,7 @@ AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_L
     str = stringToken.name;
 }
 
-std::wostream& operator<< (std::wostream& o, arr<StructElement>& tl) {
+std::wostream& operator<< (std::wostream& o, bucketed_arr<StructElement>& tl) {
     for (const auto& entry : tl) {
         o << entry.name << ": " << entry.type << ", ";
     }
@@ -96,6 +96,8 @@ std::wostream& operator<< (std::wostream& o, AST_Context* bl) {
 }
 
 void print(std::wostream& o, AST_Node* node, bool decl) {
+    assert(node && "Attempting to print a null node");
+
     switch (node->nodetype) {
         case AST_FN:             print(o, (AST_Fn*)node, decl); break;
         case AST_BINARY_OP:      print(o, (AST_BinaryOp*)node, false); break;
@@ -147,9 +149,7 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
 
         o << ')';
 
-
-        // TODO RETURNTYPE
-        AST_Type* rettype = (AST_Type*)fn->block.resolve({ "returntype" });
+        AST_Type* rettype = ((AST_FnType*)fn->type)->returntype;
         if (rettype)
             o << ": " << rettype;
 

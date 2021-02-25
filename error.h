@@ -23,7 +23,7 @@ enum ErrorCode {
 
     // Typer errors
     ERR_INVALID_ASSIGNMENT,
-    ERR_INVALID_INITIAL_VALUE,
+    ERR_CANNOT_IMPLICIT_CAST,
     ERR_BAD_BINARY_OP,
     ERR_RETURN_TYPE_MISSING,
     ERR_RETURN_TYPE_INVALID,
@@ -45,6 +45,8 @@ struct ArgumentErr {
     u64 arg_index;
 };
 
+struct DeclarationKey;
+
 struct Error {
     ErrorCode code;
     ErrorSeverity severity;
@@ -52,6 +54,7 @@ struct Error {
 
     arr<AST_Node*> nodes;
     arr<AST_Node**> node_ptrs;
+    DeclarationKey *key;
     arr<ArgumentErr> args;
 };
 

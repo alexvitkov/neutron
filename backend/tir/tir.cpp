@@ -3,8 +3,7 @@
 #include <iostream>
 #include <sstream>
 
-TIR_Value::operator bool() { return valuespace;
-}
+TIR_Value::operator bool() { return valuespace; }
 bool operator== (TIR_Value& lhs, TIR_Value& rhs) {
     return lhs.valuespace == rhs.valuespace && lhs.offset == rhs.offset;
 }
@@ -13,6 +12,7 @@ bool operator!= (TIR_Value& lhs, TIR_Value& rhs) {
 }
 u32 map_hash(TIR_Value data)                  { return data.valuespace ^ data.offset; }
 bool map_equals(TIR_Value lhs, TIR_Value rhs) { return lhs == rhs; }
+
 
 
 void TIR_Function::emit(TIR_Instruction inst) {
@@ -324,6 +324,33 @@ void compile_block(TIR_Function &fn, TIR_Block *tir_block, AST_Context *ast_bloc
         after->push_previous(tir_block);
     }
 }
+
+struct TIR_FnCompileJob : Job {
+    TIR_Function *tir_fn;
+
+    bool run(Message *msg) override {
+        tir_fn->compile_signature();
+
+        AST_Type* rettype = ((AST_FnType*)tir_fn->ast_fn->type)->returntype;
+        if (rettype) 
+            tir_fn->retval.type = rettype;
+
+        if (!tir_fn->ast_fn->is_extern) {
+            TIR_Block* entry = new TIR_Block();
+            tir_fn->blocks.push(entry);
+            compile_block(*tir_fn, entry, &tir_fn->ast_fn->block, nullptr);
+        }
+        return true;
+    }
+
+    std::wstring get_name() override {
+        std::wostringstream s;
+        s << L"TIR_FnCompileJob<" << tir_fn->ast_fn->name << L">";
+        return s.str();
+    }
+
+    TIR_FnCompileJob(TIR_Function *tir_fn) : tir_fn(tir_fn), Job(tir_fn->c.global) {}
+};
 
 TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
     switch (arr->nodetype) {
@@ -692,7 +719,9 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             AST_StringLiteral* str = (AST_StringLiteral*)node;
 
             DeclarationKey key = { .string_literal = str };
-            AST_Var* strvar = (AST_Var*)fn.c.global.resolve(key);
+
+            AST_Var* strvar = (AST_Var*)fn.c.global.declarations.find2(key);
+            assert(strvar);
 
             TIR_Value val = fn.c.global_valmap[str];
 
@@ -792,7 +821,7 @@ void TIR_Function::compile_signature() {
                 .type = arg_type,
             };
 
-            // TODO DS
+            // TODO DS - RESERVE
             while (parameters.size <= vardecl->argindex)
                 parameters.push({});
             parameters[vardecl->argindex] = val;
@@ -800,17 +829,6 @@ void TIR_Function::compile_signature() {
     }
 }
 
-void TIR_Function::compile() {
-    AST_Type* rettype = ((AST_FnType*)ast_fn->type)->returntype;
-    if (rettype) 
-        retval.type = rettype;
-
-    if (!ast_fn->is_extern) {
-        TIR_Block* entry = new TIR_Block();
-        blocks.push(entry);
-        compile_block(*this, entry, &ast_fn->block, nullptr);
-    }
-}
 
 TIR_Value pack_into_const(void *val, AST_Type *type) {
     switch (type->nodetype) {
@@ -843,29 +861,29 @@ TIR_Value pack_into_const(void *val, AST_Type *type) {
 
 
 TIR_ExecutionJob::TIR_ExecutionJob(TIR_Context *tir_context) 
-    : tir_context(tir_context) {}
+    : Job(tir_context->global),
+      tir_context(tir_context) {}
 
 
 struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
     TIR_Function *pseudo_fn;
-    TIR_Value var;
+    TIR_Value     tir_var;
+    AST_Var      *ast_var;
+
     TIR_GlobalVarInitJob(TIR_Value var, TIR_Context *tir_context);
-
-    AST_Var *varr;
-
 
     TIR_GlobalVarInitJob(TIR_Context &tir_context, AST_BinaryOp *assignment) 
         : TIR_ExecutionJob(&tir_context) 
     {
-        var = tir_context.global_valmap[assignment->lhs];
-        varr = (AST_Var*)assignment->lhs;
+        tir_var = tir_context.global_valmap[assignment->lhs];
+        ast_var = (AST_Var*)assignment->lhs;
 
         // This function calculates the initial value and returns it
         TIR_Function *pseudo_fn = new TIR_Function(tir_context, nullptr);
         TIR_Block* entry = new TIR_Block();
         pseudo_fn->retval = {
             .valuespace = TVS_RET_VALUE,
-            .type = var.type,
+            .type = tir_var.type,
         };
         pseudo_fn->writepoint = entry;
         pseudo_fn->blocks.push(entry);
@@ -876,61 +894,52 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
         arr<void*> _args;
         call(pseudo_fn, _args);
 
-        tir_context._global_running_jobs[var.offset] = this;
+        tir_context.global_initializer_running_jobs[tir_var.offset] = this;
     }
 
     std::wstring get_name() override {
         std::wostringstream stream;
-        stream << L"init<" << varr->name << ">";
+        stream << L"TIR_GlobalVarInitJob<" << ast_var->name << ">";
         return stream.str();
     }
 
     virtual void on_complete(void *value) override {
-        tir_context->_global_initial_values[var.offset]
-            = pack_into_const(value, varr->type);
+        tir_context->_global_initial_values[tir_var.offset]
+            = pack_into_const(value, ast_var->type);
 
         // TODO DS DELETE
-        tir_context->_global_running_jobs[var.offset] = nullptr;
-        tir_context->storage->global_values[var.offset] = value;
+        tir_context->global_initializer_running_jobs[tir_var.offset] = nullptr;
+        tir_context->storage.global_values[tir_var.offset] = value;
 
         wcout.flush();
     }
 };
 
+Job *TIR_Context::compile_fn(AST_Fn *fn, Job *fn_typecheck_job) {
+    TIR_Function* tir_fn = new TIR_Function(*this, fn);
+    fns.insert(fn, tir_fn);
+
+    TIR_FnCompileJob *compile_job = new TIR_FnCompileJob(tir_fn);
+    compile_job->add_dependency(fn_typecheck_job);
+    tir_fn->c.global.add_job(compile_job);
+
+    tir_fn->compile_job = compile_job;
+    return compile_job;
+}
+
+
+void TIR_Context::append_global(AST_Var *var) {
+    TIR_Value val = {
+        .valuespace = TVS_GLOBAL,
+        .offset = globals_count++,
+        .type = global.get_pointer_type(var->type),
+    };
+    global_valmap[var] = val;
+}
+
 void TIR_Context::compile_all() {
-    storage = new TIR_ExecutionStorage();
 
-    // Run through the global variables and assign them TIR_Values
-    for(auto& decl : global.declarations) {
-        switch (decl.value->nodetype) {
-            case AST_VAR: {
-                AST_Var* var = (AST_Var*)decl.value;
-
-                TIR_Value val = {
-                    .valuespace = TVS_GLOBAL,
-                    .offset = globals_count++,
-                    .type = global.get_pointer_type(((AST_Var*)decl.value)->type),
-                };
-                global_valmap[var] = val;
-                break;
-            }
-            default: continue;
-        }
-    }
-
-    for(auto& decl : global.declarations) {
-        switch (decl.value->nodetype) {
-            case AST_FN: {
-                AST_Fn* fn = (AST_Fn*)decl.value;
-                TIR_Function* tir_fn = new TIR_Function(*this, fn);
-                tir_fn->compile_signature();
-                fns.insert(fn, tir_fn);
-                break;
-            }
-            default: continue;
-        }
-    }
-
+    // Handle initial values for string literal constants
     for (auto &initial_node : global.global_initial_nodes) {
         AST_Var *the_string_var = (AST_Var*)initial_node.key;
         AST_StringLiteral *the_string_literal = (AST_StringLiteral*)initial_node.value;
@@ -948,21 +957,19 @@ void TIR_Context::compile_all() {
         _global_initial_values[the_string_var_tir.offset] = array_val;
     }
 
+    // Top level assignments are always global varaible initial values
+    // We handle them specially, with a CTE job
     for (auto& stmt : global.statements) {
         switch (stmt->nodetype) {
             case AST_ASSIGNMENT: {
                 AST_BinaryOp *assignment = (AST_BinaryOp*)stmt;
-                global.add_job(new TIR_GlobalVarInitJob(*this, assignment));
+                Job *init = new TIR_GlobalVarInitJob(*this, assignment);
+                global.add_job(init);
                 break;
             }
             default:
                 UNREACHABLE;
         }
-    }
-
-
-    for (auto& fn : fns) {
-        fn.value->compile();
     }
 }
 
@@ -1031,18 +1038,19 @@ void *TIR_ExecutionJob::StackFrame::get_value(TIR_Value key) {
 }
 
 void TIR_ExecutionJob::call(TIR_Function *fn, arr<void*> &args) {
-    assert(fn->blocks.size);
-
-    StackFrame &sf = stackframes.push({
-            .block = fn->blocks[0],
-            .next_instruction = 0,
-            .stack = (u8*)malloc(fn->stack_size),
-            .args = args,
-            .tmp = arr<void*>(fn->temps_count),
-            });
+    stackframes.push({
+        .fn = fn,
+        .block = nullptr,
+        .next_instruction = 0,
+        .stack = (u8*)malloc(fn->stack_size),
+        .args = args,
+        .tmp = arr<void*>(fn->temps_count),
+    });
 }
 
-bool TIR_ExecutionJob::run() {
+bool TIR_ExecutionJob::run(Message *message) {
+    assert(!message);
+
 NextFrame:
     if (stackframes.size == 0) {
         on_complete(next_retval);
@@ -1051,6 +1059,9 @@ NextFrame:
 
     while (true) {
         StackFrame &sf = stackframes.last();
+
+        if (!sf.block)
+            sf.block = sf.fn->blocks[0];
 
         TIR_Instruction &instr = sf.block->instructions[sf.next_instruction];
 
@@ -1106,7 +1117,7 @@ NextFrame:
                     switch (instr.un.dst.valuespace) {
                         case TVS_GLOBAL:
                             NOT_IMPLEMENTED("not here");
-                            tir_context->storage->global_values[instr.un.dst.offset] 
+                            tir_context->storage.global_values[instr.un.dst.offset] 
                                 = sf.get_value(instr.un.src);
                             break;
                         default:
@@ -1120,14 +1131,14 @@ NextFrame:
                         case TVS_GLOBAL:
                             void *val;
                             // If there is already a value assigned, use that
-                            if (tir_context->storage->global_values.find(instr.un.src.offset, &val)) {
+                            if (tir_context->storage.global_values.find(instr.un.src.offset, &val)) {
                                 sf.set_value(instr.un.dst, val);
                             } else {
                                 // If there's no value assigned to the global, look for a initial value.
                                 // The initial value is assigned via a job that may not be completed, 
                                 // so if the job isn't done we have to wait on it
                                 Job *job;
-                                if (tir_context->_global_running_jobs.find(instr.un.src.offset, &job)) {
+                                if (tir_context->global_initializer_running_jobs.find(instr.un.src.offset, &job)) {
                                     // TODO DS DELETE
                                     assert(job);
                                     this->add_dependency(job);
@@ -1157,6 +1168,12 @@ NextFrame:
                         }
 
                         call(instr.call.fn, args);
+
+                        if (instr.call.fn->blocks.size == 0) {
+                            add_dependency (instr.call.fn->compile_job);
+                            return false;
+                        }
+
                         goto NextFrame;
                     }
                 }
