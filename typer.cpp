@@ -190,8 +190,10 @@ bool validate_fn_type(AST_Context& ctx, AST_Fn* fn) {
 
 
 bool GetTypeJob::_run(Message *msg) {
-    if (node->type)
-        return node->type;
+    if (node->type) {
+        result = node->type;
+        return true;
+    }
 
     switch (node->nodetype) {
         case AST_PRIMITIVE_TYPE: 
@@ -571,7 +573,13 @@ bool TypeCheckJob::_run(Message *msg) {
 
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
-            MUST (validate_type(ctx, &var->type));
+            if (var->type) {
+                MUST (validate_type(ctx, &var->type));
+            } else {
+                assert(var->argindex >= 0);
+                AST_FnType *fntype = (AST_FnType*)this->ctx.fn->type;
+                var->type = fntype->param_types[var->argindex];
+            }
             return true;
         }
 
@@ -687,6 +695,7 @@ bool TypeCheckJob::_run(Message *msg) {
             if (node->nodetype & AST_VALUE_BIT) {
                 GetTypeJob gettype(ctx, (AST_Value*)node);
                 WAIT (gettype, GetTypeJob);
+                return true;
             }
             NOT_IMPLEMENTED();
         }

@@ -38,7 +38,8 @@ bool AST_Context::declare(DeclarationKey key, AST_Node* value, bool sendmsg) {
     if (declarations.find(key, &prev_decl)) {
         error({
             .code = ERR_ALREADY_DEFINED,
-            .nodes = { prev_decl, value }
+            .nodes = { prev_decl, value },
+            .key = new DeclarationKey(key),
         });
         return false;
     }

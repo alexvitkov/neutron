@@ -28,10 +28,13 @@ Job::Job(AST_GlobalContext *global) : global(global) {
 
 void AST_GlobalContext::send_message(Message *msg) {
     arr<Job*>& receivers = subscribers[msg->msgtype];
-    // wcout << "Sending message " << msg->msgtype << "\n";
+#ifdef DEBUG_JOBS
+    wcout << dim << "Sending message " << resetstyle << msg->msgtype << "\n";
+#endif
 
     for (u32 i = 0; i < receivers.size; ) {
         if (receivers[i]->flags & JOB_DONE || receivers[i]->_run(msg)) {
+            receivers[i]->flags = (JobFlags)(receivers[i]->flags | JOB_DONE);
             receivers.delete_unordered(i);
         } else {
             i++;
@@ -157,6 +160,9 @@ std::wstring JobGroup::get_name() {
 }
 
 void Job::subscribe(MessageType msgtype) {
+#ifdef DEBUG_JOBS
+    wcout << get_name() << dim << " subscribed to " << resetstyle << msgtype << "\n";
+#endif
     global->subscribers[msgtype].push(this);
 }
 

@@ -609,7 +609,7 @@ bool parse_block(AST_Context& block, TokenReader& r) {
 AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     Token fn_kw = r.expect_full(KW_FN);
 
-    // This only ever gets called if the 'struct' keyword
+    // parse_fn only ever gets called if the 'fn' keyword
     // has been peeked, no need for MUST check
     assert (fn_kw.type);
 
@@ -626,15 +626,16 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global->target.pointer_size);
 
     fn->type = temp_fn_type;
-    fn->block.fn = fn;
 
+    bool decl_succeeded = true;
     if (decl) {
-        MUST (ctx.declare({ name }, fn, true));
+        decl_succeeded = ctx.declare({ name }, fn, true);
     }
 
     MUST (r.expect(TOK('(')).type);
 
     // Parse the function arguments
+    i64 argindex = 0;
     while (r.peek().type != TOK_CLOSEBRACKET) {
 
         if (r.peek().type == OP_VARARGS) {
@@ -643,17 +644,28 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
             break;
         }
 
-        SmallToken nameToken = r.expect(TOK_ID);
+        Token nameToken = r.expect_full(TOK_ID);
         MUST (nameToken.type);
 
         MUST (r.expect(TOK(':')).type);
-
 
         AST_Type *& type = temp_fn_type->param_types.push(nullptr);
         MUST (parse_expr(ctx, (AST_Value**)&type, r, {}));
         fn->argument_names.push(nameToken.name);
         
         TokenType p = r.peek().type;
+
+        AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, argindex++);
+        ctx.global->definition_locations[var] = {
+            .file_id = r.sf.id,
+            .loc = {
+               .start = nameToken.loc.start,
+               .end = r.pos_in_file,
+            }
+        };
+
+        // the type of the AST_Var is set by the typer
+        MUST (fn->block.declare({ nameToken.name }, var, false));
 
         if (p == TOK_CLOSEBRACKET) {
             break;
@@ -693,7 +705,7 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
         }
     };
 
-    return fn;
+    return decl_succeeded ? fn : nullptr;
 }
 
 struct ParseExprValue {
@@ -847,7 +859,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
 
                 // TODO ALLOCATION we should not be storing the node locations
                 // for the unresolved IDs here, as they'll get discarded
-                if (!ctx.global->definition_locations.find(val, nullptr))
+                if (!ctx.global->definition_locations.find2(val))
                     ctx.global->definition_locations[val] = loc;
 
                 state._output.push({val, loc });
@@ -1131,7 +1143,7 @@ bool parse_let(AST_Context& ctx, TokenReader& r) {
 
     var->is_global = ctx.global == &ctx;
 
-    MUST (ctx.declare({ nameToken.name }, var, &ctx == ctx.global));
+    bool declare_succeeded = ctx.declare({ nameToken.name }, var, &ctx == ctx.global);
 
     MUST (r.expect(TOK(';')).type);
 
@@ -1143,7 +1155,7 @@ bool parse_let(AST_Context& ctx, TokenReader& r) {
         }
     };
 
-    return true;
+    return declare_succeeded;
 }
 
 AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
@@ -1154,12 +1166,14 @@ AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
     // parse_struct only ever gets called if the 'struct' keyword has been peeked
     assert (struct_kw.type);
 
+    bool declare_succeeded = true;
+
     if (decl) {
         Token nameToken = r.expect_full(TOK_ID);
         MUST (nameToken.type); 
 
         st = ctx.alloc<AST_Struct>(nameToken.name);
-        MUST (ctx.declare({ .name = st->name }, st, true));
+        declare_succeeded = ctx.declare({ .name = st->name }, st, true);
     }
     else {
         st = ctx.alloc<AST_Struct>(nullptr);
@@ -1168,7 +1182,7 @@ AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
     MUST (r.expect(TOK('{')).type);
     MUST (parse_type_list(ctx, r, TOK('}'), &st->members));
 
-    return st;
+    return declare_succeeded ? st : nullptr;
 }
 
 bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error) {

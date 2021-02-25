@@ -44,7 +44,6 @@ struct ERR_OfType {
 };
 
 std::wostream& operator<< (std::wostream& o, ERR_OfType rhs) {
-
     o << red << rhs.val << resetstyle << " (of type ";
     if (rhs.val->type) {
         o << rhs.val->type;
@@ -53,6 +52,20 @@ std::wostream& operator<< (std::wostream& o, ERR_OfType rhs) {
     }
     o << ")";
     return o; 
+}
+
+std::wostream& operator<< (std::wostream& o, TokenType tt) {
+    switch (tt) {
+        case ':':      o << "a type"; break;
+        case ';':      o << "a semicolon"; break;
+        case TOK_NONE: o << "end of file"; break; 
+        case TOK_ID:   o << "an identifier";  break;
+        default: {
+            o << "TOK(" << (int)tt << ")";
+            break;
+        }
+    }
+    return o;
 }
 
 ERR_OfType oftype(AST_Node* node) {
@@ -81,7 +94,7 @@ void print_code_segment(AST_Context& global, arr<Token>* tokens, arr<AST_Node*>*
 
             SourceFile* sf = &sources[loc.file_id];
 
-            if (!grouped.find(sf, nullptr)) {
+            if (!grouped.find2(sf)) {
                 grouped.insert(sf, arr<Location>());
             }
             grouped[sf].push(loc);
@@ -134,19 +147,6 @@ void print_code_segment(AST_Context& global, arr<Token>* tokens, arr<AST_Node*>*
     }
 }
 
-std::ostream& operator<< (std::ostream& o, TokenType& tt) {
-    switch (tt) {
-        case ':':      o << "type"; break;
-        case ';':      o << "semicolon"; break;
-        case TOK_NONE: o << "end of file"; break; 
-        case TOK_ID:   o << "identifier";  break;
-        default: {
-            o << "TOK(" << (int)tt << ")";
-            break;
-        }
-    }
-    return o;
-}
 
 void th(u64 n) {
     static const char* first_10[10] = {
@@ -176,8 +176,8 @@ void print_err(AST_Context &global, Error& err) {
     switch (err.code) {
 
         case ERR_ALREADY_DEFINED: {
-            wcout << red << err.tokens[0].name << resetstyle << " is defined multiple times:\n";
-            print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
+            wcout << red << err.key->name << resetstyle << " is defined multiple times:\n";
+            print_code_segment(global, nullptr, &err.nodes, nullptr);
             break;
         }
 
@@ -234,7 +234,7 @@ void print_err(AST_Context &global, Error& err) {
             Token actual = err.tokens[0];
             Token expected = err.tokens[1];
 
-            wcout << "Unexpected "         << red << actual.type << resetstyle
+            wcout << "Unexpected "         << red << actual.type   << resetstyle
                   << " while looking for " << red << expected.type << resetstyle << ":\n";
 
             arr<Token> toks = { actual };

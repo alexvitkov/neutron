@@ -185,7 +185,10 @@ struct AST_Fn : AST_Value {
     bool is_extern = false;
 
     inline AST_Fn(AST_Context* parent_ctx, const char* name) 
-        : AST_Value(AST_FN, nullptr), block(parent_ctx), name(name) {}
+        : AST_Value(AST_FN, nullptr), block(parent_ctx), name(name) 
+    {
+        block.fn = this;
+    }
 };
 
 struct AST_Struct : AST_Type {
