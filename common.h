@@ -192,6 +192,7 @@ enum AST_NodeType : u8 {
     AST_ADDRESS_OF    = 0x0b | AST_VALUE_BIT,
     AST_STRING_LITERAL= 0x0c | AST_VALUE_BIT,
     AST_TYPEOF        = 0x0d | AST_VALUE_BIT,               
+    AST_UNARY_OP      = 0x0e | AST_VALUE_BIT,
 
     AST_STRUCT         = 0x00 | AST_VALUE_BIT | AST_TYPE_BIT,
 	AST_PRIMITIVE_TYPE = 0x01 | AST_VALUE_BIT | AST_TYPE_BIT,

@@ -714,11 +714,16 @@ struct ParseExprValue {
     Location   loc;
 };
 
+struct OperatorOnStack {
+    Token     tok;
+    bool      is_unary;
+};
+
 struct ParseExprState {
     AST_Context &ctx;
     u32 brackets = 0;
     arr<ParseExprValue> _output;
-    arr<TokenType> stack;
+    arr<OperatorOnStack> stack;
 
     ParseExprValue pop_into(AST_Value **out) {
         ParseExprValue val = _output.pop();
@@ -737,66 +742,83 @@ struct ParseExprState {
 
 
 bool pop_operator(ParseExprState& state) {
-    if (state._output.size < 2) {
+
+    OperatorOnStack op = state.stack.pop();
+
+    if (state._output.size < (op.is_unary ? 1 : 2)) {
         state.ctx.error({
             .code = ERR_INVALID_EXPRESSION
         });
         return false;
     }
 
-    TokenType op = state.stack.pop();
+    if (op.is_unary) {
+        AST_UnaryOp *un = state.ctx.alloc<AST_UnaryOp>(op.tok.type, nullptr);
+        ParseExprValue inner = state.pop_into(&un->inner);
 
-    AST_BinaryOp* bin;
-    ParseExprValue lhs, rhs;
-
-    bin = state.ctx.alloc<AST_BinaryOp>(op, nullptr, nullptr);
-
-    if (prec[op] & ASSIGNMENT) {
-        if (op == '=') {
-            rhs = state.pop_into(&bin->rhs);
-            lhs = state.pop_into(&bin->lhs);
-            bin->nodetype = AST_ASSIGNMENT;
-        } else {
-            switch (op) {
-                case OP_ADDASSIGN:        op = TOK('+');      break;
-                case OP_SUBASSIGN:        op = TOK('-');      break;
-                case OP_MULASSIGN:        op = TOK('*');      break;
-                case OP_DIVASSIGN:        op = TOK('/');      break;
-                case OP_MODASSIGN:        op = TOK('%');      break;
-                case OP_SHIFTLEFTASSIGN:  op = OP_SHIFTLEFT;  break;
-                case OP_SHIFTRIGHTASSIGN: op = OP_SHIFTRIGHT; break;
-                case OP_BITANDASSIGN:     op = TOK('&');      break;
-                case OP_BITXORASSIGN:     op = TOK('|');      break;
-                case OP_BITORASSIGN:      op = TOK('^');      break;
-                default:
-                    UNREACHABLE;
+        Location loc = {
+            .file_id = inner.loc.file_id,
+            .loc = {
+                inner.loc.loc.start,
+                inner.loc.loc.end,
             }
+        };
+        state.ctx.global.definition_locations[un] = loc;
+        state._output.push({ un, loc });
+        
+        return true;
 
+    } else {
+        AST_BinaryOp *bin = state.ctx.alloc<AST_BinaryOp>(op.tok.type, nullptr, nullptr);
+        ParseExprValue lhs, rhs;
+        
+        if (prec[op.tok.type] & ASSIGNMENT) {
+            if (op.tok.type == '=') {
+                rhs = state.pop_into(&bin->rhs);
+                lhs = state.pop_into(&bin->lhs);
+                bin->nodetype = AST_ASSIGNMENT;
+            } else {
+                switch (op.tok.type) {
+                    case OP_ADDASSIGN:        op.tok.type = TOK('+');      break;
+                    case OP_SUBASSIGN:        op.tok.type = TOK('-');      break;
+                    case OP_MULASSIGN:        op.tok.type = TOK('*');      break;
+                    case OP_DIVASSIGN:        op.tok.type = TOK('/');      break;
+                    case OP_MODASSIGN:        op.tok.type = TOK('%');      break;
+                    case OP_SHIFTLEFTASSIGN:  op.tok.type = OP_SHIFTLEFT;  break;
+                    case OP_SHIFTRIGHTASSIGN: op.tok.type = OP_SHIFTRIGHT; break;
+                    case OP_BITANDASSIGN:     op.tok.type = TOK('&');      break;
+                    case OP_BITXORASSIGN:     op.tok.type = TOK('|');      break;
+                    case OP_BITORASSIGN:      op.tok.type = TOK('^');      break;
+                    default:
+                        UNREACHABLE;
+                }
+        
+                rhs = state.pop_into(&bin->rhs);
+                lhs = state.pop_into(&bin->lhs);
+        
+                bin = state.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, bin);
+                bin->nodetype = AST_ASSIGNMENT;
+                NOT_IMPLEMENTED();
+            }
+        }
+        else {
+            bin = state.ctx.alloc<AST_BinaryOp>(op.tok.type, nullptr, nullptr);
             rhs = state.pop_into(&bin->rhs);
             lhs = state.pop_into(&bin->lhs);
-
-            bin = state.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, bin);
-            bin->nodetype = AST_ASSIGNMENT;
-            NOT_IMPLEMENTED();
         }
+        
+        Location loc = {
+            .file_id = lhs.loc.file_id,
+            .loc = {
+                lhs.loc.loc.start,
+                rhs.loc.loc.end,
+            }
+        };
+        state.ctx.global.definition_locations[bin] = loc;
+        state._output.push({ bin, loc });
+        
+        return true;
     }
-    else {
-        bin = state.ctx.alloc<AST_BinaryOp>(op, nullptr, nullptr);
-        rhs = state.pop_into(&bin->rhs);
-        lhs = state.pop_into(&bin->lhs);
-    }
-
-    Location loc = {
-        .file_id = lhs.loc.file_id,
-        .loc = {
-            lhs.loc.loc.start,
-            rhs.loc.loc.end,
-        }
-    };
-    state.ctx.global.definition_locations[bin] = loc;
-    state._output.push({ bin, loc });
-
-    return true;
 }
 
 bool _token_is_value(TokenType t) {
@@ -945,7 +967,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                 // If previous isn't a value, do the shunting yard thing
                 else {
                     prev_was_value = false;
-                    state.stack.push(t.type);
+                    state.stack.push({ t, true });
                     state.brackets++;
                 }
                 break;
@@ -958,7 +980,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                     r.pos--;
                     goto Done;
                 }
-                while (state.stack.last() != TOK('('))
+                while (state.stack.last().tok.type != TOK('('))
                     MUST (pop_operator(state));
                 state.brackets--;
                 state.stack.pop(); // disacrd the (
@@ -1082,19 +1104,28 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                         }
                     }
 
-                    while (state.stack.size && state.stack.last() != TOK('(') 
-                            && PREC(state.stack.last()) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
-                    {
-                        MUST (pop_operator(state));
+                    if (prev_was_value) {
+                        while (state.stack.size && state.stack.last().tok.type != TOK('(') 
+                                && PREC(state.stack.last().tok.type) + !IS_RIGHT_ASSOC(t.type) > PREC(t.type)) 
+                        {
+                            MUST (pop_operator(state));
+                        }
+                        prev_was_value = false;
+                        state.stack.push({ t, false });
+                    } else {
+                        if ((prec[t.type] & PREFIX) == PREFIX) {
+                            prev_was_value = false;
+                            state.stack.push({ t, true });
+                        } else {
+                            NOT_IMPLEMENTED("ERrror");
+                        }
                     }
 
-                    prev_was_value = false;
-                    state.stack.push(t.type);
                 }
                 else {
                     if (prev_was_value) {
                         // The expression is over.
-                        // This token is part fo whatever comes next - don't consume it
+                        // the current token is part of whatever comes next - don't consume it
                         r.pos --;
                         goto Done;
                     }

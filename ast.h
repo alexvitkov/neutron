@@ -136,6 +136,7 @@ struct AST_Var : AST_Value {
 struct AST_Number : AST_Value {
     u64 floorabs;
 
+    bool negative;
     bool has_decimal_point;
     u64 after_decimal_point;
 
@@ -156,6 +157,14 @@ struct AST_While : AST_Node {
     AST_Context block;
 
     inline AST_While(AST_Context* parent_ctx) : AST_Node(AST_WHILE), block(parent_ctx) {}
+};
+
+struct AST_UnaryOp : AST_Value {
+    TokenType op;
+    AST_Value *inner;
+
+    inline AST_UnaryOp(TokenType op, AST_Value* inner)
+        : AST_Value(AST_UNARY_OP, nullptr), inner(inner), op(op) {}
 };
 
 struct AST_BinaryOp : AST_Value {
@@ -262,6 +271,7 @@ void print(std::wostream& o, AST_Fn* node, bool decl);
 void print(std::wostream& o, AST_Var* node, bool decl);
 void print(std::wostream& o, AST_Struct* node, bool decl);
 void print(std::wostream& o, AST_BinaryOp* node, bool brackets);
+void print(std::wostream& o, AST_UnaryOp* node, bool brackets);
 
 std::wostream& operator<<(std::wostream& o, AST_Node* node);
 std::wostream& operator<<(std::wostream& o, AST_PrimitiveType* node);

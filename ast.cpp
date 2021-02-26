@@ -102,6 +102,7 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
         case AST_FN:             print(o, (AST_Fn*)node, decl); break;
         case AST_BINARY_OP:      print(o, (AST_BinaryOp*)node, false); break;
         case AST_ASSIGNMENT:     print(o, (AST_BinaryOp*)node, false); break;
+        case AST_UNARY_OP:       print(o, (AST_UnaryOp*)node,  false); break;
         case AST_VAR:            print(o, (AST_Var*)node, decl); break;
         case AST_STRUCT:         print(o, (AST_Struct*)node, decl); break;
 
@@ -169,6 +170,22 @@ std::wostream& operator<< (std::wostream& o, AST_PrimitiveType* node) {
     return o;
 }
 
+void print(std::wostream& o, AST_UnaryOp* node, bool brackets = false) {
+    if (ALWAYS_BRACKETS || brackets)
+        o << '(';
+
+    switch (node->op) {
+        case '+': o << '+' << node->inner; break;
+        case '-': o << '-' << node->inner; break;
+        case '*': o << node->inner << '*'; break;
+        case '&': o << node->inner << '*'; break;
+        default:
+            NOT_IMPLEMENTED();
+    }
+
+    if (ALWAYS_BRACKETS || brackets)
+        o << ')';
+}
 
 void print(std::wostream& o, AST_BinaryOp* node, bool brackets = false) {
     if (ALWAYS_BRACKETS || brackets)
