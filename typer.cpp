@@ -301,30 +301,6 @@ bool GetTypeJob::run(Message *msg) {
             }
         }
 
-        case AST_ASSIGNMENT: {
-            AST_BinaryOp* bin = (AST_BinaryOp*)node;
-
-            GetTypeJob lhs_job(ctx, bin->lhs);
-            WAIT (lhs_job, GetTypeJob);
-
-            GetTypeJob rhs_job(ctx, bin->rhs);
-            WAIT (rhs_job, GetTypeJob);
-
-            if (!is_valid_lvalue(bin->lhs)) {
-                error({ .code = ERR_NOT_AN_LVALUE, .nodes = { lhs_job.node->type, } });
-                return false;
-            }
-
-            if (!implicit_cast(ctx, &bin->rhs, lhs_job.node->type)) {
-                // TODO ERROR
-                error({});
-                return false;
-            }
-            
-            bin->type = lhs_job.node->type;
-            return true;
-        }
-
         case AST_BINARY_OP: {
             AST_BinaryOp* bin = (AST_BinaryOp*)node;
 
@@ -333,6 +309,25 @@ bool GetTypeJob::run(Message *msg) {
 
             GetTypeJob rhs_job(ctx, bin->rhs);
             WAIT (rhs_job, GetTypeJob);
+
+            // Assignments are handled differently from other binary operators
+            if ((prec[bin->op] & ASSIGNMENT) == ASSIGNMENT) {
+                bin->nodetype = AST_ASSIGNMENT;
+
+                if (!is_valid_lvalue(bin->lhs)) {
+                    error({ .code = ERR_NOT_AN_LVALUE, .nodes = { lhs_job.node->type, } });
+                    return false;
+                }
+
+                if (!implicit_cast(ctx, &bin->rhs, lhs_job.node->type)) {
+                    // TODO ERROR
+                    error({});
+                    return false;
+                }
+                
+                bin->type = lhs_job.node->type;
+                return true;
+            }
 
             // Handle pointer arithmetic
             if (lhs_job.node->type IS AST_POINTER_TYPE || rhs_job.node->type IS AST_POINTER_TYPE) {

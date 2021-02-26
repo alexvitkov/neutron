@@ -772,40 +772,9 @@ bool pop_operator(ParseExprState& state) {
         AST_BinaryOp *bin = state.ctx.alloc<AST_BinaryOp>(op.tok.type, nullptr, nullptr);
         ParseExprValue lhs, rhs;
         
-        if (prec[op.tok.type] & ASSIGNMENT) {
-            if (op.tok.type == '=') {
-                rhs = state.pop_into(&bin->rhs);
-                lhs = state.pop_into(&bin->lhs);
-                bin->nodetype = AST_ASSIGNMENT;
-            } else {
-                switch (op.tok.type) {
-                    case OP_ADDASSIGN:        op.tok.type = TOK('+');      break;
-                    case OP_SUBASSIGN:        op.tok.type = TOK('-');      break;
-                    case OP_MULASSIGN:        op.tok.type = TOK('*');      break;
-                    case OP_DIVASSIGN:        op.tok.type = TOK('/');      break;
-                    case OP_MODASSIGN:        op.tok.type = TOK('%');      break;
-                    case OP_SHIFTLEFTASSIGN:  op.tok.type = OP_SHIFTLEFT;  break;
-                    case OP_SHIFTRIGHTASSIGN: op.tok.type = OP_SHIFTRIGHT; break;
-                    case OP_BITANDASSIGN:     op.tok.type = TOK('&');      break;
-                    case OP_BITXORASSIGN:     op.tok.type = TOK('|');      break;
-                    case OP_BITORASSIGN:      op.tok.type = TOK('^');      break;
-                    default:
-                        UNREACHABLE;
-                }
-        
-                rhs = state.pop_into(&bin->rhs);
-                lhs = state.pop_into(&bin->lhs);
-        
-                bin = state.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, bin);
-                bin->nodetype = AST_ASSIGNMENT;
-                NOT_IMPLEMENTED();
-            }
-        }
-        else {
-            bin = state.ctx.alloc<AST_BinaryOp>(op.tok.type, nullptr, nullptr);
-            rhs = state.pop_into(&bin->rhs);
-            lhs = state.pop_into(&bin->lhs);
-        }
+        bin = state.ctx.alloc<AST_BinaryOp>(op.tok.type, nullptr, nullptr);
+        rhs = state.pop_into(&bin->rhs);
+        lhs = state.pop_into(&bin->lhs);
         
         Location loc = {
             .file_id = lhs.loc.file_id,
@@ -1178,7 +1147,7 @@ AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
         };
 
         ctx.global.definition_locations[assignment] = loc;
-        assignment->nodetype = AST_ASSIGNMENT;
+        assignment->nodetype = AST_BINARY_OP;
         ctx.statements.push(assignment);
     } else {
         MUST (r.expect(TOK(';')).type);
