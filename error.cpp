@@ -198,6 +198,24 @@ void print_err(AST_Context &global, Error& err) {
             
         }
 
+        case ERR_INVALID_NUMBER_OF_ARGUMENTS: {
+            AST_FnCall *fncall = (AST_FnCall*)err.nodes[0];
+            AST_Fn     *fn     = (AST_Fn*)fncall->fn;
+            AST_FnType *fntype = (AST_FnType*)fn->type;
+
+            wcout << fn << " accepts ";
+            if (fntype->is_variadic)
+                wcout << "at least ";
+            wcout << fntype->param_types.size << " arguments, but was called with ";
+            if (fncall->args.size < fntype->param_types.size)
+                wcout << "only ";
+            wcout << fncall->args.size << ":\n";
+
+            arr<AST_Node*> nodes = { fncall, fn };
+            print_code_segment(global, nullptr, &nodes, nullptr);
+            break;
+        }
+
         // TODO ERR_INVALID_ASSIGNMENT and ERR_INVALID_INITIAL_VALUE can be merged
         case ERR_INVALID_ASSIGNMENT: {
             AST_Value* dst = (AST_Value*)*err.node_ptrs[0];
@@ -267,9 +285,7 @@ void print_err(AST_Context &global, Error& err) {
             AST_Fn* fn = (AST_Fn*)err.nodes[1];
             AST_FnType* fntype = (AST_FnType*)fn->type;
 
-            wcout << "Cannot return " 
-                  << red << ret->value << dim << " (of type " << ret->value->type << ')' << resetstyle 
-                  << ", the function's return type is ";
+            wcout << "Cannot return " << oftype(ret->value) << ", the function's return type is ";
 
             if (fntype->returntype)
                 wcout << fntype->returntype << ":\n";

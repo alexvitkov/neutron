@@ -119,7 +119,7 @@ bool implicit_cast(AST_Context &ctx, AST_Value **dst, AST_Type *type) {
                 string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
                 string_static_var->type = string_array_type;
                 string_static_var->is_constant = true;
-                ctx.global.global_initial_nodes[string_static_var] = str;
+                // ctx.global.global_initial_nodes[string_static_var] = str;
 
                 string_static_var->is_global = true;
 
@@ -222,7 +222,10 @@ bool GetTypeJob::run(Message *msg) {
 
                 if ((!fntype->is_variadic && num_args != num_params) || (fntype->is_variadic && num_args < num_params)) {
                     // TODO ERROR
-                    error({ .code = ERR_BAD_FN_CALL });
+                    error({ 
+                        .code = ERR_INVALID_NUMBER_OF_ARGUMENTS,
+                        .nodes = { fncall }
+                    });
                     return false;
                 }
 
@@ -569,11 +572,9 @@ bool TypeCheckJob::run(Message *msg) {
             GetTypeJob gettype(ctx, fn);
             WAIT (gettype, GetTypeJob);
 
-            // TODO EXTERN maybe this check shouldn't be here
-            if (!fn->is_extern) {
-                TypeCheckJob fn_typecheck(fn->block, &fn->block); 
-                WAIT (fn_typecheck, TypeCheckJob);
-            }
+            MUST (validate_fn_type(ctx, fn));
+            TypeCheckJob fn_typecheck(fn->block, &fn->block); 
+            WAIT (fn_typecheck, TypeCheckJob);
             return true;
         }
 
@@ -593,6 +594,10 @@ bool TypeCheckJob::run(Message *msg) {
             AST_Return *ret = (AST_Return*)node;
             AST_Type *rettype = ((AST_FnType*)ctx.fn->type)->returntype;
 
+            // TODO VOID
+            if (!rettype)
+                rettype = &t_void;
+
             if (ret->value) {
                 TypeCheckJob ret_typecheck(ctx, ret->value); 
                 WAIT (ret_typecheck, TypeCheckJob);
@@ -601,9 +606,7 @@ bool TypeCheckJob::run(Message *msg) {
             if (rettype != &t_void && !ret->value) {
                 error({
                     .code = ERR_RETURN_TYPE_MISSING,
-                    .nodes = {
-                        ret,
-                        ctx.fn,
+                    .nodes = { ret, ctx.fn,
                     }
                 });
                 return false;

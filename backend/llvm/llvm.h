@@ -51,7 +51,7 @@ struct T2L_Context {
     llvm::IRBuilder<> builder;
 
     T2L_Context(TIR_Context& t_c);
-    void compile_all();
+    void compile_all(Job *after);
     const char* output_object();
 
     llvm::Type *get_llvm_type(AST_Type *type);
@@ -96,7 +96,7 @@ struct T2L_BlockContext {
         T2L_BlockContext *source, *promise;
         llvm::Value *value;
     };
-    llvm::Value* get_value_graph_recurse(TIR_Value tir_val, bool ask_parents);
+    llvm::Value* get_value_graph_recurse(TIR_Value tir_val, arr<T2L_BlockContext *>& visited, bool return_intermediate_values);
 
     void prepass();
     void compile();

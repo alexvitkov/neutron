@@ -928,24 +928,18 @@ Job *TIR_Context::compile_fn(AST_Fn *fn, Job *fn_typecheck_job) {
 }
 
 
-void TIR_Context::append_global(AST_Var *var) {
+TIR_Value TIR_Context::append_global(AST_Var *var) {
     TIR_Value val = {
         .valuespace = TVS_GLOBAL,
         .offset = globals_count++,
         .type = global.get_pointer_type(var->type),
     };
     global_valmap[var] = val;
+    return val;
 }
 
-void TIR_Context::compile_all() {
 
-    // Handle initial values for string literal constants
-    for (auto &initial_node : global.global_initial_nodes) {
-        AST_Var *the_string_var = (AST_Var*)initial_node.key;
-        AST_StringLiteral *the_string_literal = (AST_StringLiteral*)initial_node.value;
-
-        assert(the_string_var IS AST_VAR);
-        assert(the_string_literal IS AST_STRING_LITERAL);
+void TIR_Context::add_string_global(AST_Var *the_string_var, AST_StringLiteral *the_string_literal) {
 
         TIR_Value array_val = {
             .valuespace = TVS_C_STRING_LITERAL,
@@ -953,9 +947,11 @@ void TIR_Context::compile_all() {
             .type = &t_string_literal,
         };
 
-        TIR_Value the_string_var_tir = global_valmap[the_string_var];
+        TIR_Value the_string_var_tir = append_global(the_string_var);
         _global_initial_values[the_string_var_tir.offset] = array_val;
-    }
+}
+
+void TIR_Context::compile_all() {
 
     // Top level assignments are always global varaible initial values
     // We handle them specially, with a CTE job

@@ -50,7 +50,7 @@ struct AST_Context : AST_Node {
     bucketed_arr<AST_Node*> statements;
 
     AST_GlobalContext &global;
-    AST_Context* parent;
+    AST_Context *parent;
 
     AST_Fn* fn; // the function that this context is a part of
     arr<AST_Context*> children;
@@ -127,8 +127,6 @@ struct Job;
 struct AST_GlobalContext : AST_Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
-
-    map<AST_Node*, AST_Node*> global_initial_nodes;
 
     map<const char*, AST_StringLiteral*> literals;
 

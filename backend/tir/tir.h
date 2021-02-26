@@ -194,7 +194,9 @@ struct TIR_Context {
     void compile_all(); // TODO DELETE
     Job *compile_fn(AST_Fn *fn, Job *fn_typecheck_job);
 
-    void append_global(AST_Var *var);
+    TIR_Value append_global(AST_Var *var);
+
+    void add_string_global(AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
 };
 
 

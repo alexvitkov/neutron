@@ -749,14 +749,14 @@ bool pop_operator(ParseExprState& state) {
     AST_BinaryOp* bin;
     ParseExprValue lhs, rhs;
 
+    bin = state.ctx.alloc<AST_BinaryOp>(op, nullptr, nullptr);
+
     if (prec[op] & ASSIGNMENT) {
         if (op == '=') {
-            bin = state.ctx.alloc<AST_BinaryOp>(op, nullptr, nullptr);
             rhs = state.pop_into(&bin->rhs);
             lhs = state.pop_into(&bin->lhs);
             bin->nodetype = AST_ASSIGNMENT;
-        }
-        else {
+        } else {
             switch (op) {
                 case OP_ADDASSIGN:        op = TOK('+');      break;
                 case OP_SUBASSIGN:        op = TOK('-');      break;
@@ -772,10 +772,12 @@ bool pop_operator(ParseExprState& state) {
                     UNREACHABLE;
             }
 
+            rhs = state.pop_into(&bin->rhs);
+            lhs = state.pop_into(&bin->lhs);
+
+            bin = state.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, bin);
+            bin->nodetype = AST_ASSIGNMENT;
             NOT_IMPLEMENTED();
-            //rhs.val = state.ctx.alloc<AST_BinaryOp>(op, lhs.val, rhs.val);
-            //bin = state.ctx.alloc<AST_BinaryOp>(TOK('='), lhs.val, rhs.val);
-            //bin->nodetype = AST_ASSIGNMENT;
         }
     }
     else {

@@ -327,7 +327,18 @@ std::wostream& operator<< (std::wostream& o, AST_UnresolvedId* node) {
 }
 
 std::wostream& operator<< (std::wostream& o, AST_StringLiteral* node) {
-    o << '"' << node->str << '"';
+    o << '"';
+    for (const char *c = node->str; *c; c++) {
+        switch (*c) {
+            case '"':  o << "\\\""; break;
+            case '\\': o << '\\';   break;
+            case '\n': o << "\\n";  break;
+            default:
+                o << *c;
+                break;
+        }
+    }
+    o <<  '"';
     return o;
 }
 

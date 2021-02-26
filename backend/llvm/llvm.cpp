@@ -120,63 +120,117 @@ void T2L_BlockContext::prepass() {
     }
 }
 
-llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value tir_val, bool ask_your_parents) {
+/*
+// Those are only used for debug output for the get_value_graph_recurse
+int indenti = 0;
+void print_indent() {
+    for (int i = 0; i < indenti; i++)
+        wcout << "    ";
+}
+*/
+
+llvm::Value* T2L_BlockContext::get_value_graph_recurse(TIR_Value tir_val, arr<T2L_BlockContext *>& visited, bool return_intermediate_values) {
 
     T2L_Context* ctx = fn->t2l_context;
 
-    bool will_modify = values_to_modify.find2(tir_val);
 
-    if (will_modify && compiled) {
-        return modified_values[tir_val];
-    }
-    
-    // This is a special value don't mind it
-    else if (will_modify && !ask_your_parents) {
-        return (llvm::Value*)this;
-    }
+    // If somewhere down the block we modify the value, this will be set to true
+    // For values that we modify, we don't recurse upwards, but instead return
+    // the most recent modified value
+    if (values_to_modify.find2(tir_val)) {
 
+        llvm::Value *value;
+        if (modified_values.find(tir_val, &value) && (compiled || return_intermediate_values))
+            return value;
 
+        // This is a special magic value - it signifies that we haven't yet
+        // been compiled, but we pinky promise to provide a value for a PHI node later on
 
-    if (this->tir_block->previous_blocks.size == 1) {
-        return fn->block_translation[this->tir_block->previous_blocks[0]]->get_value(tir_val);
-    } else if (this->tir_block->previous_blocks.size == 0 && tir_val.valuespace == TVS_ARGUMENT) {
-        return fn->llvm_fn->arg_begin() + tir_val.offset;
-    }
-
-    llvm::Value *asdf = nullptr;
-
-    if (modified_values.find(tir_val, &asdf))
-        return asdf;
-
-    llvm::Type *llvm_type = ctx->get_llvm_type(tir_val.type);
-
-    auto ip = ctx->builder.GetInsertBlock();
-
-    llvm::Instruction* new_ip = llvm_block->getFirstNonPHI();
-    if (new_ip)
-        ctx->builder.SetInsertPoint(new_ip);
-    else
-        ctx->builder.SetInsertPoint(llvm_block);
-
-    llvm::PHINode *phi = ctx->builder.CreatePHI(llvm_type, this->tir_block->previous_blocks.size);
-    ctx->builder.SetInsertPoint(ip);
-
-
-
-
-    for (TIR_Block* tir_parent_block : this->tir_block->previous_blocks) {
-        T2L_BlockContext* t2l_parent_block = fn->block_translation[tir_parent_block];
-
-        llvm::Value* val = t2l_parent_block->get_value_graph_recurse(tir_val, false);
-        if (val == (llvm::Value*)t2l_parent_block) {
-            t2l_parent_block->promises[tir_val].push(phi);
-        } else {
-            phi->addIncoming(val, t2l_parent_block->llvm_block);
+        if (!return_intermediate_values) {
+            // print_indent(); wcout << this->tir_block->id << " returned a promise\n";
+            return (llvm::Value*)this;
         }
     }
 
-    modified_values[tir_val] = phi;
-    return phi;
+    if (visited.contains(this)) {
+        // print_indent(); wcout << "Already visited " << this->tir_block->id << "\n";
+        llvm::Value *value;
+        if (modified_values.find(tir_val, &value)) {
+            return value;
+        }
+
+        // nullptr is a magic value that means the node has already been visited
+        return nullptr;
+
+    }
+    visited.push(this);
+    
+    // If there are no parents, this is the entry block of a function
+    // so the values for arguments are given to us directly from above
+    if (tir_val.valuespace == TVS_ARGUMENT && this->tir_block->previous_blocks.size == 0) {
+        // print_indent(); wcout << this->tir_block->id << " returned a raw argument\n";
+        return fn->llvm_fn->arg_begin() + tir_val.offset;
+    }
+
+
+    struct BlockValuePair {
+        T2L_BlockContext *block;
+        llvm::Value      *value;
+    };
+    arr<BlockValuePair> values;
+
+    for (TIR_Block *tir_parent_block : this->tir_block->previous_blocks) {
+        T2L_BlockContext *t2l_parent_block = fn->block_translation[tir_parent_block];
+
+        // print_indent(); wcout << this->tir_block->id << " calling parent " << t2l_parent_block->tir_block->id << "\n";
+        // indenti++;
+        llvm::Value* val = t2l_parent_block->get_value_graph_recurse(tir_val, visited, false);
+        // indenti--;
+        if (val)
+            values.push({ t2l_parent_block, val });
+    }
+
+    if (values.size == 0) {
+        return nullptr;
+    }
+
+    if (values.size == 1) {
+        // If we only have a single value, then it should never be a promise
+        // because we compile blocks in a certain order - child after parent
+        // If in the future this has to be changed, promises can be extended
+        // to handle this case, right now they only push to PHI nodes
+        assert((void*)values[0].value != (void*)values[0].block);
+        modified_values[tir_val] = values[0].value;
+        // print_indent(); wcout << this->tir_block->id << " returned a single value\n";
+        return values[0].value;
+    }
+
+    {
+        // If we have multiple values, create a PHI node
+        llvm::Type *llvm_type = ctx->get_llvm_type(tir_val.type);
+        auto ip = ctx->builder.GetInsertBlock();
+
+        llvm::Instruction* new_ip = llvm_block->getFirstNonPHI();
+        if (new_ip)
+            ctx->builder.SetInsertPoint(new_ip);
+        else
+            ctx->builder.SetInsertPoint(llvm_block);
+
+        llvm::PHINode *phi = ctx->builder.CreatePHI(llvm_type, this->tir_block->previous_blocks.size);
+        ctx->builder.SetInsertPoint(ip);
+
+        for (BlockValuePair &bvp : values) {
+            if ((void*)bvp.value == (void*)bvp.block) {
+                bvp.block->promises[tir_val].push(phi);
+            } else {
+                phi->addIncoming(bvp.value, bvp.block->llvm_block);
+            }
+        }
+        
+        modified_values[tir_val] = phi;
+        // print_indent(); wcout << this->tir_block->id << " returned a PHI node with " << values.size << " values\n";
+        return phi;
+    }
 }
 
 
@@ -197,7 +251,8 @@ llvm::Value* T2L_BlockContext::get_value(TIR_Value tir_val) {
             if (intermediate)
                 return *intermediate;
 
-            return get_value_graph_recurse(tir_val, true);
+            arr<T2L_BlockContext*> visited;
+            return get_value_graph_recurse(tir_val, visited, true);
         }
 
         case TVS_GLOBAL: {
@@ -416,7 +471,7 @@ void T2L_BlockContext::compile() {
                     break;
                 }
                 case TOPC_GEP: {
-                    llvm::Value *lhs = get_value(instr.bin.lhs);
+                    llvm::Value *lhs = get_value(instr.gep.base);
 
                     llvm::Value* gep;
 
@@ -603,7 +658,7 @@ void insert_entry_boilerplate(T2L_Context& c, Function* l_main) {
     c.builder.CreateRetVoid();
 }
 
-void T2L_Context::compile_all() {
+void T2L_Context::compile_all(Job *after) {
     llvm::Function* llvm_main_fn;
 
     for (auto &kvp : tir_context.global_valmap) {
