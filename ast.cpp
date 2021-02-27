@@ -159,9 +159,16 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
         } else {
             o << ' ' << &fn->block;
         }
-    } 
-    else {
+    } else {
         o << fn->name;
+        AST_FnType *fntype = (AST_FnType*)fn->type;
+        o << "(";
+        for (AST_Type *param : fntype->param_types) {
+            o << param << ", ";
+        }
+        if (fntype->param_types.size > 0)
+            o << "\b\b \b";
+        o << ")";
     }
 }
 
@@ -343,9 +350,9 @@ std::wostream& operator<< (std::wostream& o, AST_UnresolvedId* node) {
     return o;
 }
 
-std::wostream& operator<< (std::wostream& o, AST_StringLiteral* node) {
+void print_string(std::wostream& o, const char* s) {
     o << '"';
-    for (const char *c = node->str; *c; c++) {
+    for (const char *c = s; *c; c++) {
         switch (*c) {
             case '"':  o << "\\\""; break;
             case '\\': o << '\\';   break;
@@ -356,6 +363,10 @@ std::wostream& operator<< (std::wostream& o, AST_StringLiteral* node) {
         }
     }
     o <<  '"';
+}
+
+std::wostream& operator<< (std::wostream& o, AST_StringLiteral* node) {
+    print_string(o, node->str);
     return o;
 }
 

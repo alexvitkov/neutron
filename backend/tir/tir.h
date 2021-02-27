@@ -177,7 +177,6 @@ struct TIR_ExecutionStorage {
     map<u64, void*> global_values;
 };
 
-
 struct TIR_Context {
     AST_GlobalContext &global;
     map<AST_Fn*, TIR_Function*> fns;
@@ -196,8 +195,9 @@ struct TIR_Context {
 
     TIR_Value append_global(AST_Var *var);
 
-    void add_string_global(AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
 };
+
+void add_string_global(TIR_Context *tir_context, AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
 
 
 struct TIR_Function {

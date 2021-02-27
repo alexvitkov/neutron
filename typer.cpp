@@ -34,7 +34,14 @@ struct GetTypeJob : Job {
         : ctx(ctx), node(node), Job(ctx.global) { }
 
     bool run(Message *msg) override;
+    std::wstring get_name() override;
 };
+
+std::wstring GetTypeJob::get_name() {
+    std::wostringstream s;
+    s << "GetTypeJob<" << node << ">";
+    return s.str();
+}
 
 TypeCheckJob::TypeCheckJob(AST_Context& ctx, AST_Node* node) 
     : ctx(ctx), node(node), Job(ctx.global) 
@@ -45,7 +52,15 @@ TypeCheckJob::TypeCheckJob(AST_Context& ctx, AST_Node* node)
 std::wstring TypeCheckJob::get_name() {
     std::wostringstream s;
     s << "TypeCheckJob<";
-    print(s, this->node, false);
+    if (node IS AST_BLOCK) {
+        AST_Context *block = (AST_Context*)node;
+        if (&block->global == block)
+            s << "Global Scope";
+        else
+            s << "Scope in " << block->fn;
+    } else {
+        print(s, this->node, false);
+    }
     s << ">";
     return s.str();
 }
@@ -60,6 +75,14 @@ bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
 
     return true;
 }
+
+void add_string_global(struct TIR_Context *tir_context, AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
+
+
+bool can_implicit_cast(AST_Type *dsttype, AST_Type *srctype) {
+    return srctype == dsttype;
+}
+
 
 bool implicit_cast(AST_Context &ctx, AST_Value **dst, AST_Type *type) {
     AST_Type *dstt = (*dst)->type;
@@ -121,6 +144,8 @@ bool implicit_cast(AST_Context &ctx, AST_Value **dst, AST_Type *type) {
                 string_static_var->is_constant = true;
                 // ctx.global.global_initial_nodes[string_static_var] = str;
 
+                add_string_global(ctx.global.tir_context, string_static_var, str);
+
                 string_static_var->is_global = true;
 
                 MUST (ctx.global.declare({ .string_literal = str }, string_static_var, false));
@@ -140,6 +165,33 @@ bool implicit_cast(AST_Context &ctx, AST_Value **dst, AST_Type *type) {
     }
 
     return false;
+}
+
+bool match_fn_call(AST_Context &ctx, AST_FnCall *fncall, AST_Fn *fn) {
+    AST_FnType *fntype = (AST_FnType*)fn->type;
+
+    u64 num_args = fncall->args.size;
+    u64 num_params = fntype->param_types.size;
+    // wcout << "Matching " << fncall << " to " << fn << "\n";
+
+    if (!fntype->is_variadic) {
+        MUST (num_args == num_params);
+    } else {
+        MUST (num_args >= num_params);
+    }
+
+    for (int i = 0; i < num_args; i++) {
+        AST_Type *param_type = i < num_params ? fntype->param_types[i] : &t_any8;
+        AST_Type *arg_type   = fncall->args[i]->type;
+
+        MUST (can_implicit_cast(param_type, arg_type));
+    }
+
+    fncall->type = fntype->returntype;
+    fncall->fn = fn;
+
+    wcout << "Matched " << fncall << " to " << fn << "\n";
+    return true;
 }
 
 bool is_valid_lvalue(AST_Node* expr) {
@@ -211,94 +263,32 @@ bool GetTypeJob::run(Message *msg) {
         case AST_FN_CALL: {
             AST_FnCall *fncall = (AST_FnCall*)node;
 
-            // The parser can't tell apart function calls from casts
-            // We are smarter than the parser though so we can
-            if (fncall->fn IS AST_FN) {
-                AST_Fn *fn = (AST_Fn*)fncall->fn;
-                AST_FnType *fntype = (AST_FnType*)fn->type;
-
-                u64 num_args = fncall->args.size;
-                u64 num_params = fntype->param_types.size;
-
-                if ((!fntype->is_variadic && num_args != num_params) || (fntype->is_variadic && num_args < num_params)) {
-                    // TODO ERROR
-                    error({ 
-                        .code = ERR_INVALID_NUMBER_OF_ARGUMENTS,
-                        .nodes = { fncall }
-                    });
-                    return false;
-                }
-
-                for (int i = 0; i < num_args; i++) {
-                    AST_Type* param_type = i < num_params ? fntype->param_types[i] : &t_any8;
-                    GetTypeJob arg_gettype(ctx, fncall->args[i]);
-                    WAIT (arg_gettype, GetTypeJob);
-
-                    if (!implicit_cast(ctx, &fncall->args[i], param_type)) {
-                        // TODO ERROR
-                        error({ 
-                            .code = ERR_CANNOT_IMPLICIT_CAST, 
-                            .nodes = {
-                                param_type,
-                                fncall->args[i],
-                                node,
-                            }
-                        });
-                        return false;
-                    }
-                }
-
-                fncall->type = fntype->returntype;
-                node->type = fntype->returntype;
-                return true;
+            for (int i = 0; i < fncall->args.size; i++) {
+                GetTypeJob arg_gettype(ctx, fncall->args[i]);
+                WAIT (arg_gettype, GetTypeJob);
             }
-            else {
-                MUST (validate_type(ctx, (AST_Type**)(&fncall->fn)));
 
-                // If the user is trying to 'call' a type then that's a cast.
-                // Here the node is patched up from a AST_FnCall to a AST_Cast
-                
-                // There  must be exactly one 'argument' to the function call -
-                // the value the user is trying to cast
-                
-                if (fncall->args.size != 1) {
-                    // TODO ERROR
-                    error({ .code = ERR_BAD_FN_CALL });
-                    return false;
+            switch (fncall->fn->nodetype) {
+                case AST_UNRESOLVED_ID: {
+                    ResolveJob resolve_fn_job(ctx, nullptr);
+                    resolve_fn_job.fncall = fncall;
+
+                    WAIT (resolve_fn_job, ResolveJob,
+                        heap_job->subscribe(MSG_NEW_DECLARATION);
+                        heap_job->subscribe(MSG_SCOPE_CLOSED);
+                    );
+                    assert(!"Finally");
+
+                    assert(fncall->fn->nodetype == AST_FN);
+
+                    return true;
                 }
-                
-                AST_Cast* cast = (AST_Cast*)fncall;
-                
-                cast->nodetype = AST_CAST;
-                cast->type = (AST_Type*)fncall->fn;
-                cast->inner = fncall->args[0];
-                
-                MUST (validate_type(ctx, &cast->type));
-
-                // Make sure the cast has a type
-                GetTypeJob inner_type_job(ctx, cast->inner);
-                WAIT (inner_type_job, GetTypeJob);
-                
-                if ((cast->type IS AST_POINTER_TYPE || cast->type IS AST_ARRAY_TYPE)
-                    && (cast->inner->type IS AST_POINTER_TYPE || cast->inner->type IS AST_ARRAY_TYPE))
-                {
-                    cast->casttype = AST_Cast::Pointer_Pointer;
-                    return cast->type;
-                }
-                else if (cast->type IS AST_PRIMITIVE_TYPE 
-                        && cast->inner->type IS AST_PRIMITIVE_TYPE)
-                {
-                    AST_PrimitiveType *dst = (AST_PrimitiveType*)cast->type;
-                    AST_PrimitiveType *src = (AST_PrimitiveType*)cast->inner->type;
-
+                default: {
+                    // CAST
                     NOT_IMPLEMENTED();
                 }
-                else {
-                    // TODO ERROR
-                    error({ .code = ERR_INVALID_CAST });
-                    return false;
-                }
             }
+
         }
 
         case AST_BINARY_OP: {
@@ -413,6 +403,15 @@ Error:
             return false;
         }
 
+        case AST_UNARY_OP: {
+            AST_UnaryOp *un = (AST_UnaryOp*)node;
+
+            GetTypeJob type_job(ctx, un->inner);
+            WAIT (type_job, GetTypeJob);
+
+            NOT_IMPLEMENTED();
+        }
+
         case AST_MEMBER_ACCESS: {
             AST_MemberAccess* ma = (AST_MemberAccess*)node;
 
@@ -420,7 +419,7 @@ Error:
             WAIT (type_job, GetTypeJob);
 
             AST_Struct* s = (AST_Struct*)type_job.node->type;
-            MUST (s);
+            MUST_OR_FAIL_JOB (s);
 
             if (s->nodetype != AST_STRUCT) {
                 // TODO ERROR
@@ -567,16 +566,31 @@ bool TypeCheckJob::run(Message *msg) {
             GetTypeJob gettype(ctx, fn);
             WAIT (gettype, GetTypeJob);
 
-            MUST (validate_fn_type(ctx, fn));
+            MUST_OR_FAIL_JOB (validate_fn_type(ctx, fn));
+
+            if (fn->name && !declared) {
+                declared = true;
+
+                DeclarationKey key = {
+                    .name = fn->name,
+                    .fn_type = (AST_FnType*)fn->type
+                };
+
+                // we know the fn's type, declare it
+                MUST_OR_FAIL_JOB (ctx.declare(key, fn, true));
+                ctx.decrement_hanging_declarations();
+            }
+
             TypeCheckJob fn_typecheck(fn->block, &fn->block); 
             WAIT (fn_typecheck, TypeCheckJob);
+
             return true;
         }
 
         case AST_VAR: {
             AST_Var* var = (AST_Var*)node;
             if (var->type) {
-                MUST (validate_type(ctx, &var->type));
+                MUST_OR_FAIL_JOB (validate_type(ctx, &var->type));
             } else {
                 assert(var->argindex >= 0);
                 AST_FnType *fntype = (AST_FnType*)this->ctx.fn->type;

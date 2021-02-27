@@ -5,14 +5,17 @@
 #include "ds.h"
 #include "error.h"
 
+#include <atomic>
+
 struct AST_GlobalContext;
 struct AST_UnresolvedId;
+struct AST_FnCall;
 struct AST_FnType;
 struct AST_StringLiteral;
 
-// VOLATILE If you drastically change this, you will have to change the map_hash and map_equals functions defined in context.cpp
+// VOLATILE If you change this, you will have to change the map_hash and map_equals functions defined in context.cpp
 struct DeclarationKey {
-    // This must come first, as when we sometimes initialize the DeclarationKey like this: { the_name }
+    // This must come first, as we sometimes initialize the DeclarationKey like this: { the_name }
     const char* name;
     
     union {
@@ -66,6 +69,17 @@ struct AST_Context : AST_Node {
     template <typename T, typename ... Ts>
     T* alloc(Ts &&...args);
 
+    // The scope is closed when it's guarenteed that nothing else will be
+    // declared inside it. If a scope is closed a ResolveJob waiting for a
+    // new declaration inside the scope can stop, because that declaration
+    // is not coming.
+    bool closed = false;
+    // The number of hanging declarations that prevent the scope from being closed.
+    // When we parse a function for ex. this is incremented, and then when that
+    // function is typechecked and declared this is decremented. When it then
+    // reaches 0 after decrementing, the scope can be closed.
+    int hanging_declarations = 0;
+
     struct RecursiveDefinitionsIterator {
         i64 index = 0;
         arr<AST_Context*> remaining;
@@ -93,6 +107,9 @@ struct AST_Context : AST_Node {
     AST_PointerType *get_pointer_type(AST_Type* pointed_type);
     AST_ArrayType   *get_array_type(AST_Type* base_type, u64 length);
     AST_FnType      *make_function_type_unique(AST_FnType* temp_type);
+
+    void             decrement_hanging_declarations();
+    void             close();
 };
 
 // Don't insert empty spaces here, it will waste memory
@@ -113,7 +130,7 @@ struct ScopeClosedMessage : Message {
 
 struct NewDeclarationMessage : Message {
     AST_Context *context;
-    const char *name;
+    DeclarationKey key;
     AST_Node *node;
 };
 
@@ -128,9 +145,19 @@ struct AST_GlobalContext : AST_Context {
 	arr<Error> errors;
     arr<AST_UnresolvedId*> unresolved;
 
+    // When a function is parsed we cannot immediately declare it because
+    // we don't know its type yet. This is not an issue for vars,
+    // because they don't have overloads and are declared immediately
+    struct FnToDeclare {
+        AST_Context &scope;
+        AST_Fn      *fn;
+    };
+    arr<FnToDeclare> fns_to_declare;
+
     map<const char*, AST_StringLiteral*> literals;
 
     linear_alloc allocator, temp_allocator;
+    struct TIR_Context *tir_context;
 
     CompileTarget target = { 8, 8 };
 
@@ -163,20 +190,25 @@ struct AST_GlobalContext : AST_Context {
     }
 
     arr<Job*> ready_jobs;
+    map<u64, Job*> jobs_by_id;
 
     // subscribers[MSG_NEW_DECLARATION] are all the jobs waiting on MSG_NEW_DECLARATION
     arr<arr<Job*>> subscribers;
     u32 jobs_count;
+    std::atomic<int> next_job_id = { 1 };
 
     void add_job(Job *job);
     bool run_jobs();
     void send_message(Message *msg);
+
 };
 
 struct Job {
     // returns true if the job is finished after the run call returns
     virtual bool run(Message *msg) = 0;
-    virtual std::wstring get_name();
+    virtual std::wstring get_name() = 0;
+
+    u64 id;
 
     // Jobs can often be completed immediately
     // so allocating them on the heap often doesn't make sense.
@@ -190,10 +222,8 @@ struct Job {
        if (run(nullptr))
            return nullptr;
 
-       global.jobs_count++;
-
        JobT *heap_job = new JobT(std::move(*(JobT*)this));
-       global.ready_jobs.push(heap_job);
+       global.add_job(heap_job);
 
        return heap_job;
     }
@@ -202,7 +232,7 @@ struct Job {
     AST_GlobalContext &global;
     JobFlags flags = (JobFlags)0;
 
-    arr<Job*> dependent_jobs;
+    arr<u64> dependent_jobs;
     u32 dependencies_left = 0;
 
     void add_dependency(Job* dependency);
@@ -228,6 +258,7 @@ T* AST_Context::alloc_temp(Ts &&...args) {
 
 struct ResolveJob : Job {
     AST_UnresolvedId **id;
+    AST_FnCall        *fncall;
     AST_Context       *context;
 
     ResolveJob(AST_Context &ctx, AST_UnresolvedId **id);
@@ -248,11 +279,12 @@ Location location_of(AST_Context& ctx, AST_Node** node);
 bool parse_all(AST_Context& global);
 bool parse_source_file(AST_Context& global, SourceFile& sf);
 
-#define WAIT(job, jobtype)                           \
+#define WAIT(job, jobtype, ...)                      \
     {                                                \
         Job *heap_job = job.run_stackjob<jobtype>(); \
         if (heap_job) {                              \
             add_dependency(heap_job);                \
+            __VA_ARGS__                              \
             return false;                            \
         } else if (job.flags & JOB_ERROR) {          \
             flags = (JobFlags)(flags | JOB_ERROR);   \

@@ -582,19 +582,16 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
             default: {
                 if (delim == r.peek().type) {
                     r.pop();
-                    // TODO this is wrong
-                    // First of all it breaks on multiple files because global scope
-                    // is closed when it shouldnt be
-                    // And it won't work for macroexpand alter on
-                    ScopeClosedMessage msg;
-                    msg.msgtype = MSG_SCOPE_CLOSED;
-                    msg.scope = &block;
-                    block.global.send_message(&msg);
                     return true;
                 }
                 AST_Node *& expr = block.statements.push(nullptr);
                 MUST (parse_expr(block, (AST_Value**)&expr, r, {}));
                 MUST (r.expect(TOK(';')).type);
+
+                if (block.hanging_declarations == 0) {
+                    block.close();
+                }
+
                 break;
             }
         }
@@ -621,17 +618,18 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
         nameToken = r.expect_full(TOK_ID);
         name = nameToken.name;
         MUST (nameToken.type);
+
     }
 
-    AST_Fn* fn = ctx.alloc<AST_Fn>(&ctx, name);
+    AST_Fn *fn = ctx.alloc<AST_Fn>(&ctx, name);
     AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global.target.pointer_size);
+    
+    if (decl) {
+        ctx.global.fns_to_declare.push({ ctx, fn });
+        ctx.hanging_declarations ++;
+    }
 
     fn->type = temp_fn_type;
-
-    bool decl_succeeded = true;
-    if (decl) {
-        decl_succeeded = ctx.declare({ name }, fn, true);
-    }
 
     MUST (r.expect(TOK('(')).type);
 
@@ -706,7 +704,7 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
         }
     };
 
-    return decl_succeeded ? fn : nullptr;
+    return fn;
 }
 
 struct ParseExprValue {
@@ -734,10 +732,12 @@ struct ParseExprState {
             ((AST_UnresolvedId*)val.val)->job = resolve_job;
             resolve_job->subscribe(MSG_NEW_DECLARATION);
             resolve_job->subscribe(MSG_SCOPE_CLOSED);
+            ctx.global.add_job(resolve_job);
         }
 
         return val;
     };
+
 };
 
 
@@ -901,7 +901,10 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                     }
 
                     AST_FnCall* fncall = ctx.alloc<AST_FnCall>(nullptr);
-                    ParseExprValue fn = state.pop_into(&fncall->fn);
+                    ParseExprValue fn = state._output.pop();
+
+                    assert(fn.val IS AST_UNRESOLVED_ID);
+                    fncall->fn = fn.val;
 
                     arr<Location> arg_locs;
 

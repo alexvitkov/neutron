@@ -25,10 +25,7 @@ struct AST_PrimitiveType;;
 extern AST_PrimitiveType t_type;
 
 struct AST_Value : AST_Node {
-    union {
-        const char* typeName;
-        AST_Type* type;
-    };
+    AST_Type* type;
     inline AST_Value(AST_NodeType nodetype, AST_Type* type) : AST_Node(nodetype), type(type) {}
 };
 
@@ -272,6 +269,8 @@ void print(std::wostream& o, AST_Var* node, bool decl);
 void print(std::wostream& o, AST_Struct* node, bool decl);
 void print(std::wostream& o, AST_BinaryOp* node, bool brackets);
 void print(std::wostream& o, AST_UnaryOp* node, bool brackets);
+
+void print_string(std::wostream& o, const char* s);
 
 std::wostream& operator<<(std::wostream& o, AST_Node* node);
 std::wostream& operator<<(std::wostream& o, AST_PrimitiveType* node);

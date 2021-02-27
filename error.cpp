@@ -263,8 +263,8 @@ void print_err(AST_Context &global, Error& err) {
         }
 
         case ERR_NOT_DEFINED: {
-            wcout << red << *err.node_ptrs[0] << resetstyle << " is not defined.\n";
-            print_code_segment(global, nullptr, nullptr, &err.node_ptrs);
+            wcout << red << err.nodes[0] << resetstyle << " is not defined.\n";
+            print_code_segment(global, nullptr, &err.nodes, nullptr);
             break;
         }
 

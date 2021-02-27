@@ -67,7 +67,7 @@ std::wostream& operator<< (std::wostream& o, TIR_Value val) {
             o << "@" << val.offset;
             break;
         case TVS_C_STRING_LITERAL:
-            o << '"' << (const char*)val.offset << '"'; // POINTERSIZE
+            print_string(o, (const char*)val.offset); // TODO POINTERSIZE
             break;
     }
     return o;
@@ -939,16 +939,15 @@ TIR_Value TIR_Context::append_global(AST_Var *var) {
 }
 
 
-void TIR_Context::add_string_global(AST_Var *the_string_var, AST_StringLiteral *the_string_literal) {
+void add_string_global(TIR_Context *tir_context, AST_Var *the_string_var, AST_StringLiteral *the_string_literal) {
+    TIR_Value array_val = {
+        .valuespace = TVS_C_STRING_LITERAL,
+        .offset = (u64)the_string_literal->str, // POINTERSIZE
+        .type = &t_string_literal,
+    };
 
-        TIR_Value array_val = {
-            .valuespace = TVS_C_STRING_LITERAL,
-            .offset = (u64)the_string_literal->str, // POINTERSIZE
-            .type = &t_string_literal,
-        };
-
-        TIR_Value the_string_var_tir = append_global(the_string_var);
-        _global_initial_values[the_string_var_tir.offset] = array_val;
+    TIR_Value the_string_var_tir = tir_context->append_global(the_string_var);
+    tir_context->_global_initial_values[the_string_var_tir.offset] = array_val;
 }
 
 void TIR_Context::compile_all() {

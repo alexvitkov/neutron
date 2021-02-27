@@ -51,15 +51,21 @@ int main(int argc, const char** argv) {
     global.add_job(all_tir_compiled_job);
     
     TIR_Context tir_context { .global = global };
+    global.tir_context = &tir_context;
+
+    for (auto &decl : global.fns_to_declare) {
+        TypeCheckJob *j = new TypeCheckJob(decl.scope, decl.fn);
+        global.add_job(j);
+
+        Job *j2 = tir_context.compile_fn(decl.fn, j);
+        all_tir_compiled_job->add_dependency(j2);
+    }
 
     for (auto &decl : global.declarations) {
         TypeCheckJob *j = new TypeCheckJob(global, decl.value);
         global.add_job(j);
 
-        if (decl.value->nodetype == AST_FN) {
-            Job *j2 = tir_context.compile_fn((AST_Fn*)decl.value, j);
-            all_tir_compiled_job->add_dependency(j2);
-        } else if (decl.value->nodetype == AST_VAR) {
+        if (decl.value->nodetype == AST_VAR) {
             tir_context.append_global((AST_Var*)decl.value);
         }
     }
@@ -79,7 +85,27 @@ int main(int argc, const char** argv) {
         }
     }
 
-    global.run_jobs();
+
+    if (!global.run_jobs()) {
+        wcout << red << global.jobs_count << " Jobs didn't complete:\n" << resetstyle;
+
+        for (auto &kvp : global.jobs_by_id) {
+            if (!(kvp.value->flags & JOB_DONE)) {
+                if (!(kvp.value->flags & JOB_ERROR))
+                    wcout << "    - HANG " << kvp.value->get_name() << "\n";
+            }
+        }
+
+        for (auto &kvp : global.jobs_by_id) {
+            if (!(kvp.value->flags & JOB_DONE)) {
+                if ((kvp.value->flags & JOB_ERROR) == JOB_ERROR)
+                    wcout << red << "    - FAIL " << resetstyle << kvp.value->get_name() << "\n";
+            }
+        }
+
+
+        return 1;
+    }
 
     tir_context.compile_all();
 
@@ -91,6 +117,7 @@ int main(int argc, const char** argv) {
     }
 
 
+    return 0;
     T2L_Context t2l_context(tir_context);
     t2l_context.compile_all(all_tir_compiled_job);
 

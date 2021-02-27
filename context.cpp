@@ -52,8 +52,8 @@ bool AST_Context::declare(DeclarationKey key, AST_Node* value, bool sendmsg) {
         NewDeclarationMessage msg;    
         msg.msgtype = MSG_NEW_DECLARATION;
         msg.context = this;
-        msg.name = key.name;
-        msg.node = value;
+        msg.key     = key;
+        msg.node    = value;
 
         global.send_message(&msg);
     }
@@ -125,4 +125,19 @@ AST_FnType* AST_Context::make_function_type_unique(AST_FnType* temp_type) {
         global.fn_types_hash.insert(newtype, newtype);
         return newtype;
     }
+}
+
+void AST_Context::decrement_hanging_declarations() {
+    hanging_declarations--;
+    if (hanging_declarations == 0) {
+        close();
+    }
+}
+
+void AST_Context::close() {
+    ScopeClosedMessage msg;
+    msg.msgtype = MSG_SCOPE_CLOSED;
+    msg.scope = this;
+    closed = true;
+    global.send_message(&msg);
 }

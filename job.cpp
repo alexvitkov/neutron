@@ -1,5 +1,6 @@
 #include "context.h"
 #include "ast.h"
+#include "typer.h"
 #include <sstream>
 #include <iostream>
 
@@ -12,7 +13,7 @@ void Job::add_dependency(Job* dependency) {
     }
 
     dependencies_left++;
-    dependency->dependent_jobs.push(this);
+    dependency->dependent_jobs.push(id);
     if (debug_jobs) {
         wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
         wcout.flush();
@@ -20,11 +21,26 @@ void Job::add_dependency(Job* dependency) {
 
 }
 
-std::wstring Job::get_name() {
-    return L"generic_job";
+void finish_job(AST_GlobalContext &global, Job *finished_job) {
+    if (debug_jobs) {
+        wcout << dim << "Finished " << resetstyle << finished_job->get_name() << "\n";
+        wcout.flush();
+    }
+    global.jobs_count--;
+    finished_job->flags = (JobFlags)(finished_job->flags | JOB_DONE);
+
+    for (u64 dependent_job_id : finished_job->dependent_jobs) {
+
+        Job *dependent_job = global.jobs_by_id[dependent_job_id];
+
+        dependent_job->dependencies_left --;
+        if (dependent_job->dependencies_left == 0)
+            global.ready_jobs.push(dependent_job);
+    }
 }
 
 Job::Job(AST_GlobalContext &global) : global(global) {
+    id = global.next_job_id++;
 }
 
 void AST_GlobalContext::send_message(Message *msg) {
@@ -35,16 +51,23 @@ void AST_GlobalContext::send_message(Message *msg) {
     }
 
     for (u32 i = 0; i < receivers.size; ) {
-        if (receivers[i]->flags & JOB_DONE || receivers[i]->run(msg)) {
-            receivers[i]->flags = (JobFlags)(receivers[i]->flags | JOB_DONE);
+        if (receivers[i]->flags & JOB_DONE) {
+            receivers.delete_unordered(i);
+        } else if (receivers[i]->run(msg)) {
+            finish_job(*this, receivers[i]);
             receivers.delete_unordered(i);
         } else {
+            // delete_unordered places the last job at the index of the old
+            // element, so we don't increment 'i' if we've called it
             i++;
         }
     }
 }
 
 void AST_GlobalContext::add_job(Job *job) {
+    jobs_count ++;
+    jobs_by_id[job->id] = job;
+
     for (Job *j : ready_jobs) {
         if (j == job)
             assert(!"Adding the same job twice");
@@ -65,25 +88,15 @@ bool AST_GlobalContext::run_jobs() {
             continue;
 
         if (job->flags & JOB_ERROR) {
-            for (Job * j : job->dependent_jobs) {
+            for (u64 dependent_job_id : job->dependent_jobs) {
+                Job *j = global.jobs_by_id[dependent_job_id]; 
                 j->flags = (JobFlags)(j->flags | JOB_ERROR);
             }
             continue;
         }
 
         if (job->run(nullptr)) {
-            if (debug_jobs) {
-                wcout << dim << "Finished " << resetstyle << job->get_name() << "\n";
-                wcout.flush();
-            }
-            jobs_count--;
-            job->flags = (JobFlags)(job->flags | JOB_DONE);
-
-            for (Job *dependent_job : job->dependent_jobs) {
-                dependent_job->dependencies_left --;
-                if (job->dependencies_left == 0)
-                    ready_jobs.push(dependent_job);
-            }
+            finish_job(*this, job);
         }
     }
 
@@ -100,35 +113,59 @@ ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id)
 
 bool ResolveJob::run(Message *msg) {
     if (!msg) {
-        AST_Node *decl;
-        MUST (context->declarations.find({ .name = (*id)->name }, &decl));
+        if (id) {
+            AST_Node *decl;
+            MUST (context->declarations.find({ .name = (*id)->name }, &decl));
+            *(AST_Node**)id = decl;
+            return true;
+        } else {
+            AST_UnresolvedId *id = (AST_UnresolvedId*)fncall->fn;
+            assert(id IS AST_UNRESOLVED_ID);
 
-        *(AST_Node**)id = decl;
-        return true;
+            for (auto &kvp : context->declarations) {
+                wcout << "aaa\n";
+                if (!strcmp(id->name, kvp.key.name) && match_fn_call(*context, fncall, (AST_Fn*)kvp.value))
+                    return true;
+            }
+
+            while (context->closed) {
+                context = context->parent;
+
+                if (!context) {
+                    error({ .code = ERR_NOT_DEFINED, .nodes = { fncall->fn } });
+                    return false;
+                }
+
+                for (auto &kvp : context->declarations) {
+                    if (!strcmp(id->name, kvp.key.name) && match_fn_call(*context, fncall, (AST_Fn*)kvp.value))
+                        return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     switch (msg->msgtype) {
         case MSG_NEW_DECLARATION: {
             NewDeclarationMessage *decl = (NewDeclarationMessage*)msg;
-            if (decl->context != context)
-                return false;
+            MUST (decl->context == context);
 
-            if (!strcmp(decl->name, (*id)->name)) {
+            if (id) {
+                MUST (!strcmp(decl->key.name, (*id)->name));
                 *(AST_Node**)id = decl->node;
                 return true;
+            } else {
+                MUST (decl->node->nodetype == AST_FN)
+                return match_fn_call(*context, fncall, (AST_Fn*)decl->node);
             }
-
-            return false;
         }
         case MSG_SCOPE_CLOSED: {
             ScopeClosedMessage *sc = (ScopeClosedMessage*)msg;
             if (sc->scope == context) {
                 context = context->parent;
                 if (!context) {
-                    error({
-                        .code = ERR_NOT_DEFINED,
-                        .node_ptrs = { (AST_Node**)id }
-                    });
+                    error({ .code = ERR_NOT_DEFINED, .nodes = { id ? (AST_Value*)*id : fncall } });
                     return false;
                 } else {
                     return run(nullptr);
@@ -148,7 +185,8 @@ void Job::error(Error err) {
     print_err(global, err);
 
     flags = (JobFlags)(flags | JOB_ERROR);
-    for (Job *job : dependent_jobs) {
+    for (u64 dependent_job_id : dependent_jobs) {
+        Job *job = global.jobs_by_id[dependent_job_id];
         job->flags = (JobFlags)(job->flags | JOB_ERROR);
     }
 }
@@ -173,7 +211,12 @@ void Job::subscribe(MessageType msgtype) {
 
 std::wstring ResolveJob::get_name() {
     std::wostringstream stream;
-    stream << "ResolveJob<" << (*id)->name << L">";
+
+    if (id) {
+        stream << "ResolveJob<" << (*id)->name << L">";
+    } else {
+        stream << "ResolveJob<" << fncall << L">";
+    }
     return stream.str();
 }
 

@@ -21,6 +21,8 @@
 
 #define MUST(v) if (!(v)) return 0;
 
+#define MUST_OR_FAIL_JOB(v) if (!(v)) { flags = (JobFlags)(flags | JOB_ERROR); return false; }
+
 #define IS_TYPE_KW(t) ((t) >= KW_U8 && (t) <= KW_F64)
 
 // This can be extended to u16 if needed,

@@ -26,10 +26,14 @@ struct TypeCheckJob : Job {
     AST_Context &ctx; 
     AST_Node    *node;
 
+    bool declared = false;
+
     TypeCheckJob(AST_Context& ctx, AST_Node* node);
 
     std::wstring get_name() override;
     bool run(Message *msg) override;
 };
+
+bool match_fn_call(AST_Context &ctx, AST_FnCall *fncall, AST_Fn *fn);
 
 #endif // guard
