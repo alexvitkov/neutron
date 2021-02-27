@@ -5,44 +5,6 @@
 
 int indent = 0;
 
-AST_Number::AST_Number(u64 floorabs) : AST_Value(AST_NUMBER, nullptr), floorabs(floorabs) {
-
-    if (floorabs < 0xFF)
-        type = &t_u8;
-    else if (floorabs < 0xFFFF)
-        type = &t_u16;
-    else if (floorabs < 0xFFFFFFFF)
-        type = &t_u32;
-    else
-        type = &t_u64;
-
-}
-
-bool AST_Number::fits_in(AST_PrimitiveType* numtype) {
-
-    switch (numtype->kind) {
-        case PRIMITIVE_UNSIGNED: {
-            switch (numtype->size) {
-                case 1: return floorabs < 0xFF;
-                case 2: return floorabs < 0xFFFF;
-                case 4: return floorabs < 0xFFFFFFFF;
-                case 8: return floorabs < 0xFFFFFFFFFFFFFFFF;
-            }
-        }
-        case PRIMITIVE_SIGNED: {
-            switch (numtype->size) {
-                case 1: return floorabs < 0x80;
-                case 2: return floorabs < 0x8000;
-                case 4: return floorabs < 0x80000000;
-                case 8: return floorabs < 0x8000000000000000;
-            }
-        }
-        default:
-            return false;
-    }
-    
-}
-
 AST_StringLiteral::AST_StringLiteral(Token stringToken) : AST_Value(AST_STRING_LITERAL, &t_string_literal) {
     length = strlen(stringToken.name);
     str = stringToken.name;
@@ -109,8 +71,8 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
         case AST_BLOCK:          o << (AST_Context*)node; break;
         case AST_PRIMITIVE_TYPE: o << (AST_PrimitiveType*)node; break;
         case AST_RETURN:         o << (AST_Return*)node; break;
-        case AST_CAST:           o << (AST_Cast*)node; break;
-        case AST_NUMBER:         o << (AST_Number*)node; break;
+        // case AST_CAST:           o << (AST_Cast*)node; break;
+        case AST_NUMBER:         o << (AST_NumberLiteral*)node; break;
         case AST_IF:             o << (AST_If*)node; break;
         case AST_WHILE:          o << (AST_While*)node; break;
         case AST_FN_CALL:        o << (AST_FnCall*)node; break;
@@ -282,13 +244,8 @@ std::wostream& operator<< (std::wostream& o, AST_Return* node) {
     return o;
 }
 
-std::wostream& operator<< (std::wostream& o, AST_Cast* node) {
-    o << node->type << '(' << node->inner << ')';
-    return o;
-}
-
-std::wostream& operator<< (std::wostream& o, AST_Number* node) {
-    o << node->floorabs;
+std::wostream& operator<< (std::wostream& o, AST_NumberLiteral* node) {
+    o << &node->number_data;
     return o;
 }
 
@@ -409,10 +366,13 @@ bool postparse_tree_compare(AST_Node *lhs, AST_Node *rhs) {
         }
 
         case AST_NUMBER: {
+            NOT_IMPLEMENTED();
+            /*
             AST_Number *num1 = (AST_Number*)lhs;
             AST_Number *num2 = (AST_Number*)rhs;
 
             return num1->floorabs == num2->floorabs;
+            */
         }
 
         case AST_UNRESOLVED_ID: {
@@ -432,3 +392,6 @@ std::wostream& operator<<(std::wostream& o, AST_Typeof* node) {
     o << "typeof(" << node->inner << ")";
     return o;
 }
+
+AST_NumberLiteral::AST_NumberLiteral(NumberData *data) 
+        : AST_Value(AST_NUMBER, &t_number_literal), number_data(*data) {}

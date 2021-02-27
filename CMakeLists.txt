@@ -21,6 +21,8 @@ set(NEUTRON_SOURCE_FILES
 	error.h     error.cpp
 	            parser.cpp
                 job.cpp
+    number.h    number.cpp
+    default_casts.h default_casts.cpp
 	cmdargs.h   cmdargs.cpp
 	typer.h     typer.cpp
     backend/tir/tir.h   backend/tir/tir.cpp

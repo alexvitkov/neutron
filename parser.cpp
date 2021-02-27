@@ -179,45 +179,53 @@ void unexpected_token(AST_Context& ctx, Token actual, TokenType expected);
 
 
 
-NumberData* parse_number(AST_Context& ctx, char* start, char* end) {
-    // TODO ALLOCATION
-    NumberData* data = new NumberData();
+NumberData* parse_number(AST_Context& ctx, char** pos)  {
+    NumberData *num_data = new NumberData();
+    char *&p = *pos;
+    num_data->base = 10;
 
-    u64 acc[2] = { 0, 0 };
-    u8 acc_index = 0;
-
-    for (char* i = start; i != end; i++) {
-        char ch = *i;
-
-        if (ch >= '0' && ch <= '9') {
-            if (acc[acc_index])
-                acc[acc_index] *= 10;
-
-            acc[acc_index] += ch - '0';
-        }
-        else if (ch == '.') {
-            // Multiple decimal places
-            if (acc_index) {
-                ctx.error({
-                    .code = ERR_INVALID_NUMBER_FORMAT
-                });
-                return nullptr;
-            }
-            acc_index ++;
+    if (p[0] == '0') {
+        switch (p[1]) {
+            case 'b': { num_data->base = 2;  p += 2; break; }
+            case 'o': { num_data->base = 8;  p += 2; break; }
+            case 'x': { num_data->base = 16; p += 2; break; }
+            default: break;
         }
     }
 
-    if (acc_index) {
-        data->is_float = true;
-        NOT_IMPLEMENTED();
-        //data->f64_data = (double)data0] / (double)acc_index[1];
-    }
-    else {
-        data->is_float = false;
-        data->u64_data = acc[0];
+    // skip leading zeroes
+    while (*p == '0')
+        p++;
+
+    for ( ;; p++) {
+        char digit = *p;
+
+        if (digit >= '0' && digit <= '9') {
+            digit -= '0';
+        } else if (digit >= 'A' && digit <= 'F') {
+            digit -= 'A';
+        } else if (digit >= 'a' && digit <= 'f') {
+            digit -= 'a';
+        } 
+
+        else if (digit == '.') {
+            if (num_data->decimal_point >= 0)
+                assert(!"TODO ERROR");
+            num_data->decimal_point = num_data->digits.size;
+        } 
+
+        else {
+            break;
+        }
+
+        if (digit > num_data->base) {
+            assert(!"TODO ERROR");
+        }
+        num_data->digits.push(digit);
+
     }
 
-    return data;
+    return num_data;
 }
 
 
@@ -254,7 +262,8 @@ bool tokenize(AST_Context& global, SourceFile &s) {
 				tok* kw = Perfect_Hash::in_word_set(s.buffer + word_start, i - word_start);
                 TokenType tt = kw ? kw->type : (state == WORD ? TOK_ID : TOK_NUMBER);
 
-                char* name = nullptr;
+                char       *name     = nullptr;
+                NumberData *num_data = nullptr;
 
                 if (tt == TOK_ID) {
                     // TODO ALLOCATION
@@ -262,16 +271,20 @@ bool tokenize(AST_Context& global, SourceFile &s) {
                     name = (char*)malloc(length + 1);
                     memcpy(name, s.buffer + word_start, length);
                     name[length] = 0;
-                }
-                else if (tt == TOK_NUMBER) {
-                    name = (char*)parse_number(global, s.buffer + word_start, s.buffer + i);
-                    if (!name)
-                        return false;
+                } else if (tt == TOK_NUMBER) {
+                    char *pos = s.buffer + word_start;
+                    num_data = parse_number(global, &pos);
                 }
 
-                 s.pushToken(
-                    { .type = tt, .name = name },
-                    { .start = word_start, .end = i });
+                if (name) {
+                    s.pushToken(
+                        { .type = tt, .name = name },
+                        { .start = word_start, .end = i });
+                } else {
+                    s.pushToken(
+                        { .type = tt, .number_data = num_data },
+                        { .start = word_start, .end = i });
+                }
 
 				state = NONE;
 			}
@@ -842,7 +855,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                         break;
                     }
                     case TOK_NUMBER: {
-                        val = ctx.alloc<AST_Number>(t.number_data->u64_data);
+                        val = ctx.alloc<AST_NumberLiteral>(t.number_data);
                         break;
                     }
                     case TOK_STRING_LITERAL: {
@@ -1242,3 +1255,4 @@ bool parse_all(AST_Context& global) {
         MUST (parse_source_file(global, sf));
     return true;
 }
+

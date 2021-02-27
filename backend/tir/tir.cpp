@@ -438,23 +438,6 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             }
         }
 
-        case AST_NUMBER: {
-            AST_Number* num = (AST_Number*)node;
-
-            TIR_Value num_value = {
-                .valuespace = TVS_VALUE,
-                .offset = num->floorabs,
-                .type = num->type,
-            };
-
-            if (dst)
-                fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = num_value } });
-            else
-                dst = num_value;
-
-            return dst;
-        }
-
         case AST_BINARY_OP: {
             AST_BinaryOp* bin = (AST_BinaryOp*)node;
 
@@ -733,53 +716,20 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             return val;
         }
 
-        case AST_CAST: {
-            AST_Cast* cast = (AST_Cast*)node;
+        case AST_SMALL_NUMBER: {
+            AST_SmallNumber   *num  = (AST_SmallNumber*)node;
+            AST_PrimitiveType *type = (AST_PrimitiveType*)num->type;
 
-            // TODO this is probobobably unnnecessary
-            if (cast->inner->type IS AST_ARRAY_TYPE 
-                    && cast->type IS AST_POINTER_TYPE) 
-            {
-                TIR_Value var_location = get_array_ptr(fn, cast->inner);
-                TIR_Value offset_0 = { .valuespace = TVS_VALUE, .offset = 0, .type = &t_u32 };
-                arr<TIR_Value> offsets = { offset_0, offset_0 };
+            assert(type->kind == PRIMITIVE_UNSIGNED);
 
-                if (!dst)
-                    dst = fn.alloc_temp(cast->type);
+            TIR_Value val = { .valuespace = TVS_VALUE, .offset = num->u64_val, .type = num->type };
+            fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
+            return dst;
+        }
 
-                fn.emit({ 
-                    .opcode =  TOPC_GEP, 
-                    .gep = { 
-                        .dst = dst, 
-                        .base = var_location, 
-                        .offsets = offsets.release(),
-                    },
-                });
-                return dst;
-            } else {
-                TIR_Value src = compile_node_rvalue(fn, cast->inner, {});
-                if (!dst) dst = fn.alloc_temp(cast->type);
-
-                TIR_OpCode topc;
-                switch (cast->casttype) {
-                    case AST_Cast::SignedExtend:
-                        topc = TOPC_SEXT;
-                        break;
-                    case AST_Cast::ZeroExtend:
-                        topc = TOPC_ZEXT;
-                        break;
-                    default:
-                        topc = TOPC_BITCAST;
-                        break;
-                }
-
-                fn.emit({
-                    .opcode = topc,
-                    .un = { .dst = dst, .src = src }
-                });
-                
-                return dst;
-            }
+        case AST_NUMBER: {
+            // number literals should be converted to AST_SMALL_NUMBERs
+            UNREACHABLE;
         }
 
         default:

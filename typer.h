@@ -18,6 +18,7 @@ extern AST_PrimitiveType t_f64;
 extern AST_PrimitiveType t_type;
 extern AST_PrimitiveType t_void;
 extern AST_PrimitiveType t_string_literal;
+extern AST_PrimitiveType t_number_literal;
 extern AST_PrimitiveType t_any8;
 
 //AST_PointerType* get_pointer_type(AST_Type* pointed_type);

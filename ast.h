@@ -2,6 +2,7 @@
 #define AST_H
 
 #include "common.h"
+#include "number.h"
 #include "context.h"
 #include "ds.h"
 #include <iostream>
@@ -56,6 +57,7 @@ struct AST_UnresolvedId : AST_Value {
 //
 // The typer then patches up AST_FnCalls into AST_Casts by changing their nodetype,
 // so their structures must be compatible.
+/* 
 struct AST_Cast : AST_Value {
     AST_Value* inner;
 
@@ -69,6 +71,7 @@ struct AST_Cast : AST_Value {
     inline AST_Cast(AST_Type* targetType, AST_Value* inner)
         : AST_Value(AST_CAST, targetType), inner(inner) {};
 };
+*/
 
 
 // VOLATILE
@@ -130,16 +133,21 @@ struct AST_Var : AST_Value {
           always_on_stack(false) {};
 };
 
-struct AST_Number : AST_Value {
-    u64 floorabs;
 
-    bool negative;
-    bool has_decimal_point;
-    u64 after_decimal_point;
+struct AST_NumberLiteral : AST_Value {
+    NumberData number_data;
+    AST_NumberLiteral(NumberData *data);
+};
 
-    AST_Number(u64 floorabs);
+struct AST_SmallNumber : AST_Value {
+    union {
+        u64    u64_val;
+        i64    i64_val;
+        double f64_val;
+        float  f32_val;
+    };
 
-    bool fits_in(AST_PrimitiveType* numtype);
+    inline AST_SmallNumber(AST_Type *type) : AST_Value(AST_SMALL_NUMBER, type) {}
 };
 
 struct AST_If : AST_Node {
@@ -272,11 +280,12 @@ void print(std::wostream& o, AST_UnaryOp* node, bool brackets);
 
 void print_string(std::wostream& o, const char* s);
 
+
 std::wostream& operator<<(std::wostream& o, AST_Node* node);
 std::wostream& operator<<(std::wostream& o, AST_PrimitiveType* node);
 std::wostream& operator<<(std::wostream& o, AST_Return* node);
-std::wostream& operator<<(std::wostream& o, AST_Cast* node);
-std::wostream& operator<<(std::wostream& o, AST_Number* node);
+// std::wostream& operator<<(std::wostream& o, AST_Cast* node);
+std::wostream& operator<<(std::wostream& o, AST_NumberLiteral* node);
 std::wostream& operator<<(std::wostream& o, AST_If* node);
 std::wostream& operator<<(std::wostream& o, AST_While* node);
 std::wostream& operator<<(std::wostream& o, AST_Context* bl);

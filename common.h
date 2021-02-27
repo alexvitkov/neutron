@@ -142,13 +142,8 @@ struct Location {
     LocationInFile loc;
 };
 
-struct NumberData {
-    bool is_float;
-    union {
-        u64 u64_data;
-        double f64_data;
-    };
-};
+
+struct NumberData;
 
 struct SmallToken {
     enum TokenType type;
@@ -184,7 +179,7 @@ enum AST_NodeType : u8 {
     AST_VAR           = 0x01 | AST_VALUE_BIT,
     AST_BINARY_OP     = 0x02 | AST_VALUE_BIT,
     AST_ASSIGNMENT    = 0x03 | AST_VALUE_BIT,
-    AST_CAST          = 0x04 | AST_VALUE_BIT,
+    // AST_CAST          = 0x04 | AST_VALUE_BIT,
     AST_NUMBER        = 0x05 | AST_VALUE_BIT,
     AST_FN_CALL       = 0x06 | AST_VALUE_BIT,
     AST_MEMBER_ACCESS = 0x07 | AST_VALUE_BIT,
@@ -195,6 +190,7 @@ enum AST_NodeType : u8 {
     AST_STRING_LITERAL= 0x0c | AST_VALUE_BIT,
     AST_TYPEOF        = 0x0d | AST_VALUE_BIT,               
     AST_UNARY_OP      = 0x0e | AST_VALUE_BIT,
+    AST_SMALL_NUMBER  = 0x0f | AST_VALUE_BIT,
 
     AST_STRUCT         = 0x00 | AST_VALUE_BIT | AST_TYPE_BIT,
 	AST_PRIMITIVE_TYPE = 0x01 | AST_VALUE_BIT | AST_TYPE_BIT,

@@ -18,7 +18,7 @@ using std::wcout;
 
 #define DIE(msg) { assert(!(msg)); UNREACHABLE; }
 
-#define NOT_IMPLEMENTED(...) assert(!(__VA_ARGS__ "NO IMPLEMENTO"));
+#define NOT_IMPLEMENTED(...) assert(!(__VA_ARGS__"NO IMPLEMENTO"));
 
 struct Red { char _; };
 struct ResetStyle { char _; };

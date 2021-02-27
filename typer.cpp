@@ -1,6 +1,7 @@
 #include "typer.h"
 #include "ast.h"
 #include "error.h"
+#include "default_casts.h"
 #include <sstream>
 
 AST_PrimitiveType t_bool (PRIMITIVE_BOOL,     1, "bool");
@@ -15,9 +16,11 @@ AST_PrimitiveType t_i64  (PRIMITIVE_SIGNED,   8, "i64");
 AST_PrimitiveType t_f32  (PRIMITIVE_FLOAT,    4, "f32");
 AST_PrimitiveType t_f64  (PRIMITIVE_FLOAT,    8, "f64");
 
+
 AST_PrimitiveType t_type           (PRIMITIVE_UNIQUE,  0, "type");
 AST_PrimitiveType t_void           (PRIMITIVE_UNIQUE,  0, "void");
 AST_PrimitiveType t_string_literal (PRIMITIVE_UNIQUE,  0, "string_literal");
+AST_PrimitiveType t_number_literal (PRIMITIVE_UNIQUE,  0, "number_literal");
 
 // This is a special type that anything with size <= 8 can implicitly cast to
 // variadic arguments are assumed to be of type any8
@@ -26,9 +29,9 @@ AST_PrimitiveType t_any8 (PRIMITIVE_UNIQUE, 8, "any8");
 
 struct GetTypeJob : Job {
     AST_Context &ctx;
-    AST_Value   *node;
+    AST_Value   *node; // TODO use Job.result instead of this
 
-    AST_Type *cache_lhs, *cache_rhs;
+    AST_Type *cache1, *cache2;
 
     GetTypeJob(AST_Context &ctx, AST_Value *node) 
         : ctx(ctx), node(node), Job(ctx.global) { }
@@ -79,94 +82,6 @@ bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
 void add_string_global(struct TIR_Context *tir_context, AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
 
 
-bool can_implicit_cast(AST_Type *dsttype, AST_Type *srctype) {
-    return srctype == dsttype;
-}
-
-
-bool implicit_cast(AST_Context &ctx, AST_Value **dst, AST_Type *type) {
-    AST_Type *dstt = (*dst)->type;
-
-    MUST (dstt);
-
-    if (dstt == type) 
-        return true;
-
-    if (dstt IS AST_PRIMITIVE_TYPE 
-            && type IS AST_PRIMITIVE_TYPE
-            && ((AST_PrimitiveType*)type)->kind != PRIMITIVE_UNIQUE)
-    {
-        AST_PrimitiveType* l = (AST_PrimitiveType*)dstt;
-        AST_PrimitiveType* r = (AST_PrimitiveType*)type;
-
-        if ((*dst) IS AST_NUMBER) {
-            AST_Number* num = (AST_Number*)*dst;
-            if (num->fits_in((AST_PrimitiveType*)type)) {
-                num->type = type;
-                return true;
-            } else {
-                return false;
-            }
-        }
-        else {
-            // We allow very conservative implicit casting
-            // bool -> u8 -> u16 -> u32 -> u64
-            //    \     \       \      \
-            //     i8 -> i16 -> i32 -> i64
-            if (l == &t_bool
-                    || (l->kind == r->kind && l->size < r->size)
-                    || (l->kind == PRIMITIVE_UNSIGNED && r->kind == PRIMITIVE_SIGNED && l->size < r->size))
-            {
-                AST_Cast *cast = ctx.alloc<AST_Cast>(r, *dst);;
-                *dst = cast;
-
-                cast->casttype = l->kind == PRIMITIVE_UNSIGNED ? AST_Cast::ZeroExtend : AST_Cast::SignedExtend;
-                return true;
-            }
-        }
-    }
-
-    else if (dstt == &t_string_literal) {
-        if (type == ctx.get_pointer_type(&t_i8) || type == &t_any8) {
-
-            AST_StringLiteral* str = (AST_StringLiteral*)*dst;
-
-            // If the same string literal has been seen before
-            // There's already a static variable defined for it
-            AST_Var* string_static_var = (AST_Var*)ctx.declarations.find2({ .string_literal = str });
-
-            if (!string_static_var) {
-                // Get an array type that's just big enough to fit the C string 
-                AST_ArrayType* string_array_type = ctx.get_array_type(&t_i8, str->length + 1);
-
-                string_static_var = ctx.alloc<AST_Var>(nullptr, 0);
-                string_static_var->type = string_array_type;
-                string_static_var->is_constant = true;
-                // ctx.global.global_initial_nodes[string_static_var] = str;
-
-                add_string_global(ctx.global.tir_context, string_static_var, str);
-
-                string_static_var->is_global = true;
-
-                MUST (ctx.global.declare({ .string_literal = str }, string_static_var, false));
-            }
-
-            // AST_Cast *cast = ctx.alloc<AST_Cast>(ctx.get_pointer_type(&t_i8), string_static_var);
-            // cast->casttype = AST_Cast::StringLiteral_I8;
-            *dst = string_static_var;
-            return true;
-        }
-
-        return false;
-    }
-
-    else if (type == &t_any8) {
-        return true;
-    }
-
-    return false;
-}
-
 bool match_fn_call(AST_Context &ctx, AST_FnCall *fncall, AST_Fn *fn) {
     AST_FnType *fntype = (AST_FnType*)fn->type;
 
@@ -184,7 +99,8 @@ bool match_fn_call(AST_Context &ctx, AST_FnCall *fncall, AST_Fn *fn) {
         AST_Type *param_type = i < num_params ? fntype->param_types[i] : &t_any8;
         AST_Type *arg_type   = fncall->args[i]->type;
 
-        MUST (can_implicit_cast(param_type, arg_type));
+        // TODO CAST
+        MUST (param_type == arg_type);
     }
 
     fncall->type = fntype->returntype;
@@ -309,7 +225,11 @@ bool GetTypeJob::run(Message *msg) {
                     return false;
                 }
 
-                if (!implicit_cast(ctx, &bin->rhs, lhs_job.node->type)) {
+                assert(bin->rhs->type == bin->lhs->type);
+
+
+                // TODO CAST
+                if (bin->rhs->type != lhs_job.node->type) {
                     // TODO ERROR
                     error({});
                     return false;
@@ -384,12 +304,13 @@ bool GetTypeJob::run(Message *msg) {
 
             // Handle regular human arithmetic between numbers
             else {
-                if (implicit_cast(ctx, &bin->rhs, lhs_job.node->type)) {
+                // TODO CAST
+                if (bin->rhs->type != lhs_job.node->type) {
                     bin->type = lhs_job.node->type;
                     return true;
                 }
-
-                if (implicit_cast(ctx, &bin->lhs, rhs_job.node->type)) {
+                // TODO CAST
+                if (bin->lhs->type != rhs_job.node->type) {
                     bin->type = rhs_job.node->type;
                     return true;
                 }
@@ -532,6 +453,17 @@ bool validate_type(AST_Context& ctx, AST_Type** type) {
     return true;
 };
 
+CastJob cast_job(AST_Context &ctx, AST_Value *source, AST_Type *dst) {
+    CastJob cast(ctx.global, source, nullptr);
+    
+    if (!ctx.global.casts.find({ source->type, dst }, &cast.run_fn)) {
+        cast.source = nullptr;
+        return cast;
+    }
+
+    return cast;
+}
+
 bool TypeCheckJob::run(Message *msg) {
     switch (node->nodetype) {
         case AST_BLOCK: {
@@ -612,16 +544,24 @@ bool TypeCheckJob::run(Message *msg) {
                 WAIT (ret_typecheck, TypeCheckJob);
             }
 
-            if (rettype != &t_void && !ret->value) {
-                error({
-                    .code = ERR_RETURN_TYPE_MISSING,
-                    .nodes = { ret, ctx.fn,
+            if (rettype != &t_void) {
+                if (!ret->value) {
+                    error({ .code = ERR_RETURN_TYPE_MISSING, .nodes = { ret, ctx.fn, } });
+                    return false;
+                }
+
+                if (ret->value->type != rettype) {
+                    CastJob c = cast_job(ctx, ret->value, rettype);
+                    if (!c.source) {
+                        assert(!"TODO ERROR");
                     }
-                });
-                return false;
+                    WAIT (c, CastJob);
+                    ret->value = c.result;
+                }
             }
 
-            if (rettype != &t_void && !implicit_cast(ctx, &ret->value, rettype)) {
+            // TODO CAST
+            if (rettype != &t_void && ret->value->type != rettype) {
                 error({
                     .code = ERR_CANNOT_IMPLICIT_CAST, 
                     .nodes = {
@@ -720,36 +660,3 @@ bool TypeCheckJob::run(Message *msg) {
 
     }
 }
-
-/*
-bool typecheck_all(AST_GlobalContext& global) {
-
-    // During typechecking we can declare more stuff
-    // so it's not safe to iterate over global.declarations as it may relocate
-    // Right now we copy the original declartions into an array and iterate over those
-    // This means that the new declarations WON'T BE TYPECHECKED
-    arr<AST_Node*> declarations_copy;
-    for (auto& decl : global.declarations)
-        declarations_copy.push(decl.value);
-
-    // First resolve the function types, we need their signatures for everything else
-    for (auto& decl : declarations_copy) {
-        if (decl IS AST_FN) {
-            MUST (validate_fn_type(global, (AST_Fn*)decl));
-        }
-        else if (decl IS AST_VAR) {
-            MUST (typecheck(global, decl));
-        }
-    }
-
-    for (AST_Node*& stmt : global.statements)
-        MUST (typecheck(global, stmt));
-
-    // global.temp_allocator.free_all();
-
-    for (auto& decl : declarations_copy)
-        MUST (typecheck(global, decl));
-
-    return true;
-}
-*/

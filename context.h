@@ -7,11 +7,21 @@
 
 #include <atomic>
 
+struct Job;
+struct CastJob;
+struct AST_Context;
 struct AST_GlobalContext;
+
+struct AST_Value;
 struct AST_UnresolvedId;
+struct AST_StringLiteral;
+struct AST_Fn; 
 struct AST_FnCall;
 struct AST_FnType;
-struct AST_StringLiteral;
+struct AST_Type; 
+struct AST_PointerType; 
+struct AST_ArrayType;
+
 
 // VOLATILE If you change this, you will have to change the map_hash and map_equals functions defined in context.cpp
 struct DeclarationKey {
@@ -31,11 +41,6 @@ struct DeclarationKey {
 u32 map_hash(DeclarationKey key);
 u32 map_equals(DeclarationKey lhs, DeclarationKey rhs);
 
-struct AST_Fn; 
-struct AST_Type; 
-struct AST_PointerType; 
-struct AST_ArrayType;
-
 struct CompileTarget {
     u64 pointer_size;
     u64 coerce_target_size;
@@ -48,12 +53,23 @@ struct Namespace {
     bool finished_with_declarations;
 };
 
+struct CastPair {
+    AST_Type *src, *dst;
+};
+
+u32  map_hash(CastPair key);
+bool map_equals(CastPair a, CastPair b);
+
+typedef bool (*CastJobMethod) (CastJob *self);
+
 struct AST_Context : AST_Node {
     map<DeclarationKey, AST_Node*> declarations;
     bucketed_arr<AST_Node*> statements;
 
     AST_GlobalContext &global;
     AST_Context *parent;
+
+    map <CastPair, CastJobMethod> casts;
 
     AST_Fn* fn; // the function that this context is a part of
     arr<AST_Context*> children;
@@ -108,6 +124,7 @@ struct AST_Context : AST_Node {
     AST_ArrayType   *get_array_type(AST_Type* base_type, u64 length);
     AST_FnType      *make_function_type_unique(AST_FnType* temp_type);
 
+
     void             decrement_hanging_declarations();
     void             close();
 };
@@ -139,7 +156,6 @@ enum JobFlags : u32 {
     JOB_ERROR = 0x02,
 };
 
-struct Job;
 
 struct AST_GlobalContext : AST_Context {
 	arr<Error> errors;
@@ -161,54 +177,53 @@ struct AST_GlobalContext : AST_Context {
 
     CompileTarget target = { 8, 8 };
 
-    // This is silly, but there are two ways of storing information about a node's location
-    //
-    // definition_locations[node] tells us where a node is defined
-    //
-    // However that node may be referenced from a lot of different places in the tree
-    // We don't have a Reference node, we just slap a pointer to the original node
-    // when we need to reference it
-    //
-    // The issue is that we still need location info for those references to print nice errors
-    // if "AST_Node* some_node = ..." is referencing some node,
-    // the address of the 'some_node' pointer itself is what we use as a key in reference_locations
+    // there are two ways of storing information about a node's location
+    // - definition_locations[node] tells us where a node is defined.
+    // but that is referenced from a lot of different places in the AST and
+    // we don't have a reference node, so 
+    // - to track locations of references we use a pointer to the reference
+    // the catch is that now that must be const as well
     map<AST_Node*,  Location> definition_locations;
     map<AST_Node**, Location> reference_locations;
 
-    // TODO DS This should be a hashset if someone ever makes one
-    //
-    // The reason those maps exist is to make sure function/pointer types are unique
-    // Types MUST be comparable by checking their pointers with ==,
-    // so we need those maps to make sure we don't create the same
-    // composite type twice.
-    map<AST_FnType*, AST_FnType*> fn_types_hash;
+    // function/pointer types must be unique
+    // AST_Type*s MUST be comparable by checking their pointers with ==,
+    // so we need those maps to make sure we don't create the same composite type twice.
+    map<AST_FnType*, AST_FnType*> fn_types_hash; // TODO DS - thish should be a hashset
     map<AST_Type*, AST_PointerType*> pointer_types;
 
-    inline AST_GlobalContext() : AST_Context(nullptr), subscribers(MESSAGES_COUNT) {
-        for (u32 i = 0; i < MESSAGES_COUNT; i++)
-            subscribers.push(arr<Job*>());
-    }
 
     arr<Job*> ready_jobs;
     map<u64, Job*> jobs_by_id;
 
     // subscribers[MSG_NEW_DECLARATION] are all the jobs waiting on MSG_NEW_DECLARATION
     arr<arr<Job*>> subscribers;
-    u32 jobs_count;
-    std::atomic<int> next_job_id = { 1 };
+    u32 jobs_count; std::atomic<int> next_job_id = { 1 };
+
+
+    AST_GlobalContext();
 
     void add_job(Job *job);
     bool run_jobs();
     void send_message(Message *msg);
-
 };
 
 struct Job {
+    u64 id;
+    AST_GlobalContext &global;
+    arr<u64> dependent_jobs;
+    u32 dependencies_left = 0;
+    JobFlags flags = (JobFlags)0;
+
+    void add_dependency(Job* dependency);
+    void subscribe(MessageType msgtype); // TODO this won't scale - MessageType is too coarse
+
+    Job(AST_GlobalContext &global);
+    void error(Error err);
+
     // returns true if the job is finished after the run call returns
     virtual bool run(Message *msg) = 0;
     virtual std::wstring get_name() = 0;
-
-    u64 id;
 
     // Jobs can often be completed immediately
     // so allocating them on the heap often doesn't make sense.
@@ -227,19 +242,6 @@ struct Job {
 
        return heap_job;
     }
-
-
-    AST_GlobalContext &global;
-    JobFlags flags = (JobFlags)0;
-
-    arr<u64> dependent_jobs;
-    u32 dependencies_left = 0;
-
-    void add_dependency(Job* dependency);
-    void subscribe(MessageType msgtype); // TODO this won't scale - MessageType is too coarse
-
-    Job(AST_GlobalContext &global);
-    void error(Error err);
 };
 
 template <typename T, typename ... Ts>

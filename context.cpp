@@ -1,5 +1,7 @@
 #include "common.h"
 #include "ast.h"
+#include "typer.h"
+#include "default_casts.h"
 #include "error.h"
 
 AST_Context::AST_Context(AST_Context* parent)
@@ -30,6 +32,14 @@ u32 map_equals(DeclarationKey lhs, DeclarationKey rhs) {
         return false;
 
     return lhs.fn_type == rhs.fn_type;
+}
+
+u32 map_hash(CastPair pair) {
+    return map_hash(pair.src) ^ map_hash(pair.dst);
+}
+
+bool map_equals(CastPair a, CastPair b) {
+    return a.src == b.src && a.dst == b.dst;
 }
 
 bool AST_Context::declare(DeclarationKey key, AST_Node* value, bool sendmsg) {
@@ -140,4 +150,13 @@ void AST_Context::close() {
     msg.scope = this;
     closed = true;
     global.send_message(&msg);
+}
+
+int x;
+
+AST_GlobalContext::AST_GlobalContext() : AST_Context(nullptr), subscribers(MESSAGES_COUNT) {
+    for (u32 i = 0; i < MESSAGES_COUNT; i++)
+        subscribers.push(arr<Job*>());
+
+    casts.insert({ &t_number_literal, &t_u64 }, number_literal_to_u64);
 }
