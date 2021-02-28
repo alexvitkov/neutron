@@ -73,6 +73,7 @@ struct AST_Context : AST_Node {
     AST_Context *parent;
 
     map <CastPair, CastJobMethod> casts;
+    map <CastPair, int> default_cast_priorities;
 
     AST_Fn* fn; // the function that this context is a part of
     arr<AST_Context*> children;
@@ -159,13 +160,14 @@ struct DependencyFinishedMessage : Message {
     Job *dependency;
 };
 
-struct FnMatchedMessage : Message {
-    AST_FnCall *fncall;
+struct MatchFnCallJobOverMessage : Message {
+    struct MatchFnCallJob *job;
 };
 
 enum JobFlags : u32 {
     JOB_DONE  = 0x01,
     JOB_ERROR = 0x02,
+    JOB_FALSE = 0x04,
 };
 
 
@@ -278,6 +280,12 @@ struct ResolveJob : Job {
     AST_UnresolvedId **unresolved_id;
     AST_FnCall        *fncall;
     AST_Context       *context;
+
+    int pending_matches = 0;
+    int prio = 0;
+
+    arr<AST_Value*> new_args;
+    AST_Fn         *new_fn;
 
     ResolveJob(AST_Context &ctx, AST_UnresolvedId **id);
     bool run(Message *msg) override;

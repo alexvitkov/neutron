@@ -170,4 +170,14 @@ AST_GlobalContext::AST_GlobalContext() : AST_Context(nullptr), subscribers(MESSA
         subscribers.push(arr<Job*>());
 
     casts.insert({ &t_number_literal, &t_u64 }, number_literal_to_u64);
+    default_cast_priorities.insert({ &t_number_literal, &t_u64 }, 100);
+
+    casts.insert({ &t_number_literal, &t_u32 }, number_literal_to_u32);
+    default_cast_priorities.insert({ &t_number_literal, &t_u32 }, 90);
+
+    casts.insert({ &t_number_literal, &t_u16 }, number_literal_to_u16);
+    default_cast_priorities.insert({ &t_number_literal, &t_u16 }, 80);
+
+    casts.insert({ &t_number_literal, &t_u8  }, number_literal_to_u8);
+    default_cast_priorities.insert({ &t_number_literal, &t_u8 },  70);
 }

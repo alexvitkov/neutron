@@ -24,6 +24,8 @@ struct MatchFnCallJob : Job {
     AST_Fn     *fn;
 
     arr<AST_Value*> casted_args;
+    int priority = 10000;
+    int npriority = 0;
 
     bool run(Message *msg) override;
     std::wstring get_name() override;

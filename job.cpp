@@ -129,6 +129,7 @@ bool ResolveJob::run(Message *msg) {
                         MatchFnCallJob *match_job = new MatchFnCallJob(context->global, fncall, (AST_Fn*)kvp.value);
                         global.add_job(match_job);
                         add_dependency(match_job);
+                        pending_matches ++;
                     }
                 }
             }
@@ -147,12 +148,18 @@ bool ResolveJob::run(Message *msg) {
                 return true;
             } else {
                 MUST (decl->node->nodetype == AST_FN)
+
                 MatchFnCallJob *match_job = new MatchFnCallJob(context->global, fncall, (AST_Fn*)decl->node);
                 add_dependency(match_job);
                 global.add_job(match_job);
+                pending_matches ++;
+                return false;
             }
         }
         case MSG_SCOPE_CLOSED: {
+            if (pending_matches > 0)
+                return false;
+
             ScopeClosedMessage *sc = (ScopeClosedMessage*)msg;
             if (sc->scope == context) {
                 // TODO 717
@@ -170,14 +177,64 @@ bool ResolveJob::run(Message *msg) {
             }
             return false;
         }
+
         case MSG_FN_MATCHED: {
-            FnMatchedMessage *match_msg = (FnMatchedMessage*)msg;
-            return match_msg->fncall == fncall;
+            MatchFnCallJobOverMessage *match_msg = (MatchFnCallJobOverMessage*)msg;
+            if (match_msg->job->fncall != fncall)
+                return false;
+
+            pending_matches --;
+
+            if (!(match_msg->job->flags & JOB_FALSE)) {
+                wcout << "prio:" << match_msg->job->priority << "\n";
+
+                if (prio < match_msg->job->priority) {
+
+                    if (prio == 0)
+                        new_args.realloc(fncall->args.size);
+
+                    prio = match_msg->job->priority;
+
+                   for (int i = 0; i < fncall->args.size; i++)
+                       new_args[i] = match_msg->job->casted_args[i];
+
+                   new_fn = match_msg->job->fn;
+
+                } else if (prio == match_msg->job->priority) {
+                    // TODO ERROR
+                    NOT_IMPLEMENTED();
+                }
+            }
+
+            if (pending_matches == 0) {
+                if (context && context->closed) {
+                    context = context->parent;
+                    if (context) {
+                        assert(!run(nullptr));
+                        return false;
+                    }
+                }
+                if (!context) {
+                    if (prio > 0) {
+                        for (int i = 0; i < fncall->args.size; i++)
+                            fncall->args[i] = new_args[i];
+                        fncall->fn = new_fn;
+                        fncall->type = ((AST_FnType*)fncall->fn->type)->returntype;
+                        return true;
+                    } else {
+                        // TODO ERROR
+                        NOT_IMPLEMENTED();
+                    }
+                } else {
+                    return false;
+                }
+            }
+
+            return false;
         }
         default:
             UNREACHABLE;
     }
-
 }
 
 void Job::error(Error err) {

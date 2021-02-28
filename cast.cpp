@@ -2,21 +2,6 @@
 #include <iostream>
 #include <sstream>
 
-
-bool number_literal_to_u64 (CastJob *self) {
-    AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
-    u64 num;
-    if (!number_data_to_unsigned(&nl->number_data, &num)) {
-        self->set_error_flag();
-        return false;
-    }
-    AST_SmallNumber *sn = self->global.alloc<AST_SmallNumber>(&t_u64);
-    sn->u64_val = num;
-    *self->result = sn;
-    return true;
-}
-
-
 bool CastJob::run(Message *msg) {
     return run_fn(this);
 }
@@ -25,16 +10,6 @@ std::wstring CastJob::get_name() {
     return L"CastJob";
 }
 
-CastJob cast_job(AST_Context &ctx, AST_Value *source, AST_Value **dst, AST_Type *dsttype) {
-    CastJob cast(ctx.global, source, dst, nullptr);
-    
-    if (!ctx.global.casts.find({ source->type, dsttype }, &cast.run_fn)) {
-        cast.source = nullptr;
-        return cast;
-    }
-
-    return cast;
-}
 
 MatchFnCallJob::MatchFnCallJob(AST_GlobalContext &global, AST_FnCall *fncall, AST_Fn *fn)
     : Job(global), fncall(fncall), fn(fn), casted_args(fncall->args.size) {}
@@ -58,6 +33,7 @@ bool MatchFnCallJob::run(Message *msg) {
         MUST (num_args >= num_params);
     }
 
+
     if (casted_args.size == 0) {
         casted_args.size = casted_args.capacity;
         for (int i = 0; i < num_args; i++) {
@@ -70,6 +46,11 @@ bool MatchFnCallJob::run(Message *msg) {
                 if (!global.casts.find({ fncall->args[i]->type, param_type }, &run_fn)) {
                     // TODO stop the remaining dependencies
                     return false;
+                }
+                int add;
+                if (global.default_cast_priorities.find({ fncall->args[i]->type, param_type }, &add)) {
+                    priority += add;
+                    npriority += 1;
                 }
 
                 CastJob cast(global, fncall->args[i], &casted_args[i], run_fn);
@@ -89,17 +70,67 @@ bool MatchFnCallJob::run(Message *msg) {
         return false;
     }
 
-    fncall->type = fntype->returntype;
-    fncall->fn = fn;
-
-    FnMatchedMessage matched_msg;
+    MatchFnCallJobOverMessage matched_msg;
     matched_msg.msgtype = MSG_FN_MATCHED;
-    matched_msg.fncall = fncall;
+    matched_msg.job = this;
     global.send_message(&matched_msg);
-
-    for (int i = 0; i < casted_args.size; i++)
-        fncall->args[i] = casted_args[i];
 
     return true;
 }
 
+
+
+
+
+
+bool number_literal_to_u64(CastJob *self) {
+    AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
+    u64 num;
+    if (!number_data_to_unsigned(&nl->number_data, &num)) {
+        self->set_error_flag();
+        return false;
+    }
+    AST_SmallNumber *sn = self->global.alloc<AST_SmallNumber>(&t_u64);
+    sn->u64_val = num;
+    *self->result = sn;
+    return true;
+}
+
+bool number_literal_to_u32(CastJob *self) {
+    AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
+    u32 num;
+    if (!number_data_to_unsigned(&nl->number_data, &num)) {
+        self->set_error_flag();
+        return false;
+    }
+    AST_SmallNumber *sn = self->global.alloc<AST_SmallNumber>(&t_u64);
+    sn->u64_val = num;
+    *self->result = sn;
+    return true;
+}
+
+bool number_literal_to_u16(CastJob *self) {
+    AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
+    u16 num;
+    if (!number_data_to_unsigned(&nl->number_data, &num)) {
+        self->set_error_flag();
+        return false;
+    }
+    AST_SmallNumber *sn = self->global.alloc<AST_SmallNumber>(&t_u64);
+    sn->u64_val = num;
+    *self->result = sn;
+    return true;
+}
+
+bool number_literal_to_u8(CastJob *self) {
+    AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
+    u8 num;
+    if (!number_data_to_unsigned(&nl->number_data, &num)) {
+        self->set_error_flag();
+        return false;
+    }
+    AST_SmallNumber *sn = self->global.alloc<AST_SmallNumber>(&t_u64);
+    sn->u64_val = num;
+    *self->result = sn;
+    return true;
+}

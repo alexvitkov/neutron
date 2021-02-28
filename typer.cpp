@@ -164,6 +164,9 @@ bool GetTypeJob::run(Message *msg) {
 
                     return true;
                 }
+                case AST_FN: {
+                    UNREACHABLE;
+                }
                 default: {
                     // CAST
                     NOT_IMPLEMENTED();
