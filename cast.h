@@ -18,6 +18,20 @@ struct CastJob : Job {
     std::wstring get_name() override;
 };
 
+
+struct MatchFnCallJob : Job {
+    AST_FnCall *fncall;
+    AST_Fn     *fn;
+
+    arr<AST_Value*> casted_args;
+
+    bool run(Message *msg) override;
+    std::wstring get_name() override;
+
+    MatchFnCallJob(AST_GlobalContext &global, AST_FnCall *fncall, AST_Fn *fn);
+};
+
+
 bool number_literal_to_u64(CastJob *self);
 bool number_literal_to_u32(CastJob *self);
 bool number_literal_to_u16(CastJob *self);

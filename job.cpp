@@ -1,6 +1,7 @@
 #include "context.h"
 #include "ast.h"
 #include "typer.h"
+#include "cast.h"
 #include <sstream>
 #include <iostream>
 

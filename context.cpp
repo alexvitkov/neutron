@@ -1,7 +1,7 @@
 #include "common.h"
 #include "ast.h"
 #include "typer.h"
-#include "default_casts.h"
+#include "cast.h"
 #include "error.h"
 
 AST_Context::AST_Context(AST_Context* parent)

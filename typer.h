@@ -35,16 +35,4 @@ struct TypeCheckJob : Job {
     bool run(Message *msg) override;
 };
 
-struct MatchFnCallJob : Job {
-    AST_FnCall *fncall;
-    AST_Fn     *fn;
-
-    arr<AST_Value*> casted_args;
-
-    bool run(Message *msg) override;
-    std::wstring get_name() override;
-
-    MatchFnCallJob(AST_GlobalContext &global, AST_FnCall *fncall, AST_Fn *fn);
-};
-
 #endif // guard

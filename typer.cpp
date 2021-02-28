@@ -1,7 +1,7 @@
 #include "typer.h"
 #include "ast.h"
 #include "error.h"
-#include "default_casts.h"
+#include "cast.h"
 #include <sstream>
 
 AST_PrimitiveType t_bool (PRIMITIVE_BOOL,     1, "bool");
@@ -25,6 +25,7 @@ AST_PrimitiveType t_number_literal (PRIMITIVE_UNIQUE,  0, "number_literal");
 // This is a special type that anything with size <= 8 can implicitly cast to
 // variadic arguments are assumed to be of type any8
 AST_PrimitiveType t_any8 (PRIMITIVE_UNIQUE, 8, "any8");
+
 
 
 struct GetTypeJob : Job {
@@ -71,84 +72,6 @@ std::wstring TypeCheckJob::get_name() {
 
 void add_string_global(struct TIR_Context *tir_context, AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
 
-
-CastJob cast_job(AST_Context &ctx, AST_Value *source, AST_Value **dst, AST_Type *dsttype) {
-    CastJob cast(ctx.global, source, dst, nullptr);
-    
-    if (!ctx.global.casts.find({ source->type, dsttype }, &cast.run_fn)) {
-        cast.source = nullptr;
-        return cast;
-    }
-
-    return cast;
-}
-
-MatchFnCallJob::MatchFnCallJob(AST_GlobalContext &global, AST_FnCall *fncall, AST_Fn *fn)
-    : Job(global), fncall(fncall), fn(fn), casted_args(fncall->args.size) {}
-
-
-std::wstring MatchFnCallJob::get_name() {
-    std::wostringstream s;
-    s << "MatchFnCallJob<" << fncall << ">";
-    return s.str();
-}
-
-bool MatchFnCallJob::run(Message *msg) {
-    AST_FnType *fntype = (AST_FnType*)fn->type;
-
-    u64 num_args = fncall->args.size;
-    u64 num_params = fntype->param_types.size;
-
-    if (!fntype->is_variadic) {
-        MUST (num_args == num_params);
-    } else {
-        MUST (num_args >= num_params);
-    }
-
-    if (casted_args.size == 0) {
-        casted_args.size = casted_args.capacity;
-        for (int i = 0; i < num_args; i++) {
-            AST_Type *param_type = i < num_params ? fntype->param_types[i] : &t_any8;
-
-            if (param_type == fncall->args[i]->type) {
-                casted_args[i] = fncall->args[i];
-            } else {
-                CastJobMethod run_fn;
-                if (!global.casts.find({ fncall->args[i]->type, param_type }, &run_fn)) {
-                    // TODO stop the remaining dependencies
-                    return false;
-                }
-
-                CastJob cast(global, fncall->args[i], &casted_args[i], run_fn);
-
-                Job *heap_job = cast.run_stackjob<CastJob>();
-                if (heap_job) {
-                    add_dependency(heap_job);
-                } else if (cast.flags & JOB_ERROR) {
-                    // TODO stop the remaining dependencies
-                    return false;
-                }
-            }
-        }
-    }
-
-    if (dependencies_left > 0) {
-        return false;
-    }
-
-    fncall->type = fntype->returntype;
-    fncall->fn = fn;
-
-    FnMatchedMessage matched_msg;
-    matched_msg.msgtype = MSG_FN_MATCHED;
-    matched_msg.fncall = fncall;
-    global.send_message(&matched_msg);
-
-    for (int i = 0; i < casted_args.size; i++)
-        fncall->args[i] = casted_args[i];
-
-    return true;
-}
 
 bool is_valid_lvalue(AST_Node* expr) {
     switch (expr->nodetype) {
@@ -578,11 +501,12 @@ bool TypeCheckJob::run(Message *msg) {
                 }
 
                 if (ret->value->type != rettype) {
-                    CastJob c = cast_job(ctx, ret->value, &ret->value, rettype);
-                    if (!c.source) {
+                    CastJobMethod run_fn;
+                    if (!ctx.global.casts.find({ ret->value->type, rettype }, &run_fn)) {
                         assert(!"TODO ERROR");
                     }
-                    WAIT (c, CastJob);
+                    CastJob cast(ctx.global, ret->value, &ret->value, run_fn);
+                    WAIT (cast, CastJob);
                 }
             }
 
