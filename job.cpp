@@ -8,7 +8,7 @@ void Job::add_dependency(Job* dependency) {
     assert(!(dependency->flags & JOB_DONE));
 
     if (dependency->flags & JOB_ERROR) {
-        flags = (JobFlags)(flags | JOB_ERROR);
+        set_error_flag();
         return;
     }
 
@@ -74,7 +74,7 @@ void AST_GlobalContext::add_job(Job *job) {
     }
 
     if (debug_jobs) {
-        wcout << dim << "Adding " << resetstyle << job->get_name() << "\n";
+        wcout << dim << "Adding " << resetstyle << job->id << ":" << job->get_name() << "\n";
         wcout.flush();
     }
     ready_jobs.push(job);
@@ -90,7 +90,7 @@ bool AST_GlobalContext::run_jobs() {
         if (job->flags & JOB_ERROR) {
             for (u64 dependent_job_id : job->dependent_jobs) {
                 Job *j = global.jobs_by_id[dependent_job_id]; 
-                j->flags = (JobFlags)(j->flags | JOB_ERROR);
+                j->set_error_flag();
             }
             continue;
         }
@@ -104,46 +104,35 @@ bool AST_GlobalContext::run_jobs() {
 }
 
 ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id) 
-    : Job(ctx.global), id(id), context(&ctx) 
+    : Job(ctx.global), unresolved_id(id), context(&ctx) 
 {
-    // TODO JOB - we add a fake dependency to make sure the job doesnt get called
+    // TODO JOB 717 - we add a fake dependency to make sure the job doesnt get called
     // we're actually waiting for a message
     this->dependencies_left ++;
 }
 
 bool ResolveJob::run(Message *msg) {
     if (!msg) {
-        if (id) {
-            AST_Node *decl;
-            MUST (context->declarations.find({ .name = (*id)->name }, &decl));
-            *(AST_Node**)id = decl;
-            return true;
-        } else {
-            AST_UnresolvedId *id = (AST_UnresolvedId*)fncall->fn;
-            assert(id IS AST_UNRESOLVED_ID);
-
-            for (auto &kvp : context->declarations) {
-                wcout << "aaa\n";
-                if (!strcmp(id->name, kvp.key.name) && match_fn_call(*context, fncall, (AST_Fn*)kvp.value))
-                    return true;
-            }
-
-            while (context->closed) {
-                context = context->parent;
-
-                if (!context) {
-                    error({ .code = ERR_NOT_DEFINED, .nodes = { fncall->fn } });
-                    return false;
-                }
-
+        do { 
+            if (unresolved_id) {
+                AST_Node *decl;
+                MUST (context->declarations.find({ .name = (*unresolved_id)->name }, &decl));
+                *(AST_Node**)unresolved_id = decl;
+                return true;
+            } else {
+                AST_UnresolvedId *the_id = (AST_UnresolvedId*)fncall->fn;
+                assert(the_id IS AST_UNRESOLVED_ID);
+                
                 for (auto &kvp : context->declarations) {
-                    if (!strcmp(id->name, kvp.key.name) && match_fn_call(*context, fncall, (AST_Fn*)kvp.value))
-                        return true;
+                    if (!strcmp(the_id->name, kvp.key.name)) {
+                        MatchFnCallJob *match_job = new MatchFnCallJob(context->global, fncall, (AST_Fn*)kvp.value);
+                        global.add_job(match_job);
+                        add_dependency(match_job);
+                    }
                 }
             }
-
-            return false;
-        }
+        } while (context->closed && (context = context->parent));
+        return false;
     }
 
     switch (msg->msgtype) {
@@ -151,27 +140,38 @@ bool ResolveJob::run(Message *msg) {
             NewDeclarationMessage *decl = (NewDeclarationMessage*)msg;
             MUST (decl->context == context);
 
-            if (id) {
-                MUST (!strcmp(decl->key.name, (*id)->name));
-                *(AST_Node**)id = decl->node;
+            if (unresolved_id) {
+                MUST (!strcmp(decl->key.name, (*unresolved_id)->name));
+                *(AST_Node**)unresolved_id = decl->node;
                 return true;
             } else {
                 MUST (decl->node->nodetype == AST_FN)
-                return match_fn_call(*context, fncall, (AST_Fn*)decl->node);
+                MatchFnCallJob *match_job = new MatchFnCallJob(context->global, fncall, (AST_Fn*)decl->node);
+                add_dependency(match_job);
+                global.add_job(match_job);
             }
         }
         case MSG_SCOPE_CLOSED: {
             ScopeClosedMessage *sc = (ScopeClosedMessage*)msg;
             if (sc->scope == context) {
+                // TODO 717
                 context = context->parent;
                 if (!context) {
-                    error({ .code = ERR_NOT_DEFINED, .nodes = { id ? (AST_Value*)*id : fncall } });
-                    return false;
+                    if (dependencies_left == 1) {
+                        error({ .code = ERR_NOT_DEFINED, .nodes = { unresolved_id ? (AST_Value*)*unresolved_id : fncall } });
+                        return false;
+                    } else {
+                        return false;
+                    }
                 } else {
                     return run(nullptr);
                 }
             }
             return false;
+        }
+        case MSG_FN_MATCHED: {
+            FnMatchedMessage *match_msg = (FnMatchedMessage*)msg;
+            return match_msg->fncall == fncall;
         }
         default:
             UNREACHABLE;
@@ -184,10 +184,10 @@ void Job::error(Error err) {
     global.error(err);
     print_err(global, err);
 
-    flags = (JobFlags)(flags | JOB_ERROR);
+    set_error_flag();
     for (u64 dependent_job_id : dependent_jobs) {
         Job *job = global.jobs_by_id[dependent_job_id];
-        job->flags = (JobFlags)(job->flags | JOB_ERROR);
+        job->set_error_flag();
     }
 }
 
@@ -212,8 +212,8 @@ void Job::subscribe(MessageType msgtype) {
 std::wstring ResolveJob::get_name() {
     std::wostringstream stream;
 
-    if (id) {
-        stream << "ResolveJob<" << (*id)->name << L">";
+    if (unresolved_id) {
+        stream << "ResolveJob<" << (*unresolved_id)->name << L">";
     } else {
         stream << "ResolveJob<" << fncall << L">";
     }

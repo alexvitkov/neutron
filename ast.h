@@ -130,6 +130,7 @@ struct AST_Var : AST_Value {
           name(name), 
           argindex(argindex), 
           is_global(false),
+          is_constant(false),
           always_on_stack(false) {};
 };
 

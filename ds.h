@@ -245,6 +245,7 @@ struct arr {
     }
 
     arr& operator= (arr&& other) {
+        if (buffer) free(buffer);
         buffer = other.buffer;
         size = other.size;
         capacity = other.capacity;
@@ -261,8 +262,8 @@ struct arr {
             new (&buffer[i]) T (other.buffer[i]);
     }
 
-    void realloc() {
-        capacity *= 2;
+    void realloc(u32 new_capacity) {
+        capacity = new_capacity;
         T* new_buffer = (T*)malloc(sizeof(T) * capacity);
         for (u32 i = 0; i < size; i++)
             new (&new_buffer[i]) T (std::move(buffer[i]));
@@ -285,8 +286,9 @@ struct arr {
     }
 
     T& push(T value) {
-        if (size >= capacity)
-            realloc();
+        if (size >= capacity) {
+            realloc(capacity * 2);
+        }
 
         T* ptr = &buffer[size++];
         new (ptr) T(value);

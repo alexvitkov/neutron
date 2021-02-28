@@ -133,6 +133,7 @@ struct AST_Context : AST_Node {
 enum MessageType : u8 {
     MSG_NEW_DECLARATION = 0,
     MSG_SCOPE_CLOSED    = 1,
+    MSG_FN_MATCHED      = 2,
 
     MESSAGES_COUNT,
 };
@@ -149,6 +150,14 @@ struct NewDeclarationMessage : Message {
     AST_Context *context;
     DeclarationKey key;
     AST_Node *node;
+};
+
+struct DependencyFinishedMessage : Message {
+    Job *dependency;
+};
+
+struct FnMatchedMessage : Message {
+    AST_FnCall *fncall;
 };
 
 enum JobFlags : u32 {
@@ -242,6 +251,10 @@ struct Job {
 
        return heap_job;
     }
+
+    inline void set_error_flag() {
+        flags = (JobFlags)(flags | JOB_ERROR);
+    }
 };
 
 template <typename T, typename ... Ts>
@@ -259,7 +272,7 @@ T* AST_Context::alloc_temp(Ts &&...args) {
 }
 
 struct ResolveJob : Job {
-    AST_UnresolvedId **id;
+    AST_UnresolvedId **unresolved_id;
     AST_FnCall        *fncall;
     AST_Context       *context;
 
@@ -289,7 +302,7 @@ bool parse_source_file(AST_Context& global, SourceFile& sf);
             __VA_ARGS__                              \
             return false;                            \
         } else if (job.flags & JOB_ERROR) {          \
-            flags = (JobFlags)(flags | JOB_ERROR);   \
+            set_error_flag();                        \
             return false;                            \
         }                                            \
     }

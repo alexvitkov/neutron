@@ -65,6 +65,8 @@ bool map_equals(u64 lhs, u64 rhs) {
 }
 
 char* linear_alloc::alloc(u64 bytes) {
+    bytes = (bytes / 8) * 8 + 8;
+
     if (remaining < bytes) {
         remaining = 64 * 1024 * 1024;
         assert(bytes < remaining);

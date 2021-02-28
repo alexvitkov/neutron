@@ -595,15 +595,15 @@ bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
             default: {
                 if (delim == r.peek().type) {
                     r.pop();
+
+                    if (block.hanging_declarations == 0) {
+                        block.close();
+                    }
                     return true;
                 }
                 AST_Node *& expr = block.statements.push(nullptr);
                 MUST (parse_expr(block, (AST_Value**)&expr, r, {}));
                 MUST (r.expect(TOK(';')).type);
-
-                if (block.hanging_declarations == 0) {
-                    block.close();
-                }
 
                 break;
             }
@@ -745,6 +745,7 @@ struct ParseExprState {
             ((AST_UnresolvedId*)val.val)->job = resolve_job;
             resolve_job->subscribe(MSG_NEW_DECLARATION);
             resolve_job->subscribe(MSG_SCOPE_CLOSED);
+            resolve_job->subscribe(MSG_FN_MATCHED);
             ctx.global.add_job(resolve_job);
         }
 

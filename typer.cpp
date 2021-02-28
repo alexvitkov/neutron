@@ -82,12 +82,32 @@ bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
 void add_string_global(struct TIR_Context *tir_context, AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
 
 
-bool match_fn_call(AST_Context &ctx, AST_FnCall *fncall, AST_Fn *fn) {
+CastJob cast_job(AST_Context &ctx, AST_Value *source, AST_Value **dst, AST_Type *dsttype) {
+    CastJob cast(ctx.global, source, dst, nullptr);
+    
+    if (!ctx.global.casts.find({ source->type, dsttype }, &cast.run_fn)) {
+        cast.source = nullptr;
+        return cast;
+    }
+
+    return cast;
+}
+
+MatchFnCallJob::MatchFnCallJob(AST_GlobalContext &global, AST_FnCall *fncall, AST_Fn *fn)
+    : Job(global), fncall(fncall), fn(fn), casted_args(fncall->args.size) {}
+
+
+std::wstring MatchFnCallJob::get_name() {
+    std::wostringstream s;
+    s << "MatchFnCallJob<" << fncall << ">";
+    return s.str();
+}
+
+bool MatchFnCallJob::run(Message *msg) {
     AST_FnType *fntype = (AST_FnType*)fn->type;
 
     u64 num_args = fncall->args.size;
     u64 num_params = fntype->param_types.size;
-    // wcout << "Matching " << fncall << " to " << fn << "\n";
 
     if (!fntype->is_variadic) {
         MUST (num_args == num_params);
@@ -95,18 +115,48 @@ bool match_fn_call(AST_Context &ctx, AST_FnCall *fncall, AST_Fn *fn) {
         MUST (num_args >= num_params);
     }
 
-    for (int i = 0; i < num_args; i++) {
-        AST_Type *param_type = i < num_params ? fntype->param_types[i] : &t_any8;
-        AST_Type *arg_type   = fncall->args[i]->type;
+    if (casted_args.size == 0) {
+        casted_args.size = casted_args.capacity;
+        for (int i = 0; i < num_args; i++) {
+            AST_Type *param_type = i < num_params ? fntype->param_types[i] : &t_any8;
 
-        // TODO CAST
-        MUST (param_type == arg_type);
+            if (param_type == fncall->args[i]->type) {
+                casted_args[i] = fncall->args[i];
+            } else {
+                CastJobMethod run_fn;
+                if (!global.casts.find({ fncall->args[i]->type, param_type }, &run_fn)) {
+                    // TODO stop the remaining dependencies
+                    return false;
+                }
+
+                CastJob cast(global, fncall->args[i], &casted_args[i], run_fn);
+
+                Job *heap_job = cast.run_stackjob<CastJob>();
+                if (heap_job) {
+                    add_dependency(heap_job);
+                } else if (cast.flags & JOB_ERROR) {
+                    // TODO stop the remaining dependencies
+                    return false;
+                }
+            }
+        }
+    }
+
+    if (dependencies_left > 0) {
+        return false;
     }
 
     fncall->type = fntype->returntype;
     fncall->fn = fn;
 
-    wcout << "Matched " << fncall << " to " << fn << "\n";
+    FnMatchedMessage matched_msg;
+    matched_msg.msgtype = MSG_FN_MATCHED;
+    matched_msg.fncall = fncall;
+    global.send_message(&matched_msg);
+
+    for (int i = 0; i < casted_args.size; i++)
+        fncall->args[i] = casted_args[i];
+
     return true;
 }
 
@@ -180,6 +230,7 @@ bool GetTypeJob::run(Message *msg) {
             AST_FnCall *fncall = (AST_FnCall*)node;
 
             for (int i = 0; i < fncall->args.size; i++) {
+                // TODO TODO
                 GetTypeJob arg_gettype(ctx, fncall->args[i]);
                 WAIT (arg_gettype, GetTypeJob);
             }
@@ -192,6 +243,7 @@ bool GetTypeJob::run(Message *msg) {
                     WAIT (resolve_fn_job, ResolveJob,
                         heap_job->subscribe(MSG_NEW_DECLARATION);
                         heap_job->subscribe(MSG_SCOPE_CLOSED);
+                        heap_job->subscribe(MSG_FN_MATCHED);
                     );
                     assert(!"Finally");
 
@@ -305,13 +357,8 @@ bool GetTypeJob::run(Message *msg) {
             // Handle regular human arithmetic between numbers
             else {
                 // TODO CAST
-                if (bin->rhs->type != lhs_job.node->type) {
+                if (bin->rhs->type == lhs_job.node->type) {
                     bin->type = lhs_job.node->type;
-                    return true;
-                }
-                // TODO CAST
-                if (bin->lhs->type != rhs_job.node->type) {
-                    bin->type = rhs_job.node->type;
                     return true;
                 }
             }
@@ -453,16 +500,6 @@ bool validate_type(AST_Context& ctx, AST_Type** type) {
     return true;
 };
 
-CastJob cast_job(AST_Context &ctx, AST_Value *source, AST_Type *dst) {
-    CastJob cast(ctx.global, source, nullptr);
-    
-    if (!ctx.global.casts.find({ source->type, dst }, &cast.run_fn)) {
-        cast.source = nullptr;
-        return cast;
-    }
-
-    return cast;
-}
 
 bool TypeCheckJob::run(Message *msg) {
     switch (node->nodetype) {
@@ -551,12 +588,11 @@ bool TypeCheckJob::run(Message *msg) {
                 }
 
                 if (ret->value->type != rettype) {
-                    CastJob c = cast_job(ctx, ret->value, rettype);
+                    CastJob c = cast_job(ctx, ret->value, &ret->value, rettype);
                     if (!c.source) {
                         assert(!"TODO ERROR");
                     }
                     WAIT (c, CastJob);
-                    ret->value = c.result;
                 }
             }
 

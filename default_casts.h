@@ -7,12 +7,12 @@
 #include "typer.h"
 
 struct CastJob : Job {
-    AST_Value *source;
-    AST_Value *result;
+    AST_Value  *source;
+    AST_Value **result;
     bool (*run_fn) (CastJob *self);
 
-    inline CastJob(AST_GlobalContext &global, AST_Value *source, bool (*run_fn) (CastJob*)) 
-        : Job(global), source(source), run_fn(run_fn) {}
+    inline CastJob(AST_GlobalContext &global, AST_Value *source, AST_Value **result, bool (*run_fn) (CastJob*)) 
+        : Job(global), source(source), result(result), run_fn(run_fn) {}
 
     bool run(Message *msg) override;
     std::wstring get_name() override;

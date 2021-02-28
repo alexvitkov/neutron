@@ -300,6 +300,7 @@ void print_err(AST_Context &global, Error& err) {
         case ERR_BAD_BINARY_OP: {
             wcout << "Cannot do a binary operation on " << oftype(err.nodes[0]) << " and " << oftype(err.nodes[1]) << ":\n";
             print_code_segment(global, &err.tokens, &err.nodes, &err.node_ptrs);
+            break;
         }
 
         default: {
