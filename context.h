@@ -41,6 +41,9 @@ struct DeclarationKey {
 u32 map_hash(DeclarationKey key);
 u32 map_equals(DeclarationKey lhs, DeclarationKey rhs);
 
+u32 map_hash(AST_FnType *fntype);
+bool map_equals(AST_FnType *lhs, AST_FnType *rhs);
+
 struct CompileTarget {
     u64 pointer_size;
     u64 coerce_target_size;

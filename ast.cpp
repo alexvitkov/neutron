@@ -73,6 +73,8 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
         case AST_RETURN:         o << (AST_Return*)node; break;
         // case AST_CAST:           o << (AST_Cast*)node; break;
         case AST_NUMBER:         o << (AST_NumberLiteral*)node; break;
+        case AST_SMALL_NUMBER:   o << (AST_SmallNumber*)node; break;
+        case AST_FN_TYPE:        o << (AST_FnType*)node; break;
         case AST_IF:             o << (AST_If*)node; break;
         case AST_WHILE:          o << (AST_While*)node; break;
         case AST_FN_CALL:        o << (AST_FnCall*)node; break;
@@ -249,6 +251,33 @@ std::wostream& operator<< (std::wostream& o, AST_NumberLiteral* node) {
     return o;
 }
 
+std::wostream& operator<< (std::wostream& o, AST_SmallNumber* node) {
+    AST_PrimitiveType *prim = (AST_PrimitiveType*)node->type;
+    switch (prim->kind) {
+        case PRIMITIVE_SIGNED:
+            o << node->i64_val; 
+            break;
+        case PRIMITIVE_UNSIGNED: 
+            o << node->u64_val; 
+            break;
+        case PRIMITIVE_FLOAT: {
+            switch (prim->size) {
+                case 8: 
+                    o << node->f64_val; 
+                    break;
+                case 4: 
+                    o << node->f32_val; 
+                    break;
+                default:
+                    UNREACHABLE;
+            }
+        }
+        default:
+            UNREACHABLE;
+    }
+    return o;
+}
+
 std::wostream& operator<< (std::wostream& o, AST_If* node) {
     o << "if " << node->condition << " " << &node->then_block;
     return o;
@@ -390,6 +419,24 @@ bool postparse_tree_compare(AST_Node *lhs, AST_Node *rhs) {
 
 std::wostream& operator<<(std::wostream& o, AST_Typeof* node) {
     o << "typeof(" << node->inner << ")";
+    return o;
+}
+
+std::wostream& operator<<(std::wostream& o, AST_FnType* node) {
+    // wcout << "(" << 
+    if (node->param_types.size == 0)
+        o << "()";
+    else if (node->param_types.size > 0)
+        o << "(";
+
+    for (int i = 0; i < node->param_types.size; i++) {
+        o << node->param_types[i];
+        if (i != node->param_types.size - 1)
+            o << ", ";
+    }
+    if (node->param_types.size > 0)
+        o << ")";
+    o << "->" << node->returntype;
     return o;
 }
 

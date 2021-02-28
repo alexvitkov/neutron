@@ -48,7 +48,7 @@ u32 map_hash(void* node) {
         u32 h[2];
     } u;
     u.p = node;
-    return u.h[0] | u.h[1];
+    return u.h[0] ^ u.h[1];
 }
 
 bool map_equals(void* lhs, void* rhs) {

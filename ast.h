@@ -282,11 +282,13 @@ void print(std::wostream& o, AST_UnaryOp* node, bool brackets);
 void print_string(std::wostream& o, const char* s);
 
 
+std::wostream& operator<<(std::wostream& o, AST_FnType* node);
 std::wostream& operator<<(std::wostream& o, AST_Node* node);
 std::wostream& operator<<(std::wostream& o, AST_PrimitiveType* node);
 std::wostream& operator<<(std::wostream& o, AST_Return* node);
 // std::wostream& operator<<(std::wostream& o, AST_Cast* node);
 std::wostream& operator<<(std::wostream& o, AST_NumberLiteral* node);
+std::wostream& operator<<(std::wostream& o, AST_SmallNumber* node);
 std::wostream& operator<<(std::wostream& o, AST_If* node);
 std::wostream& operator<<(std::wostream& o, AST_While* node);
 std::wostream& operator<<(std::wostream& o, AST_Context* bl);

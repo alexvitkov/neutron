@@ -19,14 +19,14 @@ u32 map_hash(DeclarationKey key) {
     if (key.name)
         hash = map_hash(key.name);
 
-    hash ^= map_hash(key.fn_type);
+    hash ^= map_hash((void*)key.fn_type);
 
     return hash;
 }
 
 u32 map_equals(DeclarationKey lhs, DeclarationKey rhs) {
-    if (!lhs.name != !rhs.name)
-        return false;
+    // Either both have a name or neither has a name, we'll check if equal in a sec
+    MUST (!lhs.name == !rhs.name);
 
     if (lhs.name && rhs.name && strcmp(lhs.name, rhs.name))
         return false;
@@ -95,15 +95,28 @@ u32 map_equals(TypeSizeTuple lhs, TypeSizeTuple rhs) {
 u32 hash(AST_Type* returntype, bucketed_arr<AST_Type*>& param_types) {
     u32 hash = map_hash(returntype);
 
-    for (AST_Type* param : param_types)
-        hash ^= map_hash(param);
+    for (AST_Type* param : param_types) {
+        hash ^= map_hash((void*)param);
+        hash <<= 1;
+    }
 
     return hash;
 }
 
-u32 map_hash(AST_FnType* fn_type) {
-    return hash(fn_type->returntype, fn_type->param_types);
+u32 map_hash(AST_FnType* fntype) {
+    return hash(fntype->returntype, fntype->param_types);
 };
+
+bool map_equals(AST_FnType *lhs, AST_FnType *rhs) {
+    MUST (lhs->returntype == rhs->returntype);
+    MUST (lhs->param_types.size == rhs->param_types.size);
+    MUST (lhs->is_variadic == rhs->is_variadic);
+
+    for (u32 i = 0; i < lhs->param_types.size; i++)
+        MUST (lhs->param_types[i] == rhs->param_types[i]);
+
+    return true;
+}
 
 // TODO RESOLUTION we should check if it's a AST_UnresolvedId
 AST_PointerType* AST_Context::get_pointer_type(AST_Type* pointed_type) {
@@ -151,8 +164,6 @@ void AST_Context::close() {
     closed = true;
     global.send_message(&msg);
 }
-
-int x;
 
 AST_GlobalContext::AST_GlobalContext() : AST_Context(nullptr), subscribers(MESSAGES_COUNT) {
     for (u32 i = 0; i < MESSAGES_COUNT; i++)

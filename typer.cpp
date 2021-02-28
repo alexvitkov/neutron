@@ -68,16 +68,6 @@ std::wstring TypeCheckJob::get_name() {
     return s.str();
 }
 
-bool map_equals(AST_FnType* lhs, AST_FnType* rhs) {
-    MUST (lhs->returntype == rhs->returntype);
-    MUST (lhs->param_types.size == rhs->param_types.size);
-    MUST (lhs->is_variadic == rhs->is_variadic);
-
-    for (u32 i = 0; i < lhs->param_types.size; i++)
-        MUST (lhs->param_types[i] == rhs->param_types[i]);
-
-    return true;
-}
 
 void add_string_global(struct TIR_Context *tir_context, AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
 

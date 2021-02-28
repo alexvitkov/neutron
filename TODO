@@ -1,0 +1,1 @@
+forbid declaring overloads that only differ in return type
