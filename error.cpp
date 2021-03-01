@@ -216,7 +216,6 @@ void print_err(AST_Context &global, Error& err) {
             break;
         }
 
-        // TODO ERR_INVALID_ASSIGNMENT and ERR_INVALID_INITIAL_VALUE can be merged
         case ERR_INVALID_ASSIGNMENT: {
             AST_Value* dst = (AST_Value*)*err.node_ptrs[0];
             AST_Value* src = (AST_Value*)*err.node_ptrs[1];

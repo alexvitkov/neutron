@@ -85,6 +85,7 @@ bool MatchFnCallJob::run(Message *msg) {
 
 bool number_literal_to_u64(CastJob *self) {
     AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
+    assert(nl IS AST_NUMBER);
     u64 num;
     if (!number_data_to_unsigned(&nl->number_data, &num)) {
         self->set_error_flag();
@@ -98,6 +99,7 @@ bool number_literal_to_u64(CastJob *self) {
 
 bool number_literal_to_u32(CastJob *self) {
     AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
+    assert(nl IS AST_NUMBER);
     u32 num;
     if (!number_data_to_unsigned(&nl->number_data, &num)) {
         self->set_error_flag();
@@ -111,6 +113,7 @@ bool number_literal_to_u32(CastJob *self) {
 
 bool number_literal_to_u16(CastJob *self) {
     AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
+    assert(nl IS AST_NUMBER);
     u16 num;
     if (!number_data_to_unsigned(&nl->number_data, &num)) {
         self->set_error_flag();
@@ -124,6 +127,7 @@ bool number_literal_to_u16(CastJob *self) {
 
 bool number_literal_to_u8(CastJob *self) {
     AST_NumberLiteral *nl = (AST_NumberLiteral*)self->source;
+    assert(nl IS AST_NUMBER);
     u8 num;
     if (!number_data_to_unsigned(&nl->number_data, &num)) {
         self->set_error_flag();
