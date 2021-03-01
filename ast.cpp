@@ -62,9 +62,6 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
 
     switch (node->nodetype) {
         case AST_FN:             print(o, (AST_Fn*)node, decl); break;
-        case AST_BINARY_OP:      print(o, (AST_BinaryOp*)node, false); break;
-        case AST_ASSIGNMENT:     print(o, (AST_BinaryOp*)node, false); break;
-        case AST_UNARY_OP:       print(o, (AST_UnaryOp*)node,  false); break;
         case AST_VAR:            print(o, (AST_Var*)node, decl); break;
         case AST_STRUCT:         print(o, (AST_Struct*)node, decl); break;
 
@@ -77,7 +74,7 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
         case AST_FN_TYPE:        o << (AST_FnType*)node; break;
         case AST_IF:             o << (AST_If*)node; break;
         case AST_WHILE:          o << (AST_While*)node; break;
-        case AST_FN_CALL:        o << (AST_FnCall*)node; break;
+        case AST_FN_CALL:        o << (AST_Call*)node; break;
         case AST_MEMBER_ACCESS:  o << (AST_MemberAccess*)node; break;
         case AST_POINTER_TYPE:   o << (AST_PointerType*)node; break;
         case AST_ARRAY_TYPE:     o << (AST_ArrayType*)node; break;
@@ -139,74 +136,6 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
 std::wostream& operator<< (std::wostream& o, AST_PrimitiveType* node) {
     o << node->name;
     return o;
-}
-
-void print(std::wostream& o, AST_UnaryOp* node, bool brackets = false) {
-    if (ALWAYS_BRACKETS || brackets)
-        o << '(';
-
-    switch (node->op) {
-        case '+': o << '+' << node->inner; break;
-        case '-': o << '-' << node->inner; break;
-        case '*': o << node->inner << '*'; break;
-        case '&': o << node->inner << '*'; break;
-        default:
-            NOT_IMPLEMENTED();
-    }
-
-    if (ALWAYS_BRACKETS || brackets)
-        o << ')';
-}
-
-void print(std::wostream& o, AST_BinaryOp* node, bool brackets = false) {
-    if (ALWAYS_BRACKETS || brackets)
-        o << '(';
-
-    if (node->lhs IS AST_BINARY_OP)
-        print(o, (AST_BinaryOp*)node->lhs, PREC(((AST_BinaryOp*)(node->lhs))->op) < PREC(node->op));
-    else
-        print(o, node->lhs, false);
-    o << ' ';
-
-    switch (node->op) {
-        case OP_PLUSPLUS: o << "++"; break;
-        case OP_MINUSMINUS: o << "--"; break;
-        case OP_SHIFTLEFT: o << "<<"; break;
-        case OP_SHIFTRIGHT: o << ">>"; break;
-        case OP_LESSEREQUALS: o << "<="; break;
-        case OP_GREATEREQUALS: o << ">="; break;
-        case OP_DOUBLEEQUALS: o << "=="; break;
-        case OP_AND: o << "&&"; break;
-        case OP_OR: o << "||"; break;
-        case OP_NOTEQUALS: o << "!="; break;
-        case OP_ADDASSIGN: o << "+="; break;
-        case OP_SUBASSIGN: o << "-="; break;
-        case OP_MULASSIGN: o << "*="; break;
-        case OP_DIVASSIGN: o << "/="; break;
-        case OP_MODASSIGN: o << "%="; break;
-        case OP_SHIFTLEFTASSIGN: o << "<<="; break;
-        case OP_SHIFTRIGHTASSIGN: o << ">>="; break;
-        case OP_BITANDASSIGN: o << "&="; break;
-        case OP_BITXORASSIGN: o << "^="; break;
-        case OP_BITORASSIGN: o << "|="; break;
-        case OP_ADD_PTR_INT: o << "+"; break;
-        case OP_SUB_PTR_INT: o << "-"; break;
-        case OP_SUB_PTR_PTR: o << "-"; break;
-        default: {
-            if (node->op < 128)
-                o << (char)node->op;
-            else
-                o << "TOK(" << (int)node->op << ")";
-        }
-    }
-
-    o << ' ';
-    if (node->rhs IS AST_BINARY_OP)
-        print(o, (AST_BinaryOp*)node->rhs, PREC(((AST_BinaryOp*)(node->rhs))->op) < PREC(node->op));
-    else
-        print(o, node->rhs, false);
-    if (ALWAYS_BRACKETS || brackets)
-        o << ')';
 }
 
 void print(std::wostream& o, AST_Var* node, bool decl) {
@@ -288,16 +217,21 @@ std::wostream& operator<< (std::wostream& o, AST_While* node) {
     return o;
 }
 
-std::wostream& operator<< (std::wostream& o, AST_FnCall* node) {
-    o << node->fn << "(";
-
-    for (AST_Value*& a : node->args) {
-        o << a << ", ";
+std::wostream& operator<< (std::wostream& o, AST_Call* node) {
+    switch (node->kind) {
+        case FNCALL_REGULAR_FN: {
+            o << node->fn << "(";
+            for (u32 i = 0; i < node->args.size; i++) {
+                o << node->args[i];
+                if (i != node->args.size - 1)
+                    o << ", ";
+            }
+            o << ")";
+            return o;
+        }
+        default:
+            NOT_IMPLEMENTED();
     }
-    if (node->args.size)
-        o << "\b\b \b"; // clear the last comma
-    o << ")";
-    return o;
 }
 
 std::wostream& operator<< (std::wostream& o, AST_PointerType* node) {
@@ -377,19 +311,6 @@ bool postparse_tree_compare(AST_Node *lhs, AST_Node *rhs) {
 
             for (u32 i = 0; i < bl1->statements.size; i++)
                 MUST (postparse_tree_compare(bl1->statements[i], bl2->statements[i]));
-
-            return true;
-        }
-
-        case AST_ASSIGNMENT:
-        case AST_BINARY_OP: 
-        {
-            AST_BinaryOp *op1 = (AST_BinaryOp*)lhs;
-            AST_BinaryOp *op2 = (AST_BinaryOp*)rhs;
-
-            MUST(op1->op == op2->op);
-            MUST(postparse_tree_compare(op1->lhs, op2->lhs));
-            MUST(postparse_tree_compare(op1->rhs, op2->rhs));
 
             return true;
         }

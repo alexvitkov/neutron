@@ -767,8 +767,9 @@ bool pop_operator(ParseExprState& state) {
     }
 
     if (op.is_unary) {
-        AST_UnaryOp *un = state.ctx.alloc<AST_UnaryOp>(op.tok.type, nullptr);
-        ParseExprValue inner = state.pop_into(&un->inner);
+        AST_Call *un = state.ctx.alloc<AST_Call>(FNCALL_UNARY_OP, op.tok.type, nullptr, 1);
+        un->args.size = 1;
+        ParseExprValue inner = state.pop_into(&un->args[0]);
 
         Location loc = {
             .file_id = inner.loc.file_id,
@@ -783,12 +784,10 @@ bool pop_operator(ParseExprState& state) {
         return true;
 
     } else {
-        AST_BinaryOp *bin = state.ctx.alloc<AST_BinaryOp>(op.tok.type, nullptr, nullptr);
+        AST_Call *bin = state.ctx.alloc<AST_Call>(FNCALL_UNARY_OP, op.tok.type, nullptr, 2);
         ParseExprValue lhs, rhs;
-        
-        bin = state.ctx.alloc<AST_BinaryOp>(op.tok.type, nullptr, nullptr);
-        rhs = state.pop_into(&bin->rhs);
-        lhs = state.pop_into(&bin->lhs);
+        rhs = state.pop_into(&bin->args[0]);
+        lhs = state.pop_into(&bin->args[1]);
         
         Location loc = {
             .file_id = lhs.loc.file_id,
@@ -884,28 +883,6 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                 break;
             }
 
-            /*
-            case KW_TYPEOF: {
-                MUST (r.expect(TOK('(')).type);
-                AST_Value *inner = parse_expr(ctx, r, TOK(')'));
-                MUST (r.expect(TOK(')')).type);
-
-                Location loc = {
-                    .file_id = t.file_id,
-                    .loc = {
-                        .start = t.loc.start,
-                        .end = r.pos_in_file,
-                    }
-                };
-
-                AST_Typeof* ast_typeof = ctx.alloc<AST_Typeof>(nullptr);
-                ctx.global->definition_locations[ast_typeof] = loc;
-
-                state._output.push({ ast_typeof, loc });
-                break;
-            }
-            */
-
             case TOK_OPENBRACKET: {
                 // Value followed by a open brackets means function call
                 if (prev_was_value) {
@@ -914,7 +891,7 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                         return false;
                     }
 
-                    AST_FnCall* fncall = ctx.alloc<AST_FnCall>(nullptr);
+                    AST_Call* fncall = ctx.alloc<AST_Call>(FNCALL_REGULAR_FN, TOK(0), nullptr, 4);
                     ParseExprValue fn = state._output.pop();
 
                     assert(fn.val IS AST_UNRESOLVED_ID);
@@ -992,35 +969,6 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                 break;
             }
 
-            case TOK_OPENSQUARE: { 
-                // When we see foo[bar] we output (foo + bar)*
-                AST_BinaryOp* add = ctx.alloc<AST_BinaryOp>(TOK('+'), nullptr, nullptr);
-
-                MUST (parse_expr(ctx, &add->rhs, r, {}));
-                MUST (r.expect(TOK(']')).type);
-
-                if (state._output.size == 0) {
-                    state.ctx.error({ .code = ERR_INVALID_EXPRESSION });
-                    return false;
-                }
-
-
-                ParseExprValue inner = state.pop_into(&add->lhs);
-                AST_Dereference* deref = ctx.alloc<AST_Dereference>(add);
-
-                Location loc = {
-                    .file_id = r.sf.id,
-                    .loc = {
-                        .start = inner.loc.loc.start,
-                        .end = r.pos_in_file,
-                    }
-                };
-
-                state._output.push({ deref, loc });
-                ctx.global.definition_locations[deref] = loc;
-                break;
-            }
-            
             case TOK_AMPERSAND: {
                 if (state._output.size == 0) {
                     state.ctx.error({ .code = ERR_INVALID_EXPRESSION });
@@ -1152,8 +1100,12 @@ AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
 
     if (r.peek().type == TOK('=')) {
         r.pop();
-        AST_BinaryOp *assignment = ctx.alloc<AST_BinaryOp>(TOK('='), var, nullptr);
-        MUST (parse_expr(ctx, &assignment->rhs, r, {}));
+
+        AST_Call *assignment = ctx.alloc<AST_Call>(FNCALL_UNARY_OP, TOK('='), nullptr, 2);
+        assignment->args.size = 2;
+
+        assignment->args[0] = var;
+        MUST (parse_expr(ctx, &assignment->args[1], r, {}));
 
         Location loc = {
             .file_id = nameToken.file_id,

@@ -50,37 +50,28 @@ struct AST_UnresolvedId : AST_Value {
     }
 };
 
-
-// VOLATILE
-// The parser miscategorizes casts as function calls as they have the same syntax
-//  - foo(100) can either be a cast or a fn call, we don't know at parse time
-//
-// The typer then patches up AST_FnCalls into AST_Casts by changing their nodetype,
-// so their structures must be compatible.
-/* 
-struct AST_Cast : AST_Value {
-    AST_Value* inner;
-
-    enum CastType {
-        Pointer_Pointer,
-        StringLiteral_I8,
-        ZeroExtend,
-        SignedExtend,
-    } casttype;
-
-    inline AST_Cast(AST_Type* targetType, AST_Value* inner)
-        : AST_Value(AST_CAST, targetType), inner(inner) {};
+enum CallKind {
+    FNCALL_REGULAR_FN,
+    FNCALL_UNARY_OP,
+    FNCALL_BINARY_OP,
+    FNCALL_CAST
 };
-*/
 
+enum BracketsKind {
+    BRACKETS_NORMAL = '(',
+    BRACKETS_TRIANGLE = '<',
+    BRACEKTS_SQUARE = '['
+};
 
-// VOLATILE
-// Read the comment before AST_Cast before changing this
-struct AST_FnCall : AST_Value {
-    AST_Value* fn;
-    bucketed_arr<AST_Value*> args;
+struct AST_Call : AST_Value {
+    CallKind   kind;
+    TokenType    op;
+    BracketsKind brackets;
+    AST_Value   *fn;
+    arr<AST_Value*> args;
 
-    inline AST_FnCall(AST_Value* fn) : AST_Value(AST_FN_CALL, nullptr), fn(fn), args() {}
+    inline AST_Call(CallKind kind, TokenType op, AST_Value* fn, u32 args_reserve) 
+        : AST_Value(AST_FN_CALL, nullptr), kind(kind), op(op), fn(fn), args(args_reserve) {}
 };
 
 struct AST_PrimitiveType : AST_Type {
@@ -91,8 +82,7 @@ struct AST_PrimitiveType : AST_Type {
         : AST_Type(AST_PRIMITIVE_TYPE, size), kind(kind), name(name) {}
 };
 
-// VOLATILE
-// If you add stuff to this, you MUST update map_hash and map_equals for (defined in typer.cpp)
+// VOLATILE - if you add stuff to this, you MUST update its map_hash and map_equals
 struct AST_FnType : AST_Type {
     AST_Type* returntype;
     // TODO we can probably get away with a regular arr here
@@ -163,22 +153,6 @@ struct AST_While : AST_Node {
     AST_Context block;
 
     inline AST_While(AST_Context* parent_ctx) : AST_Node(AST_WHILE), block(parent_ctx) {}
-};
-
-struct AST_UnaryOp : AST_Value {
-    TokenType op;
-    AST_Value *inner;
-
-    inline AST_UnaryOp(TokenType op, AST_Value* inner)
-        : AST_Value(AST_UNARY_OP, nullptr), inner(inner), op(op) {}
-};
-
-struct AST_BinaryOp : AST_Value {
-    TokenType op;
-    AST_Value *lhs, *rhs;
-
-    inline AST_BinaryOp(TokenType op, AST_Value* lhs, AST_Value* rhs)
-        : AST_Value(AST_BINARY_OP, nullptr), lhs(lhs), rhs(rhs), op(op) {}
 };
 
 struct AST_Return : AST_Node {
@@ -276,8 +250,6 @@ void print(std::wostream& o, AST_Node* node, bool decl);
 void print(std::wostream& o, AST_Fn* node, bool decl);
 void print(std::wostream& o, AST_Var* node, bool decl);
 void print(std::wostream& o, AST_Struct* node, bool decl);
-void print(std::wostream& o, AST_BinaryOp* node, bool brackets);
-void print(std::wostream& o, AST_UnaryOp* node, bool brackets);
 
 void print_string(std::wostream& o, const char* s);
 
@@ -286,13 +258,12 @@ std::wostream& operator<<(std::wostream& o, AST_FnType* node);
 std::wostream& operator<<(std::wostream& o, AST_Node* node);
 std::wostream& operator<<(std::wostream& o, AST_PrimitiveType* node);
 std::wostream& operator<<(std::wostream& o, AST_Return* node);
-// std::wostream& operator<<(std::wostream& o, AST_Cast* node);
 std::wostream& operator<<(std::wostream& o, AST_NumberLiteral* node);
 std::wostream& operator<<(std::wostream& o, AST_SmallNumber* node);
 std::wostream& operator<<(std::wostream& o, AST_If* node);
 std::wostream& operator<<(std::wostream& o, AST_While* node);
 std::wostream& operator<<(std::wostream& o, AST_Context* bl);
-std::wostream& operator<<(std::wostream& o, AST_FnCall* node);
+std::wostream& operator<<(std::wostream& o, AST_Call* node);
 std::wostream& operator<<(std::wostream& o, AST_MemberAccess* node);
 std::wostream& operator<<(std::wostream& o, AST_PointerType* node);
 std::wostream& operator<<(std::wostream& o, AST_ArrayType* node);

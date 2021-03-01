@@ -11,17 +11,17 @@ std::wstring CastJob::get_name() {
 }
 
 
-MatchFnCallJob::MatchFnCallJob(AST_GlobalContext &global, AST_FnCall *fncall, AST_Fn *fn)
+MatchCallJob::MatchCallJob(AST_GlobalContext &global, AST_Call *fncall, AST_Fn *fn)
     : Job(global), fncall(fncall), fn(fn), casted_args(fncall->args.size) {}
 
 
-std::wstring MatchFnCallJob::get_name() {
+std::wstring MatchCallJob::get_name() {
     std::wostringstream s;
-    s << "MatchFnCallJob<" << fncall << ">";
+    s << "MatchCallJob<" << fncall << ">";
     return s.str();
 }
 
-bool MatchFnCallJob::run(Message *msg) {
+bool MatchCallJob::run(Message *msg) {
     AST_FnType *fntype = (AST_FnType*)fn->type;
 
     u64 num_args = fncall->args.size;
@@ -70,7 +70,7 @@ bool MatchFnCallJob::run(Message *msg) {
         return false;
     }
 
-    MatchFnCallJobOverMessage matched_msg;
+    MatchCallJobOverMessage matched_msg;
     matched_msg.msgtype = MSG_FN_MATCHED;
     matched_msg.job = this;
     global.send_message(&matched_msg);

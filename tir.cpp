@@ -416,7 +416,6 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
         case AST_MEMBER_ACCESS:
         case AST_DEREFERENCE: 
         {
-
             TIR_Value src;
             if (get_location(fn, (AST_Value*)node, &src)) {
                 if (!dst)
@@ -438,73 +437,9 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             }
         }
 
-        case AST_BINARY_OP: {
-            AST_BinaryOp* bin = (AST_BinaryOp*)node;
-
-            TIR_Value lhs = compile_node_rvalue(fn, bin->lhs, {});
-            TIR_Value rhs = compile_node_rvalue(fn, bin->rhs, {});
-
-
-            TIR_OpCode opcode;
-            switch (bin->op) {
-                case OP_ADD:             opcode = TOPC_ADD; break;
-                case OP_SUB:             opcode = TOPC_SUB; break;
-                case OP_MUL:             opcode = TOPC_MUL; break;
-                case OP_DIV:             opcode = TOPC_DIV; break;
-                case OP_MOD:             opcode = TOPC_MOD; break;
-                case OP_SHIFTLEFT:       opcode = TOPC_SHL; break;
-                case OP_SHIFTRIGHT:      opcode = TOPC_SHR; break;
-                case OP_DOUBLEEQUALS:    opcode = TOPC_EQ;  break;
-                case OP_LESSTHAN:        opcode = TOPC_LT;  break;
-                case OP_LESSEREQUALS:    opcode = TOPC_LTE; break;
-                case OP_GREATERTHAN:     opcode = TOPC_GT;  break;
-                case OP_GREATEREQUALS:   opcode = TOPC_GTE; break;
-                case OP_ADD_PTR_INT:     opcode = TOPC_GEP; break;
-                default:
-                    NOT_IMPLEMENTED();
-            }
-
-            if (lhs.type IS AST_PRIMITIVE_TYPE) {
-                AST_PrimitiveType *prim = (AST_PrimitiveType*)lhs.type;
-
-                if (opcode != TOPC_SHL && opcode != TOPC_SHR) {
-                    switch (prim->kind) {
-                        case PRIMITIVE_SIGNED: 
-                            opcode = (TIR_OpCode)(opcode | TOPC_SIGNED); 
-                            break;
-                        case PRIMITIVE_UNSIGNED: 
-                            opcode = (TIR_OpCode)(opcode | TOPC_UNSIGNED); 
-                            break;
-                        case PRIMITIVE_FLOAT: 
-                            opcode = (TIR_OpCode)(opcode | TOPC_FLOAT); 
-                            break;
-                        default:
-                            UNREACHABLE;
-                    }
-                }
-            }
-
-            if (!dst)
-                dst = fn.alloc_temp(bin->type);
-
-            if (bin->op == OP_ADD_PTR_INT) {
-                arr<TIR_Value> offsets = { rhs };
-                fn.emit({
-                    .opcode = TOPC_GEP,
-                    .gep = {.dst = dst, .base = lhs, .offsets = offsets.release()}
-                });
-            } else {
-                fn.emit({
-                    .opcode = opcode,
-                    .bin = {dst, lhs, rhs}
-                });
-            }
-
-            return dst;
-        }
 
         case AST_FN_CALL: {
-            AST_FnCall* fncall = (AST_FnCall*)node;
+            AST_Call* fncall = (AST_Call*)node;
             
             assert(fncall->fn IS AST_FN);
             AST_Fn *callee = (AST_Fn*)fncall->fn;
@@ -570,6 +505,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             return {};
         }
 
+        /*
         case AST_ASSIGNMENT: {
             AST_BinaryOp *assign = (AST_BinaryOp*)node;
             TIR_Value ptrloc;
@@ -604,7 +540,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                 }
             }
         }
-
+        */
 
         case AST_ADDRESS_OF: {
             AST_AddressOf *addrof = (AST_AddressOf*)node;
@@ -822,11 +758,11 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
 
     TIR_GlobalVarInitJob(TIR_Value var, TIR_Context *tir_context);
 
-    TIR_GlobalVarInitJob(TIR_Context &tir_context, AST_BinaryOp *assignment) 
+    TIR_GlobalVarInitJob(TIR_Context &tir_context, AST_Call *assignment) 
         : TIR_ExecutionJob(&tir_context) 
     {
-        tir_var = tir_context.global_valmap[assignment->lhs];
-        ast_var = (AST_Var*)assignment->lhs;
+        tir_var = tir_context.global_valmap[assignment->args[0]];
+        ast_var = (AST_Var*)assignment->args[0];
 
         // This function calculates the initial value and returns it
         TIR_Function *pseudo_fn = new TIR_Function(tir_context, nullptr);
@@ -838,7 +774,7 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
         pseudo_fn->writepoint = entry;
         pseudo_fn->blocks.push(entry);
 
-        compile_node_rvalue(*pseudo_fn, assignment->rhs, pseudo_fn->retval);
+        compile_node_rvalue(*pseudo_fn, assignment->args[1], pseudo_fn->retval);
         pseudo_fn->emit({ .opcode = TOPC_RET });
 
         arr<void*> _args;
@@ -906,8 +842,9 @@ void TIR_Context::compile_all() {
     // We handle them specially, with a CTE job
     for (auto& stmt : global.statements) {
         switch (stmt->nodetype) {
-            case AST_ASSIGNMENT: {
-                AST_BinaryOp *assignment = (AST_BinaryOp*)stmt;
+            case AST_FN_CALL: {
+                NOT_IMPLEMENTED();
+                AST_Call *assignment = (AST_Call*)stmt;
                 Job *init = new TIR_GlobalVarInitJob(*this, assignment);
                 global.add_job(init);
                 break;

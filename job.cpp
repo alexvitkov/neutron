@@ -126,7 +126,7 @@ bool ResolveJob::run(Message *msg) {
                 
                 for (auto &kvp : context->declarations) {
                     if (!strcmp(the_id->name, kvp.key.name)) {
-                        MatchFnCallJob *match_job = new MatchFnCallJob(context->global, fncall, (AST_Fn*)kvp.value);
+                        MatchCallJob *match_job = new MatchCallJob(context->global, fncall, (AST_Fn*)kvp.value);
                         global.add_job(match_job);
                         add_dependency(match_job);
                         pending_matches ++;
@@ -149,7 +149,7 @@ bool ResolveJob::run(Message *msg) {
             } else {
                 MUST (decl->node->nodetype == AST_FN)
 
-                MatchFnCallJob *match_job = new MatchFnCallJob(context->global, fncall, (AST_Fn*)decl->node);
+                MatchCallJob *match_job = new MatchCallJob(context->global, fncall, (AST_Fn*)decl->node);
                 add_dependency(match_job);
                 global.add_job(match_job);
                 pending_matches ++;
@@ -179,7 +179,7 @@ bool ResolveJob::run(Message *msg) {
         }
 
         case MSG_FN_MATCHED: {
-            MatchFnCallJobOverMessage *match_msg = (MatchFnCallJobOverMessage*)msg;
+            MatchCallJobOverMessage *match_msg = (MatchCallJobOverMessage*)msg;
             if (match_msg->job->fncall != fncall)
                 return false;
 

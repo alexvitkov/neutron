@@ -19,8 +19,8 @@ struct CastJob : Job {
 };
 
 
-struct MatchFnCallJob : Job {
-    AST_FnCall *fncall;
+struct MatchCallJob : Job {
+    AST_Call *fncall;
     AST_Fn     *fn;
 
     arr<AST_Value*> casted_args;
@@ -30,7 +30,7 @@ struct MatchFnCallJob : Job {
     bool run(Message *msg) override;
     std::wstring get_name() override;
 
-    MatchFnCallJob(AST_GlobalContext &global, AST_FnCall *fncall, AST_Fn *fn);
+    MatchCallJob(AST_GlobalContext &global, AST_Call *fncall, AST_Fn *fn);
 };
 
 

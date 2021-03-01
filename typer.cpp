@@ -140,7 +140,7 @@ bool GetTypeJob::run(Message *msg) {
         }
 
         case AST_FN_CALL: {
-            AST_FnCall *fncall = (AST_FnCall*)node;
+            AST_Call *fncall = (AST_Call*)node;
 
             for (int i = 0; i < fncall->args.size; i++) {
                 // TODO TODO
@@ -173,127 +173,6 @@ bool GetTypeJob::run(Message *msg) {
                 }
             }
 
-        }
-
-        case AST_BINARY_OP: {
-            AST_BinaryOp* bin = (AST_BinaryOp*)node;
-
-            GetTypeJob lhs_job(ctx, bin->lhs);
-            WAIT (lhs_job, GetTypeJob);
-
-            GetTypeJob rhs_job(ctx, bin->rhs);
-            WAIT (rhs_job, GetTypeJob);
-
-            // Assignments are handled differently from other binary operators
-            if ((prec[bin->op] & ASSIGNMENT) == ASSIGNMENT) {
-                bin->nodetype = AST_ASSIGNMENT;
-
-                if (!is_valid_lvalue(bin->lhs)) {
-                    error({ .code = ERR_NOT_AN_LVALUE, .nodes = { lhs_job.node->type, } });
-                    return false;
-                }
-
-                assert(bin->rhs->type == bin->lhs->type);
-
-
-                // TODO CAST
-                if (bin->rhs->type != lhs_job.node->type) {
-                    // TODO ERROR
-                    error({});
-                    return false;
-                }
-                
-                bin->type = lhs_job.node->type;
-                return true;
-            }
-
-            // Handle pointer arithmetic
-            if (lhs_job.node->type IS AST_POINTER_TYPE || rhs_job.node->type IS AST_POINTER_TYPE) {
-                if (bin->op != '+' && bin->op != '-') {
-                    error({
-                        .code = ERR_INVALID_ASSIGNMENT,
-                        .nodes = { bin->lhs, bin-> rhs }
-                    });
-                    return false;
-                }
-
-                // There are 6 cases here
-                // Pointer  + Integral -- valid
-                // Integral + Pointer  -- valid
-                // Pointer  + Pointer  -- invalid
-                
-                // Pointer  - Integral -- valid
-                // Pointer  - Pointer  -- valid
-                // Integral - Pointer  -- invalid
-
-                if (lhs_job.node->type IS AST_POINTER_TYPE) {
-                    // If LHS is a pointer and operator is +, RHS can only be an integral type
-                    if (bin->op == '+' && !is_integral_type(rhs_job.node->type))
-                        goto Error;
-
-                    if (bin->op == '-') {
-                        // Pointer Pointer subtraction is valid if the pointers the same type
-                        if (rhs_job.node->type IS AST_POINTER_TYPE) {
-                            if (lhs_job.node->type != rhs_job.node->type)
-                                goto Error;
-                            bin->op = OP_SUB_PTR_PTR;
-                        }
-                        // The other valid case is Pointer - Integral
-                        else {
-                            if (!is_integral_type(rhs_job.node->type))
-                                goto Error;
-                            bin->op = OP_SUB_PTR_INT;
-                        }
-                    }
-                    else {
-                        bin->op = OP_ADD_PTR_INT;
-                    }
-
-
-                } else {
-                    // LHS is not a pointer => the only valid case is Integral + Pointer
-                    if (!is_integral_type(lhs_job.node->type) || bin->op != '+')
-                        goto Error;
-
-                    // In order to simplify code generation
-                    // we will swap the arguments so that the pointer is LHS
-                    std::swap(bin->lhs, bin->rhs);
-                    bin->op = OP_ADD_PTR_INT;
-                }
-
-                // After this is all done, the type of the binary expression
-                // is the same as the pointer type
-                bin->type = lhs_job.node->type IS AST_POINTER_TYPE ? lhs_job.node->type : rhs_job.node->type;
-                return bin->type;
-
-                NOT_IMPLEMENTED("TODO ERROR");
-                return false;
-            }
-
-            // Handle regular human arithmetic between numbers
-            else {
-                // TODO CAST
-                if (bin->rhs->type == lhs_job.node->type) {
-                    bin->type = lhs_job.node->type;
-                    return true;
-                }
-            }
-
-Error:
-            error({
-                .code = ERR_BAD_BINARY_OP,
-                .nodes = { bin->lhs, bin->rhs }
-            });
-            return false;
-        }
-
-        case AST_UNARY_OP: {
-            AST_UnaryOp *un = (AST_UnaryOp*)node;
-
-            GetTypeJob type_job(ctx, un->inner);
-            WAIT (type_job, GetTypeJob);
-
-            NOT_IMPLEMENTED();
         }
 
         case AST_MEMBER_ACCESS: {

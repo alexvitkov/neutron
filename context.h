@@ -16,7 +16,7 @@ struct AST_Value;
 struct AST_UnresolvedId;
 struct AST_StringLiteral;
 struct AST_Fn; 
-struct AST_FnCall;
+struct AST_Call;
 struct AST_FnType;
 struct AST_Type; 
 struct AST_PointerType; 
@@ -160,8 +160,8 @@ struct DependencyFinishedMessage : Message {
     Job *dependency;
 };
 
-struct MatchFnCallJobOverMessage : Message {
-    struct MatchFnCallJob *job;
+struct MatchCallJobOverMessage : Message {
+    struct MatchCallJob *job;
 };
 
 enum JobFlags : u32 {
@@ -278,7 +278,7 @@ T* AST_Context::alloc_temp(Ts &&...args) {
 
 struct ResolveJob : Job {
     AST_UnresolvedId **unresolved_id;
-    AST_FnCall        *fncall;
+    AST_Call        *fncall;
     AST_Context       *context;
 
     int pending_matches = 0;
