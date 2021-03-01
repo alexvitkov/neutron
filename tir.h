@@ -1,9 +1,9 @@
 #ifndef TIR_H
 #define TIR_H
 
-#include "../../common.h"
-#include "../../ast.h"
-#include "../../context.h"
+#include "common.h"
+#include "ast.h"
+#include "context.h"
 
 enum TIR_ValueSpace : u8 {
     TVS_DISCARD = 0x00,

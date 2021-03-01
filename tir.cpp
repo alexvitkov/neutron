@@ -1,5 +1,5 @@
 #include "tir.h"
-#include "../../typer.h"
+#include "typer.h"
 #include <iostream>
 #include <sstream>
 

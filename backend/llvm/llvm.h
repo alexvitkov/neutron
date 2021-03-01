@@ -29,7 +29,7 @@
 #include "../../ast.h"
 #include "../../typer.h"
 #include "../../cmdargs.h"
-#include "../tir/tir.h"
+#include "../../tir.h"
 
 
 struct T2L_Context;

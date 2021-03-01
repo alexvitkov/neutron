@@ -1,5 +1,5 @@
 #include "backend/llvm/llvm.h" // include this first
-#include "backend/tir/tir.h"
+#include "tir.h"
 #include "typer.h"
 #include "ast.h"
 #include "cmdargs.h"

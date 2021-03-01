@@ -25,7 +25,7 @@ set(NEUTRON_SOURCE_FILES
     cast.h      cast.cpp
 	cmdargs.h   cmdargs.cpp
 	typer.h     typer.cpp
-    backend/tir/tir.h   backend/tir/tir.cpp
+    tir.h       tir.cpp
 	backend/llvm/llvm.h backend/llvm/llvm.cpp
 	util.h              util_common.cpp
 	${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h)
