@@ -148,31 +148,24 @@ bool GetTypeJob::run(Message *msg) {
                 WAIT (arg_gettype, GetTypeJob);
             }
 
-            switch (fncall->fn->nodetype) {
-                case AST_UNRESOLVED_ID: {
-                    ResolveJob resolve_fn_job(ctx, nullptr);
-                    resolve_fn_job.fncall = fncall;
+            ResolveJob resolve_fn_job(ctx, nullptr);
+            resolve_fn_job.fncall = fncall;
 
-                    WAIT (resolve_fn_job, ResolveJob,
-                        heap_job->subscribe(MSG_NEW_DECLARATION);
-                        heap_job->subscribe(MSG_SCOPE_CLOSED);
-                        heap_job->subscribe(MSG_FN_MATCHED);
-                    );
-                    assert(!"Finally");
-
-                    assert(fncall->fn->nodetype == AST_FN);
-
-                    return true;
-                }
-                case AST_FN: {
-                    UNREACHABLE;
-                }
-                default: {
-                    // CAST
-                    NOT_IMPLEMENTED();
-                }
+            if (fncall->fn) {
+                assert (fncall->kind == FNCALL_REGULAR_FN);
+                assert (fncall->fn   IS AST_UNRESOLVED_ID);
             }
 
+            WAIT (resolve_fn_job, ResolveJob,
+                heap_job->subscribe(MSG_NEW_DECLARATION);
+                heap_job->subscribe(MSG_SCOPE_CLOSED);
+                heap_job->subscribe(MSG_FN_MATCHED);
+            );
+            
+            // after the ResolveJob finishes, fncall->type will be set,
+            // when run() is called again the check before the big switch
+            // will succeed and return the type, so we can't ever get here
+            UNREACHABLE;
         }
 
         case AST_MEMBER_ACCESS: {

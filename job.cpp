@@ -112,8 +112,35 @@ ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id)
     this->dependencies_left ++;
 }
 
+void ResolveJob::spawn_match_job(AST_Fn *fn) {
+    MatchCallJob *match_job = new MatchCallJob(context->global, fncall, fn);
+    global.add_job(match_job);
+    add_dependency(match_job);
+    pending_matches ++;
+}
+
+DeclarationKey ResolveJob::get_decl_key() {
+    DeclarationKey key = {};
+
+    if (fncall->fn) {
+        assert(fncall->fn IS AST_UNRESOLVED_ID);
+        key.name = ((AST_UnresolvedId*)fncall->fn)->name;
+    } else {
+        key.op = fncall->op;
+    }
+    return key;
+}
+
+bool key_compatible(DeclarationKey &lhs, DeclarationKey &rhs) {
+    MUST (lhs.name);
+    MUST (rhs.name);
+    MUST (strcmp(lhs.name, rhs.name));
+    return true;
+}
+
 bool ResolveJob::run(Message *msg) {
     if (!msg) {
+        DeclarationKey key = get_decl_key();
         do { 
             if (unresolved_id) {
                 AST_Node *decl;
@@ -121,19 +148,17 @@ bool ResolveJob::run(Message *msg) {
                 *(AST_Node**)unresolved_id = decl;
                 return true;
             } else {
-                AST_UnresolvedId *the_id = (AST_UnresolvedId*)fncall->fn;
-                assert(the_id IS AST_UNRESOLVED_ID);
-                
-                for (auto &kvp : context->declarations) {
-                    if (!strcmp(the_id->name, kvp.key.name)) {
-                        MatchCallJob *match_job = new MatchCallJob(context->global, fncall, (AST_Fn*)kvp.value);
-                        global.add_job(match_job);
-                        add_dependency(match_job);
-                        pending_matches ++;
-                    }
-                }
+                for (auto &kvp : context->declarations)
+                    if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
+                        spawn_match_job((AST_Fn*)kvp.value);
+
             }
         } while (context->closed && (context = context->parent));
+
+        if (!context) {
+            assert (pending_matches == 0);
+            set_error_flag();
+        }
         return false;
     }
 
@@ -142,18 +167,17 @@ bool ResolveJob::run(Message *msg) {
             NewDeclarationMessage *decl = (NewDeclarationMessage*)msg;
             MUST (decl->context == context);
 
-            if (unresolved_id) {
-                MUST (!strcmp(decl->key.name, (*unresolved_id)->name));
-                *(AST_Node**)unresolved_id = decl->node;
-                return true;
-            } else {
-                MUST (decl->node->nodetype == AST_FN)
+            DeclarationKey key = get_decl_key();
 
-                MatchCallJob *match_job = new MatchCallJob(context->global, fncall, (AST_Fn*)decl->node);
-                add_dependency(match_job);
-                global.add_job(match_job);
-                pending_matches ++;
-                return false;
+            if (key_compatible(key, decl->key)) {
+                if (unresolved_id) {
+                    *(AST_Node**)unresolved_id = decl->node;
+                    return true;
+                } else {
+                    if (decl->node IS AST_FN)
+                        spawn_match_job((AST_Fn*)decl->node);
+                    return false;
+                }
             }
         }
         case MSG_SCOPE_CLOSED: {

@@ -1,4 +1,5 @@
 #include "cast.h"
+#include "tir.h"
 #include <iostream>
 #include <sstream>
 
@@ -138,3 +139,7 @@ bool number_literal_to_u8(CastJob *self) {
     *self->result = sn;
     return true;
 }
+
+TIR_Function add_u8_u8 = {
+    {  }
+};

@@ -784,7 +784,7 @@ bool pop_operator(ParseExprState& state) {
         return true;
 
     } else {
-        AST_Call *bin = state.ctx.alloc<AST_Call>(FNCALL_UNARY_OP, op.tok.type, nullptr, 2);
+        AST_Call *bin = state.ctx.alloc<AST_Call>(FNCALL_BINARY_OP, op.tok.type, nullptr, 2);
         ParseExprValue lhs, rhs;
         rhs = state.pop_into(&bin->args[0]);
         lhs = state.pop_into(&bin->args[1]);
@@ -1101,7 +1101,7 @@ AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
     if (r.peek().type == TOK('=')) {
         r.pop();
 
-        AST_Call *assignment = ctx.alloc<AST_Call>(FNCALL_UNARY_OP, TOK('='), nullptr, 2);
+        AST_Call *assignment = ctx.alloc<AST_Call>(FNCALL_BINARY_OP, TOK('='), nullptr, 2);
         assignment->args.size = 2;
 
         assignment->args[0] = var;

@@ -15,8 +15,8 @@ bool map_equals(TIR_Value lhs, TIR_Value rhs) { return lhs == rhs; }
 
 
 
-void TIR_Function::emit(TIR_Instruction inst) {
-    writepoint->instructions.push(inst);
+void TIR_Function::emit(TIR_Instruction instr) {
+    writepoint->instructions.push(instr);
 }
 
 TIR_Value TIR_Function::alloc_temp(AST_Type* type) {
@@ -31,7 +31,7 @@ TIR_Value TIR_Function::alloc_stack(AST_Var* var) {
     TIR_Value val {
         .valuespace = TVS_STACK,
         .offset = temps_count++,
-        .type = c.global.get_pointer_type(var->type),
+        .type = tir_context->global.get_pointer_type(var->type),
     };
     stack.push({var, val});
     return val;
@@ -68,6 +68,9 @@ std::wostream& operator<< (std::wostream& o, TIR_Value val) {
             break;
         case TVS_C_STRING_LITERAL:
             print_string(o, (const char*)val.offset); // TODO POINTERSIZE
+            break;
+        case TVS_AST_VALUE:
+            o << "AST: " << (AST_Node*)val.offset; // TODO POINTERSIZE
             break;
     }
     return o;
@@ -229,7 +232,7 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
             AST_Var* var = (AST_Var*)val;
 
             if (var->is_global || var->always_on_stack) {
-                *out = var->is_global ? fn.c.global_valmap[var] : fn.fn_valmap[var];
+                *out = var->is_global ? fn.tir_context->global_valmap[var] : fn.fn_valmap[var];
                 return true;
             }
             else {
@@ -263,7 +266,7 @@ bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out) {
                 }
             };
 
-            *out = fn.alloc_temp(fn.c.global.get_pointer_type(member_access->type));
+            *out = fn.alloc_temp(fn.tir_context->global.get_pointer_type(member_access->type));
             fn.emit({ 
                 .opcode = TOPC_GEP,
                 .gep = {
@@ -349,7 +352,7 @@ struct TIR_FnCompileJob : Job {
         return s.str();
     }
 
-    TIR_FnCompileJob(TIR_Function *tir_fn) : tir_fn(tir_fn), Job(tir_fn->c.global) {}
+    TIR_FnCompileJob(TIR_Function *tir_fn) : tir_fn(tir_fn), Job(tir_fn->tir_context->global) {}
 };
 
 TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
@@ -358,7 +361,7 @@ TIR_Value get_array_ptr(TIR_Function& fn, AST_Value* arr) {
             AST_Var* var = (AST_Var*)arr;
 
             if (var->is_global) {
-                return fn.c.global_valmap[var];
+                return fn.tir_context->global_valmap[var];
             } else {
                 NOT_IMPLEMENTED();
             }
@@ -395,7 +398,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                 if (!dst)
                     dst = fn.alloc_temp(((AST_Value*)node)->type);
 
-                TIR_Value src = fn.c._global_initial_values[fn.c.global_valmap[var].offset];
+                TIR_Value src = fn.tir_context->_global_initial_values[fn.tir_context->global_valmap[var].offset];
 
                 TIR_Value offset_0 = { .valuespace = TVS_VALUE, .offset = 0, .type = &t_u32 };
                 arr<TIR_Value> offsets = { offset_0, offset_0 };
@@ -444,7 +447,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             assert(fncall->fn IS AST_FN);
             AST_Fn *callee = (AST_Fn*)fncall->fn;
 
-            TIR_Function *tir_callee = fn.c.fns[callee];
+            TIR_Function *tir_callee = fn.tir_context->fns[callee];
             assert(tir_callee);
 
             arr<TIR_Value> args;
@@ -548,7 +551,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             switch (addrof->inner->nodetype) {
                 case AST_VAR: {
                     AST_Var* var = (AST_Var*)addrof->inner;
-                    return var->is_global ? fn.c.global_valmap[var] : fn.fn_valmap[var];
+                    return var->is_global ? fn.tir_context->global_valmap[var] : fn.fn_valmap[var];
                 }
                 default:
                     UNREACHABLE;
@@ -639,10 +642,10 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
 
             DeclarationKey key = { .string_literal = str };
 
-            AST_Var* strvar = (AST_Var*)fn.c.global.declarations.find2(key);
+            AST_Var* strvar = (AST_Var*)fn.tir_context->global.declarations.find2(key);
             assert(strvar);
 
-            TIR_Value val = fn.c.global_valmap[str];
+            TIR_Value val = fn.tir_context->global_valmap[str];
 
             if (!dst)
                 dst = fn.alloc_temp(str->type);
@@ -696,7 +699,7 @@ void TIR_Function::compile_signature() {
             TIR_Value_Flags flags = (TIR_Value_Flags)0;
 
             if (vardecl->type IS AST_STRUCT) {
-                arg_type = c.global.get_pointer_type(vardecl->type);
+                arg_type = tir_context->global.get_pointer_type(vardecl->type);
                 flags = TVF_BYVAL;
             }
 
@@ -765,7 +768,7 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
         ast_var = (AST_Var*)assignment->args[0];
 
         // This function calculates the initial value and returns it
-        TIR_Function *pseudo_fn = new TIR_Function(tir_context, nullptr);
+        TIR_Function *pseudo_fn = new TIR_Function(&tir_context, nullptr);
         TIR_Block* entry = new TIR_Block();
         pseudo_fn->retval = {
             .valuespace = TVS_RET_VALUE,
@@ -802,12 +805,12 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
 };
 
 Job *TIR_Context::compile_fn(AST_Fn *fn, Job *fn_typecheck_job) {
-    TIR_Function* tir_fn = new TIR_Function(*this, fn);
+    TIR_Function* tir_fn = new TIR_Function(this, fn);
     fns.insert(fn, tir_fn);
 
     TIR_FnCompileJob *compile_job = new TIR_FnCompileJob(tir_fn);
     compile_job->add_dependency(fn_typecheck_job);
-    tir_fn->c.global.add_job(compile_job);
+    tir_fn->tir_context->global.add_job(compile_job);
 
     tir_fn->compile_job = compile_job;
     return compile_job;
@@ -1110,3 +1113,12 @@ NextFrame:
     }
 }
 
+TIR_Function::TIR_Function(std::initializer_list<TIR_Instruction> instrs) {
+    tir_context = nullptr;
+    ast_fn = nullptr;
+    writepoint = blocks.push(new TIR_Block());
+
+    for (TIR_Instruction instr : instrs) {
+        emit(instr);
+    }
+}

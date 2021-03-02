@@ -229,6 +229,14 @@ std::wostream& operator<< (std::wostream& o, AST_Call* node) {
             o << ")";
             return o;
         }
+        case FNCALL_BINARY_OP: {
+            o << '(';
+            o << node->args[0];
+            o << " OP ";
+            o << node->args[1];
+            o << ')';
+            return o;
+        }
         default:
             NOT_IMPLEMENTED();
     }

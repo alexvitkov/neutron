@@ -23,23 +23,16 @@ struct AST_PointerType;
 struct AST_ArrayType;
 
 
-// VOLATILE If you change this, you will have to change the map_hash and map_equals functions defined in context.cpp
+// VOLATILE - map_hash and map_equals MUST be updated after chaning this
 struct DeclarationKey {
-    // This must come first, as we sometimes initialize the DeclarationKey like this: { the_name }
-    const char* name;
-    
-    union {
-        // For functions we can have two fns with the same name but different signatures.
-        AST_FnType* fn_type;
-
-        // String literals get translated to nameless static arrays,
-        // that we index by the AST_StringLiteral that is responsible for making them
-        AST_StringLiteral* string_literal;
-    };
+    const char* name;    // must come first, as we initialize the sturct like { the_name }
+    TokenType op;        // used for operators
+    AST_FnType* fn_type; // used for function overloads
+    AST_StringLiteral* string_literal;
 };
 
 u32 map_hash(DeclarationKey key);
-u32 map_equals(DeclarationKey lhs, DeclarationKey rhs);
+u32 map_equals(DeclarationKey &lhs, DeclarationKey &rhs);
 
 u32 map_hash(AST_FnType *fntype);
 bool map_equals(AST_FnType *lhs, AST_FnType *rhs);
@@ -278,7 +271,7 @@ T* AST_Context::alloc_temp(Ts &&...args) {
 
 struct ResolveJob : Job {
     AST_UnresolvedId **unresolved_id;
-    AST_Call        *fncall;
+    AST_Call          *fncall;
     AST_Context       *context;
 
     int pending_matches = 0;
@@ -290,8 +283,10 @@ struct ResolveJob : Job {
     ResolveJob(AST_Context &ctx, AST_UnresolvedId **id);
     bool run(Message *msg) override;
     std::wstring get_name() override;
-};
 
+    void spawn_match_job(AST_Fn *fn);
+    DeclarationKey get_decl_key();
+};
 
 struct JobGroup : Job {
     std::wstring name;

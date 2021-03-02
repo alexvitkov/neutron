@@ -19,19 +19,24 @@ u32 map_hash(DeclarationKey key) {
     if (key.name)
         hash = map_hash(key.name);
 
+    // we assume that the fn_type has been made unique, we can hash it as void*
     hash ^= map_hash((void*)key.fn_type);
+    hash ^= key.op;
 
     return hash;
 }
 
-u32 map_equals(DeclarationKey lhs, DeclarationKey rhs) {
-    // Either both have a name or neither has a name, we'll check if equal in a sec
+u32 map_equals(DeclarationKey &lhs, DeclarationKey &rhs) {
+    // either both have a name or neither has a name
     MUST (!lhs.name == !rhs.name);
 
     if (lhs.name && rhs.name && strcmp(lhs.name, rhs.name))
         return false;
 
-    return lhs.fn_type == rhs.fn_type;
+    MUST (lhs.fn_type == rhs.fn_type);
+    MUST (lhs.op == rhs.op);
+
+    return true;
 }
 
 u32 map_hash(CastPair pair) {

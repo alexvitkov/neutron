@@ -4,6 +4,7 @@
 #include "common.h"
 #include "ast.h"
 #include "context.h"
+#include <initializer_list>
 
 enum TIR_ValueSpace : u8 {
     TVS_DISCARD = 0x00,
@@ -14,6 +15,7 @@ enum TIR_ValueSpace : u8 {
     TVS_VALUE,
     TVS_STACK,
     TVS_C_STRING_LITERAL,
+    TVS_AST_VALUE,
 };
 
 enum TIR_Value_Flags : u32 {
@@ -201,7 +203,7 @@ void add_string_global(TIR_Context *tir_context, AST_Var *the_string_var, AST_St
 
 
 struct TIR_Function {
-    TIR_Context& c;
+    TIR_Context *tir_context;
     AST_Fn* ast_fn;
 
     TIR_Value retval = { .valuespace = TVS_RET_VALUE };
@@ -223,7 +225,8 @@ struct TIR_Function {
     // Blocks are stored in the order they need to be compiled in
     arr<TIR_Block*> blocks;
 
-    TIR_Function(TIR_Context& c, AST_Fn* fn) : ast_fn(fn), c(c) {};
+    TIR_Function(TIR_Context *c, AST_Fn* fn) : ast_fn(fn), tir_context(c) {};
+    TIR_Function(std::initializer_list<TIR_Instruction> instrs);
 
     TIR_Value alloc_temp(AST_Type* type);
     TIR_Value alloc_stack(AST_Var* type);
