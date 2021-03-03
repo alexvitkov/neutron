@@ -201,7 +201,7 @@ void print_err(AST_Context &global, Error& err) {
         case ERR_INVALID_NUMBER_OF_ARGUMENTS: {
             AST_Call *fncall = (AST_Call*)err.nodes[0];
             AST_Fn     *fn     = (AST_Fn*)fncall->fn;
-            AST_FnType *fntype = (AST_FnType*)fn->type;
+            AST_FnType *fntype = fn->fntype();
 
             wcout << fn << " accepts ";
             if (fntype->is_variadic)
@@ -270,7 +270,7 @@ void print_err(AST_Context &global, Error& err) {
         case ERR_RETURN_TYPE_MISSING: {
             AST_Return* ret = (AST_Return*)err.nodes[0];
             AST_Fn* fn = (AST_Fn*)err.nodes[1];
-            AST_FnType* fntype = (AST_FnType*)fn->type;
+            AST_FnType* fntype = fn->fntype();
             wcout << "Missing return value - expected a value of type " 
                 << red << fntype->returntype << resetstyle << ":\n";
 
@@ -282,7 +282,7 @@ void print_err(AST_Context &global, Error& err) {
         case ERR_RETURN_TYPE_INVALID: {
             AST_Return* ret = (AST_Return*)err.nodes[0];
             AST_Fn* fn = (AST_Fn*)err.nodes[1];
-            AST_FnType* fntype = (AST_FnType*)fn->type;
+            AST_FnType* fntype = fn->fntype();
 
             wcout << "Cannot return " << oftype(ret->value) << ", the function's return type is ";
 

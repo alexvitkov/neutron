@@ -101,9 +101,8 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
 
         o << '(';
 
-        AST_FnType* fntype = (AST_FnType*)fn->type;
         for (u32 i = 0; i < fn->argument_names.size; i++)
-            o << fn->argument_names[i] << ": " << fntype->param_types[i] << ", ";
+            o << fn->argument_names[i] << ": " << fn->fntype()->param_types[i] << ", ";
 
         // Delete the last comma
         if (fn->argument_names.size)
@@ -111,7 +110,7 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
 
         o << ')';
 
-        AST_Type* rettype = ((AST_FnType*)fn->type)->returntype;
+        AST_Type* rettype = fn->fntype()->returntype;
         if (rettype)
             o << ": " << rettype;
 
@@ -122,12 +121,11 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
         }
     } else {
         o << fn->name;
-        AST_FnType *fntype = (AST_FnType*)fn->type;
         o << "(";
-        for (AST_Type *param : fntype->param_types) {
+        for (AST_Type *param : fn->fntype()->param_types) {
             o << param << ", ";
         }
-        if (fntype->param_types.size > 0)
+        if (fn->fntype()->param_types.size > 0)
             o << "\b\b \b";
         o << ")";
     }
@@ -260,11 +258,11 @@ std::wostream& operator<< (std::wostream& o, AST_MemberAccess* node) {
 }
 
 std::wostream& operator<< (std::wostream& o, AST_Dereference* node) {
-    if (node->ptr IS AST_BINARY_OP || ALWAYS_BRACKETS) {
+    //if (node->ptr IS AST_BINARY_OP || ALWAYS_BRACKETS) {
         o << '(' << node->ptr << ")*";
-    } else {
-        o << node->ptr << '*';
-    }
+    //} else {
+        //o << node->ptr << '*';
+    //}
     return o;
 }
 

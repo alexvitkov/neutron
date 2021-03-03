@@ -102,7 +102,7 @@ bool is_integral_type(AST_Type* type) {
 bool validate_type(AST_Context& ctx, AST_Type** type);
 
 bool validate_fn_type(AST_Context& ctx, AST_Fn* fn) {
-    AST_FnType *fntype = (AST_FnType*)fn->type;
+    AST_FnType *fntype = fn->fntype();
     
     for (auto& p : fntype->param_types) {
         // we must check if the parameters are valid AST_Types
@@ -330,7 +330,7 @@ bool TypeCheckJob::run(Message *msg) {
 
                 DeclarationKey key = {
                     .name = fn->name,
-                    .fn_type = (AST_FnType*)fn->type
+                    .fn_type = fn->fntype()
                 };
 
                 // we know the fn's type, declare it
@@ -350,8 +350,7 @@ bool TypeCheckJob::run(Message *msg) {
                 MUST_OR_FAIL_JOB (validate_type(ctx, &var->type));
             } else {
                 assert(var->argindex >= 0);
-                AST_FnType *fntype = (AST_FnType*)this->ctx.fn->type;
-                var->type = fntype->param_types[var->argindex];
+                var->type = ctx.fn->fntype()->param_types[var->argindex];
             }
             return true;
         }
@@ -375,30 +374,13 @@ bool TypeCheckJob::run(Message *msg) {
                     return false;
                 }
 
-                if (ret->value->type != rettype) {
-                    CastJobMethod run_fn;
-                    if (!ctx.global.casts.find({ ret->value->type, rettype }, &run_fn)) {
-                        assert(!"TODO ERROR");
-                    }
-                    CastJob cast(ctx.global, ret->value, &ret->value, run_fn);
-                    WAIT (cast, CastJob);
-                }
-            }
+                CastJob cast_job(&ctx, ret->value, rettype);
+                WAIT (cast_job, CastJob);
 
-            // TODO CAST
-            if (rettype != &t_void && ret->value->type != rettype) {
-                error({
-                    .code = ERR_CANNOT_IMPLICIT_CAST, 
-                    .nodes = {
-                        rettype,
-                        ret->value,
-                        ret
-                    }
-                });
-                return false;
-            }
+                ret->value = cast_job.result;
 
-            if (rettype == &t_void && ret->value) {
+                return true;
+            } else if (ret->value) {
                 error({
                     .code = ERR_RETURN_TYPE_INVALID,
                     .nodes = { ret, ctx.fn }

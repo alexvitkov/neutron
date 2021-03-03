@@ -334,7 +334,7 @@ struct TIR_FnCompileJob : Job {
     bool run(Message *msg) override {
         tir_fn->compile_signature();
 
-        AST_Type* rettype = ((AST_FnType*)tir_fn->ast_fn->type)->returntype;
+        AST_Type* rettype = tir_fn->ast_fn->fntype()->returntype;
         if (rettype) 
             tir_fn->retval.type = rettype;
 
@@ -677,7 +677,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
 }
 
 void TIR_Function::compile_signature() {
-    AST_FnType *fntype = (AST_FnType*)ast_fn->type;
+    AST_FnType *fntype = ast_fn->fntype();
     // TODO VOID
     if (fntype->returntype && fntype->returntype != &t_void) {
         retval.valuespace = TVS_RET_VALUE;

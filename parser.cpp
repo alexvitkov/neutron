@@ -811,7 +811,7 @@ bool _token_is_value(TokenType t) {
     return false;
 }
 
-AST_Var *parse_let(AST_Context& ctx, TokenReader& r);
+AST_Var *parse_var_decl(AST_Context& ctx, TokenReader& r);
 
 bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType delim) {
     ParseExprState state { .ctx = ctx };
@@ -844,11 +844,10 @@ bool parse_expr(AST_Context& ctx, AST_Value **out, TokenReader& r, TokenType del
                     case TOK_ID: {
                         if (r.peek().type == TOK_COLON) {
                             r.pos--;
-                            val = parse_let(ctx, r);
+                            val = parse_var_decl(ctx, r);
                             MUST (val);
                         }
                         else {
-                            val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
                             if (!ctx.declarations.find({ .name = t.name }, (AST_Node**)&val))
                                 val = ctx.alloc_temp<AST_UnresolvedId>(t.name, ctx);
                         }
@@ -1088,45 +1087,16 @@ Done:
     return true;
 }
 
-AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
+AST_Var *parse_var_decl(AST_Context& ctx, TokenReader& r) {
     Token nameToken = r.expect_full(TOK_ID);
     MUST (nameToken.type);
 
     AST_Var* var = ctx.alloc<AST_Var>(nameToken.name, -1);
 
     MUST (r.expect(TOK(':')).type);
-
     MUST (parse_expr(ctx, (AST_Value**)&var->type, r, TOK('=')));
 
-    if (r.peek().type == TOK('=')) {
-        r.pop();
-
-        AST_Call *assignment = ctx.alloc<AST_Call>(FNCALL_BINARY_OP, TOK('='), nullptr, 2);
-        assignment->args.size = 2;
-
-        assignment->args[0] = var;
-        MUST (parse_expr(ctx, &assignment->args[1], r, {}));
-
-        Location loc = {
-            .file_id = nameToken.file_id,
-            .loc = {
-                .start = nameToken.loc.start,
-                .end = r.pos_in_file,
-            }
-        };
-
-        ctx.global.definition_locations[assignment] = loc;
-        assignment->nodetype = AST_BINARY_OP;
-        ctx.statements.push(assignment);
-    } else {
-        MUST (r.expect(TOK(';')).type);
-    }
-
-
     var->is_global = &ctx.global == &ctx;
-
-    bool declare_succeeded = ctx.declare({ nameToken.name }, var, &ctx == &ctx.global);
-
 
     ctx.global.definition_locations[var] = {
         .file_id = r.sf.id,
@@ -1136,7 +1106,8 @@ AST_Var *parse_let(AST_Context& ctx, TokenReader& r) {
         }
     };
 
-    return declare_succeeded ? var : nullptr;
+    MUST (ctx.declare({ nameToken.name }, var, &ctx == &ctx.global));
+    return var;
 }
 
 AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
@@ -1173,15 +1144,6 @@ bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error) {
                 *error = true;
                 return false;
             }
-            return true;
-        }
-        case KW_LET: {
-            r.pop();
-            if (!parse_let(ctx, r)) {
-                *error = true;
-                return false;
-            }
-            MUST (r.expect(TOK(';')).type);
             return true;
         }
         case KW_STRUCT: {

@@ -19,7 +19,7 @@
 
 #define PREC(tt) (prec[tt] & PREC_MASK)
 
-#define MUST(v) if (!(v)) return 0;
+#define MUST(v) { if (!(v)) return 0; }
 
 #define MUST_OR_FAIL_JOB(v) if (!(v)) { flags = (JobFlags)(flags | JOB_ERROR); return false; }
 
@@ -93,7 +93,6 @@ enum TokenType : u8 {
 	KW_F64,
 
 	KW_FN,
-	KW_LET,
 	KW_STRUCT,
     KW_RETURN,
 	KW_TRUE,
@@ -171,7 +170,6 @@ enum AST_NodeType : u8 {
 
     AST_FN            = 0x00 | AST_VALUE_BIT,
     AST_VAR           = 0x01 | AST_VALUE_BIT,
-    AST_BINARY_OP     = 0x02 | AST_VALUE_BIT,
     AST_ASSIGNMENT    = 0x03 | AST_VALUE_BIT,
     // AST_CAST          = 0x04 | AST_VALUE_BIT,
     AST_NUMBER        = 0x05 | AST_VALUE_BIT,
@@ -183,7 +181,6 @@ enum AST_NodeType : u8 {
     AST_ADDRESS_OF    = 0x0b | AST_VALUE_BIT,
     AST_STRING_LITERAL= 0x0c | AST_VALUE_BIT,
     AST_TYPEOF        = 0x0d | AST_VALUE_BIT,               
-    AST_UNARY_OP      = 0x0e | AST_VALUE_BIT,
     AST_SMALL_NUMBER  = 0x0f | AST_VALUE_BIT,
 
     AST_STRUCT         = 0x00 | AST_VALUE_BIT | AST_TYPE_BIT,

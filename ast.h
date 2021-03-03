@@ -174,6 +174,8 @@ struct AST_Fn : AST_Value {
     AST_Context block;
     bool is_extern = false;
 
+    inline AST_FnType *fntype() { return (AST_FnType*)type; };
+
     inline AST_Fn(AST_Context* parent_ctx, const char* name) 
         : AST_Value(AST_FN, nullptr), block(parent_ctx), name(name) 
     {

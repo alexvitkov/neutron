@@ -112,21 +112,65 @@ ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id)
     this->dependencies_left ++;
 }
 
-void ResolveJob::spawn_match_job(AST_Fn *fn) {
-    MatchCallJob *match_job = new MatchCallJob(context->global, fncall, fn);
-    global.add_job(match_job);
-    add_dependency(match_job);
+bool ResolveJob::spawn_match_job(AST_Fn *fn) {
+    AST_FnType *fntype = fn->fntype();
+
+    MUST (fntype->param_types.size >= fncall->args.size);
+
+    if (!fntype->is_variadic)
+        MUST (fntype->param_types.size == fncall->args.size);
+
+    int prio = 1000;
+    arr<AST_Value*> casted_args(fncall->args.size);
+    casted_args.size = fncall->args.size;
+
+    JobGroup *wait_group = nullptr;
+
+    for (u32 i = 0; i < fntype->param_types.size; i++) {
+        AST_Type *paramtype = fntype->param_types[i];
+        AST_Type *argtype = fncall->args[i]->type;
+
+        CastJob cast_job(context, fncall->args[i], paramtype);
+        CastJob *cast_heap_job = cast_job.run_stackjob<CastJob>();
+        if (cast_heap_job) {
+            NOT_IMPLEMENTED();
+            if (wait_group) {}
+        } else if (cast_job.flags & JOB_DONE) {
+            casted_args[i] = cast_job.result;
+            continue;
+        }
+        return false;
+    }
+
     pending_matches ++;
+
+    MatchCallJobOverMessage matched_msg;
+    matched_msg.msgtype = MSG_FN_MATCHED;
+    matched_msg.priority = prio;
+    matched_msg.fncall = fncall;
+    matched_msg.fn = fn;
+
+    for (u32 i = 0; i < fncall->args.size; i++)
+        matched_msg.casted_args.push(casted_args[i]);
+
+    global.send_message(&matched_msg);
+    return true;
 }
 
 DeclarationKey ResolveJob::get_decl_key() {
     DeclarationKey key = {};
 
-    if (fncall->fn) {
-        assert(fncall->fn IS AST_UNRESOLVED_ID);
-        key.name = ((AST_UnresolvedId*)fncall->fn)->name;
+    if (fncall) {
+        if (fncall->fn) {
+            key.name = ((AST_UnresolvedId*)fncall->fn)->name;
+        } else {
+            assert (fncall->op);
+            key.op = fncall->op;
+        }
     } else {
-        key.op = fncall->op;
+        assert(unresolved_id);
+        assert((*unresolved_id) IS AST_UNRESOLVED_ID);
+        key.name = (*unresolved_id)->name;
     }
     return key;
 }
@@ -134,7 +178,7 @@ DeclarationKey ResolveJob::get_decl_key() {
 bool key_compatible(DeclarationKey &lhs, DeclarationKey &rhs) {
     MUST (lhs.name);
     MUST (rhs.name);
-    MUST (strcmp(lhs.name, rhs.name));
+    MUST (!strcmp(lhs.name, rhs.name));
     return true;
 }
 
@@ -190,6 +234,13 @@ bool ResolveJob::run(Message *msg) {
                 context = context->parent;
                 if (!context) {
                     if (dependencies_left == 1) {
+                        if (this->fncall && this->prio > 0) {
+                            for (int i = 0; i < fncall->args.size; i++)
+                                fncall->args[i] = new_args[i];
+                            fncall->fn = new_fn;
+                            fncall->type = ((AST_FnType*)fncall->fn->type)->returntype;
+                            return true;
+                        }
                         error({ .code = ERR_NOT_DEFINED, .nodes = { unresolved_id ? (AST_Value*)*unresolved_id : fncall } });
                         return false;
                     } else {
@@ -204,30 +255,28 @@ bool ResolveJob::run(Message *msg) {
 
         case MSG_FN_MATCHED: {
             MatchCallJobOverMessage *match_msg = (MatchCallJobOverMessage*)msg;
-            if (match_msg->job->fncall != fncall)
+            if (match_msg->fncall != fncall)
                 return false;
 
             pending_matches --;
 
-            if (!(match_msg->job->flags & JOB_FALSE)) {
-                wcout << "prio:" << match_msg->job->priority << "\n";
+            // wcout << "prio:" << match_msg->priority << "\n";
 
-                if (prio < match_msg->job->priority) {
+            if (prio < match_msg->priority) {
 
-                    if (prio == 0)
-                        new_args.realloc(fncall->args.size);
+                if (prio == 0)
+                    new_args.realloc(fncall->args.size);
 
-                    prio = match_msg->job->priority;
+                prio = match_msg->priority;
 
-                   for (int i = 0; i < fncall->args.size; i++)
-                       new_args[i] = match_msg->job->casted_args[i];
+                for (int i = 0; i < fncall->args.size; i++)
+                    new_args[i] = match_msg->casted_args[i];
 
-                   new_fn = match_msg->job->fn;
+                new_fn = match_msg->fn;
 
-                } else if (prio == match_msg->job->priority) {
-                    // TODO ERROR
-                    NOT_IMPLEMENTED();
-                }
+            } else if (prio == match_msg->priority) {
+                // TODO ERROR
+                NOT_IMPLEMENTED();
             }
 
             if (pending_matches == 0) {

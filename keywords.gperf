@@ -19,7 +19,6 @@ f32,    KW_F32
 f64,    KW_F64
 fn,     KW_FN
 struct, KW_STRUCT
-let,    KW_LET
 return, KW_RETURN
 true,   KW_TRUE
 false,  KW_FALSE

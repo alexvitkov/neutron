@@ -39,11 +39,11 @@ u32 map_equals(DeclarationKey &lhs, DeclarationKey &rhs) {
     return true;
 }
 
-u32 map_hash(CastPair pair) {
+u32 map_hash(BuiltinCastPair pair) {
     return map_hash(pair.src) ^ map_hash(pair.dst);
 }
 
-bool map_equals(CastPair a, CastPair b) {
+bool map_equals(BuiltinCastPair a, BuiltinCastPair b) {
     return a.src == b.src && a.dst == b.dst;
 }
 
@@ -174,15 +174,8 @@ AST_GlobalContext::AST_GlobalContext() : AST_Context(nullptr), subscribers(MESSA
     for (u32 i = 0; i < MESSAGES_COUNT; i++)
         subscribers.push(arr<Job*>());
 
-    casts.insert({ &t_number_literal, &t_u64 }, number_literal_to_u64);
-    default_cast_priorities.insert({ &t_number_literal, &t_u64 }, 100);
-
-    casts.insert({ &t_number_literal, &t_u32 }, number_literal_to_u32);
-    default_cast_priorities.insert({ &t_number_literal, &t_u32 }, 90);
-
-    casts.insert({ &t_number_literal, &t_u16 }, number_literal_to_u16);
-    default_cast_priorities.insert({ &t_number_literal, &t_u16 }, 80);
-
-    casts.insert({ &t_number_literal, &t_u8  }, number_literal_to_u8);
-    default_cast_priorities.insert({ &t_number_literal, &t_u8 },  70);
+    builtin_casts.insert({ &t_number_literal, &t_u64 }, { number_literal_to_u64, 100 });
+    //builtin_casts.insert({ &t_number_literal, &t_u32 }, 90);
+    //builtin_casts.insert({ &t_number_literal, &t_u16 }, 80);
+    //builtin_casts.insert({ &t_number_literal, &t_u8 },  70);
 }

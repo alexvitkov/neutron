@@ -40,7 +40,7 @@ llvm::Constant *get_constant(T2L_Context *ctx, TIR_Value tir_val) {
 
 llvm::FunctionType *T2L_Context::get_function_type(TIR_Function* fn) {
     arr<llvm::Type*> l_param_types;
-    AST_FnType *fntype = (AST_FnType*)fn->ast_fn->type;
+    AST_FnType *fntype = fn->ast_fn->fntype();
 
     llvm::Type *llvm_fntype;
     if (translated_types.find(fntype, &llvm_fntype)) {

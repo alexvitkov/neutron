@@ -23,6 +23,7 @@ struct AST_PointerType;
 struct AST_ArrayType;
 
 
+
 // VOLATILE - map_hash and map_equals MUST be updated after chaning this
 struct DeclarationKey {
     const char* name;    // must come first, as we initialize the sturct like { the_name }
@@ -49,12 +50,19 @@ struct Namespace {
     bool finished_with_declarations;
 };
 
-struct CastPair {
+typedef bool (*BuiltinCastFn) (AST_GlobalContext &global, AST_Value *src, AST_Value **dst);
+
+struct BuiltinCast {
+    BuiltinCastFn fn;
+    int priority;
+};
+
+struct BuiltinCastPair {
     AST_Type *src, *dst;
 };
 
-u32  map_hash(CastPair key);
-bool map_equals(CastPair a, CastPair b);
+u32  map_hash(BuiltinCastPair key);
+bool map_equals(BuiltinCastPair a, BuiltinCastPair b);
 
 typedef bool (*CastJobMethod) (CastJob *self);
 
@@ -64,9 +72,6 @@ struct AST_Context : AST_Node {
 
     AST_GlobalContext &global;
     AST_Context *parent;
-
-    map <CastPair, CastJobMethod> casts;
-    map <CastPair, int> default_cast_priorities;
 
     AST_Fn* fn; // the function that this context is a part of
     arr<AST_Context*> children;
@@ -154,13 +159,16 @@ struct DependencyFinishedMessage : Message {
 };
 
 struct MatchCallJobOverMessage : Message {
-    struct MatchCallJob *job;
+    int priority;
+    AST_Call *fncall;
+    AST_Fn   *fn;
+    arr<AST_Value*> casted_args;
 };
 
 enum JobFlags : u32 {
     JOB_DONE  = 0x01,
     JOB_ERROR = 0x02,
-    JOB_FALSE = 0x04,
+    JOB_SOFT  = 0x04,
 };
 
 
@@ -181,6 +189,7 @@ struct AST_GlobalContext : AST_Context {
 
     linear_alloc allocator, temp_allocator;
     struct TIR_Context *tir_context;
+    map<BuiltinCastPair, BuiltinCast> builtin_casts;
 
     CompileTarget target = { 8, 8 };
 
@@ -241,8 +250,10 @@ struct Job {
     // so you can wait on it
     template <typename JobT>
     JobT *run_stackjob() {
-       if (run(nullptr))
+       if (run(nullptr)) {
+           flags = (JobFlags)(flags | JOB_DONE);
            return nullptr;
+       }
 
        JobT *heap_job = new JobT(std::move(*(JobT*)this));
        global.add_job(heap_job);
@@ -269,6 +280,7 @@ T* AST_Context::alloc_temp(Ts &&...args) {
     return buf;
 }
 
+
 struct ResolveJob : Job {
     AST_UnresolvedId **unresolved_id;
     AST_Call          *fncall;
@@ -284,7 +296,7 @@ struct ResolveJob : Job {
     bool run(Message *msg) override;
     std::wstring get_name() override;
 
-    void spawn_match_job(AST_Fn *fn);
+    bool spawn_match_job(AST_Fn *fn);
     DeclarationKey get_decl_key();
 };
 
