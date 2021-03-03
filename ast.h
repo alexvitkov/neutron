@@ -64,14 +64,15 @@ enum BracketsKind {
 };
 
 struct AST_Call : AST_Value {
-    CallKind   kind;
-    TokenType    op;
-    BracketsKind brackets;
-    AST_Value   *fn;
+    CallKind      kind;
+    BracketsKind  brackets;
+    TokenType            op;
+    AST_Value           *fn;
+    struct TIR_Function *tir_fn;
     arr<AST_Value*> args;
 
     inline AST_Call(CallKind kind, TokenType op, AST_Value* fn, u32 args_reserve) 
-        : AST_Value(AST_FN_CALL, nullptr), kind(kind), op(op), fn(fn), args(args_reserve) {}
+        : AST_Value(AST_FN_CALL, nullptr), kind(kind), op(op), fn(fn), args(args_reserve), tir_fn(nullptr) {}
 };
 
 struct AST_PrimitiveType : AST_Type {

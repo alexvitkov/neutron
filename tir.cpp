@@ -444,11 +444,14 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
         case AST_FN_CALL: {
             AST_Call* fncall = (AST_Call*)node;
             
-            assert(fncall->fn IS AST_FN);
-            AST_Fn *callee = (AST_Fn*)fncall->fn;
-
-            TIR_Function *tir_callee = fn.tir_context->fns[callee];
-            assert(tir_callee);
+            TIR_Function *tir_callee;
+            if (fncall->tir_fn) {
+                tir_callee = fncall->tir_fn;
+            } else {
+                AST_Fn *callee = (AST_Fn*)fncall->fn;
+                tir_callee = fn.tir_context->fns[callee];
+                assert(fncall->fn IS AST_FN);
+            }
 
             arr<TIR_Value> args;
 
@@ -948,6 +951,7 @@ NextFrame:
         if (!sf.block)
             sf.block = sf.fn->blocks[0];
 
+        assert(sf.next_instruction < sf.block->instructions.size);
         TIR_Instruction &instr = sf.block->instructions[sf.next_instruction];
 
         if ((instr.opcode & TOPC_BINARY) == TOPC_BINARY) {
@@ -979,7 +983,7 @@ NextFrame:
                 case TOPC_SGTE: val = (void*)((i64)lhs >= (i64)rhs); break;
 
                 default:
-                                NOT_IMPLEMENTED();
+                    NOT_IMPLEMENTED();
             }
 
             sf.set_value(instr.bin.dst, val);

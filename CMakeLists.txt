@@ -26,8 +26,10 @@ set(NEUTRON_SOURCE_FILES
 	cmdargs.h   cmdargs.cpp
 	typer.h     typer.cpp
     tir.h       tir.cpp
+                util_common.cpp
+    tir_builtins.h      tir_builtins.cpp
 	backend/llvm/llvm.h backend/llvm/llvm.cpp
-	util.h              util_common.cpp
+	util.h
 	${CMAKE_SOURCE_DIR}/keywords.gperf.gen.h)
 
 if(WIN32)

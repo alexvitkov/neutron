@@ -50,20 +50,6 @@ struct Namespace {
     bool finished_with_declarations;
 };
 
-typedef bool (*BuiltinCastFn) (AST_GlobalContext &global, AST_Value *src, AST_Value **dst);
-
-struct BuiltinCast {
-    BuiltinCastFn fn;
-    int priority;
-};
-
-struct BuiltinCastPair {
-    AST_Type *src, *dst;
-};
-
-u32  map_hash(BuiltinCastPair key);
-bool map_equals(BuiltinCastPair a, BuiltinCastPair b);
-
 typedef bool (*CastJobMethod) (CastJob *self);
 
 struct AST_Context : AST_Node {
@@ -189,7 +175,6 @@ struct AST_GlobalContext : AST_Context {
 
     linear_alloc allocator, temp_allocator;
     struct TIR_Context *tir_context;
-    map<BuiltinCastPair, BuiltinCast> builtin_casts;
 
     CompileTarget target = { 8, 8 };
 

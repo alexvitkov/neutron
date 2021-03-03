@@ -1,6 +1,7 @@
 #include "context.h"
 #include "ast.h"
 #include "typer.h"
+#include "tir_builtins.h"
 #include "cast.h"
 #include <sstream>
 #include <iostream>
@@ -192,6 +193,34 @@ bool ResolveJob::run(Message *msg) {
                 *(AST_Node**)unresolved_id = decl;
                 return true;
             } else {
+                
+                if (fncall->op) {
+                    TIR_Function *fn;
+                    switch (fncall->args.size) {
+                        case 2:
+                            MUST (builtin_binary_ops.find({ 
+                                fncall->op, 
+                                fncall->args[0]->type, 
+                                fncall->args[1]->type 
+                            }, &fn));
+
+                            fncall->type = fncall->args[0]->type;
+                            fncall->tir_fn = fn;
+                            return true;
+                        case 1:
+                            MUST (builtin_unary_ops.find({ 
+                                fncall->op, 
+                                fncall->args[0]->type, 
+                            }, &fn));
+
+                            fncall->tir_fn = fn;
+                            fncall->type = fncall->args[0]->type;
+                            return true;
+                        default:
+                            UNREACHABLE;
+                    }
+                }
+
                 for (auto &kvp : context->declarations)
                     if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
                         spawn_match_job((AST_Fn*)kvp.value);

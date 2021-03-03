@@ -785,6 +785,7 @@ bool pop_operator(ParseExprState& state) {
 
     } else {
         AST_Call *bin = state.ctx.alloc<AST_Call>(FNCALL_BINARY_OP, op.tok.type, nullptr, 2);
+        bin->args.size = 2;
         ParseExprValue lhs, rhs;
         rhs = state.pop_into(&bin->args[0]);
         lhs = state.pop_into(&bin->args[1]);

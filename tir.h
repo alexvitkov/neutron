@@ -4,6 +4,7 @@
 #include "common.h"
 #include "ast.h"
 #include "context.h"
+
 #include <initializer_list>
 
 enum TIR_ValueSpace : u8 {
@@ -210,6 +211,8 @@ struct TIR_Function {
     TIR_Block* writepoint;
     u64 temps_count = 0;
     Job *compile_job;
+
+    bool is_inline = false;
 
     struct VarValTuple {
         AST_Var *var;

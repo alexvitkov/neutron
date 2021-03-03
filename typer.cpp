@@ -161,11 +161,8 @@ bool GetTypeJob::run(Message *msg) {
                 heap_job->subscribe(MSG_SCOPE_CLOSED);
                 heap_job->subscribe(MSG_FN_MATCHED);
             );
-            
-            // after the ResolveJob finishes, fncall->type will be set,
-            // when run() is called again the check before the big switch
-            // will succeed and return the type, so we can't ever get here
-            UNREACHABLE;
+
+            return fncall->type;
         }
 
         case AST_MEMBER_ACCESS: {

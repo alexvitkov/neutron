@@ -39,14 +39,6 @@ u32 map_equals(DeclarationKey &lhs, DeclarationKey &rhs) {
     return true;
 }
 
-u32 map_hash(BuiltinCastPair pair) {
-    return map_hash(pair.src) ^ map_hash(pair.dst);
-}
-
-bool map_equals(BuiltinCastPair a, BuiltinCastPair b) {
-    return a.src == b.src && a.dst == b.dst;
-}
-
 bool AST_Context::declare(DeclarationKey key, AST_Node* value, bool sendmsg) {
     // Throw an error if another value with the same name has been declared
     AST_Node* prev_decl;
@@ -174,8 +166,4 @@ AST_GlobalContext::AST_GlobalContext() : AST_Context(nullptr), subscribers(MESSA
     for (u32 i = 0; i < MESSAGES_COUNT; i++)
         subscribers.push(arr<Job*>());
 
-    builtin_casts.insert({ &t_number_literal, &t_u64 }, { number_literal_to_u64, 100 });
-    //builtin_casts.insert({ &t_number_literal, &t_u32 }, 90);
-    //builtin_casts.insert({ &t_number_literal, &t_u16 }, 80);
-    //builtin_casts.insert({ &t_number_literal, &t_u8 },  70);
 }
