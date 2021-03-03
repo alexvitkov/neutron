@@ -165,7 +165,10 @@ std::wostream& operator<< (std::wostream& o, TIR_Instruction& instr) {
             if (instr.call.dst.valuespace != TVS_DISCARD)
                 o << instr.call.dst << " <- ";
             
-            o << "call " << instr.call.fn->ast_fn->name << "(";
+            if (instr.call.fn->ast_fn)
+                o << "call " << instr.call.fn->ast_fn->name << "(";
+            else 
+                o << "call ?(";
 
             for (TIR_Value& val : instr.call.args)
                 o << val << ", ";
@@ -387,6 +390,67 @@ void TIR_Block::push_previous(TIR_Block *previous) {
     */
 }
 
+struct InlineFnState {
+    TIR_Function &fn;
+    TIR_Function &callee;
+    TIR_Value    retval;
+    arr<TIR_Value> &args;
+    u64 temps_start;
+};
+
+TIR_Value translate_inline_value(TIR_Value val, InlineFnState &state) {
+    assert(val.type);
+    switch (val.valuespace) {
+        case TVS_RET_VALUE: {
+            return state.retval;
+        }
+        case TVS_ARGUMENT: {
+            return state.args[val.offset];
+        }
+        case TVS_TEMP: {
+            val.offset += state.temps_start;
+            return val;
+        }
+        default: {
+            NOT_IMPLEMENTED();
+        }
+    }
+}
+
+void inline_function(InlineFnState &state) {
+    state.temps_start = state.fn.temps_count;
+    state.fn.temps_count += state.callee.temps_count;
+
+    if (state.callee.blocks.size > 1) {
+        NOT_IMPLEMENTED();
+    } else {
+        for (TIR_Instruction& instr : state.callee.blocks[0]->instructions) {
+            if ((instr.opcode & TOPC_UNARY) == TOPC_UNARY) {
+                state.fn.emit({
+                    .opcode = instr.opcode,
+                    .un = {
+                        .dst = translate_inline_value(instr.un.dst, state),
+                        .src = translate_inline_value(instr.un.src, state),
+                    }
+                });
+            } else if ((instr.opcode & TOPC_BINARY) == TOPC_BINARY) {
+                state.fn.emit({
+                    .opcode = instr.opcode,
+                    .bin = {
+                        .dst = translate_inline_value(instr.bin.dst, state),
+                        .lhs = translate_inline_value(instr.bin.lhs, state),
+                        .rhs = translate_inline_value(instr.bin.rhs, state),
+                    }
+                });
+            } else if (instr.opcode == TOPC_RET) {
+                return;
+            } else {
+                NOT_IMPLEMENTED();
+            }
+        }
+    }
+}
+
 TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
     switch (node->nodetype) {
         case AST_VAR: {
@@ -456,7 +520,6 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             arr<TIR_Value> args;
 
             for (u32 i = 0; i < fncall->args.size; i++) {
-
                 AST_Type* param_type = &t_any8;
                 if (i < tir_callee->parameters.size)
                     param_type = tir_callee->parameters[i].type;
@@ -477,10 +540,20 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
                 dst = fn.alloc_temp(fn.retval.type);
             }
 
-            fn.emit({ 
-                .opcode = TOPC_CALL, 
-                .call = { .dst = dst, .fn = tir_callee, .args = args.release(), }
-            });
+            if (tir_callee->is_inline) {
+                InlineFnState state {
+                    .fn     = fn,
+                    .callee = *tir_callee,
+                    .retval = dst,
+                    .args   = args,
+                };
+                inline_function(state);
+            } else {
+                fn.emit({ 
+                    .opcode = TOPC_CALL, 
+                    .call = { .dst = dst, .fn = tir_callee, .args = args.release(), }
+                });
+            }
 
             return dst;
         }

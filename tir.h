@@ -80,19 +80,20 @@ enum TIR_OpCode : u16 {
     TOPC_SGT  = TOPC_GT  | TOPC_SIGNED,
     TOPC_SGTE = TOPC_GTE | TOPC_SIGNED,
 
-    TOPC_MOV        = 0x00 | TOPC_UNARY,
-    TOPC_CALL,
-    TOPC_GEP,
 
-    TOPC_BITCAST,
-    TOPC_ZEXT,
-    TOPC_SEXT,
+    TOPC_MOV     = 0x00 | TOPC_UNARY,
+    TOPC_BITCAST = 0x01 | TOPC_UNARY,
+    TOPC_ZEXT    = 0x02 | TOPC_UNARY,
+    TOPC_SEXT    = 0x03 | TOPC_UNARY,
 
     TOPC_JMPIF      = 0x01,
     TOPC_JMP        = 0x02,
     TOPC_RET        = 0x03,
     TOPC_LOAD       = 0x04,
     TOPC_STORE      = 0x05,
+
+    TOPC_CALL,
+    TOPC_GEP,
 };
 
 

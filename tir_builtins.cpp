@@ -60,40 +60,43 @@ struct Initializer {
             for (AST_Type *t1 : unsigned_types) {
                 for (AST_Type *t2 : unsigned_types) {
                     TIR_Function *tirfn = new TIR_Function {};
+                    tirfn->is_inline = true;
 
-                    TIR_Value lhs = { .valuespace = TVS_ARGUMENT, .offset = 0 };
-                    TIR_Value rhs = { .valuespace = TVS_ARGUMENT, .offset = 1 };
+                    TIR_Value lhs = { .valuespace = TVS_ARGUMENT, .offset = 0, .type = t1 };
+                    TIR_Value rhs = { .valuespace = TVS_ARGUMENT, .offset = 1, .type = t2 };
                     tirfn->returntype = t1->size > t2->size ? t1 : t2;
 
                     if (t1->size < t2->size) {
                         tirfn->emit({ 
                             .opcode = TOPC_ZEXT,
                             .un = { 
-                                .dst = { .valuespace = TVS_TEMP,     .offset = 0 }, 
-                                .src = { .valuespace = TVS_ARGUMENT, .offset = 0 },
+                                .dst = { .valuespace = TVS_TEMP,     .offset = 0, .type = t2 }, 
+                                .src = { .valuespace = TVS_ARGUMENT, .offset = 0, .type = t1 },
                             }
                         });
-                        lhs = { .valuespace = TVS_TEMP, .offset = 0 };
+                        tirfn->temps_count += 1;
+                        lhs = { .valuespace = TVS_TEMP, .offset = 0, .type = t2 };
                     } else if (t2->size < t1->size) {
                         tirfn->emit({ 
                             .opcode = TOPC_ZEXT,
                             .un = { 
-                                .dst = { .valuespace = TVS_TEMP,     .offset = 0 }, 
-                                .src = { .valuespace = TVS_ARGUMENT, .offset = 1 },
+                                .dst = { .valuespace = TVS_TEMP,     .offset = 0, .type = t1 }, 
+                                .src = { .valuespace = TVS_ARGUMENT, .offset = 1, .type = t2 },
                             }
                         });
-                        rhs = { .valuespace = TVS_TEMP, .offset = 0 };
+                        tirfn->temps_count += 1;
+                        rhs = { .valuespace = TVS_TEMP, .offset = 0, .type = t1 };
                     }
 
                     tirfn->emit({ 
-                        .opcode = (TIR_OpCode)(op.opc | TOPC_UNSIGNED),
+                        .opcode = (TIR_OpCode)(op.opc | TOPC_UNSIGNED), 
                         .bin = { 
-                            .dst = { .valuespace = TVS_RET_VALUE }, 
+                            .dst = { .valuespace = TVS_RET_VALUE, .type = tirfn->returntype }, 
                             .lhs = lhs,
                             .rhs = rhs,
                         }
                     });
-                    tirfn->emit({ .opcode = TOPC_RET });
+                    tirfn->emit({ .opcode = TOPC_RET, });
 
                     builtin_binary_ops.insert({ op.tok, t1, t2 }, tirfn);
                 }
