@@ -32,11 +32,11 @@ bool CastJob::run(Message *msg) {
         return true;
     } else {
         BuiltinCast cast;
-        MUST (builtin_casts.find({ src->type, dsttype }, &cast));
-        MUST (cast.fn(global, src, &result));
+        MUST_OR_FAIL_JOB (builtin_casts.find({ src->type, dsttype }, &cast));
+        MUST_OR_FAIL_JOB (cast.fn(global, src, &result));
         prio = cast.priority;
         return true;
     }
-    set_error_flag();
+    NOT_IMPLEMENTED();
     return false;
 }

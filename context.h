@@ -240,6 +240,10 @@ struct Job {
            return nullptr;
        }
 
+       if (flags & JOB_ERROR) {
+           return nullptr;
+       }
+
        JobT *heap_job = new JobT(std::move(*(JobT*)this));
        global.add_job(heap_job);
 
