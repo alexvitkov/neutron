@@ -1,6 +1,7 @@
 #include "context.h"
 #include "ast.h"
 #include "typer.h"
+#include "tir.h"
 #include "tir_builtins.h"
 #include "cast.h"
 #include <sstream>
@@ -198,17 +199,17 @@ bool ResolveJob::run(Message *msg) {
                     TIR_Function *fn;
                     switch (fncall->args.size) {
                         case 2:
-                            MUST (builtin_binary_ops.find({ 
+                            MUST_OR_FAIL_JOB (builtin_binary_ops.find({ 
                                 fncall->op, 
                                 fncall->args[0]->type, 
                                 fncall->args[1]->type 
                             }, &fn));
 
-                            fncall->type = fncall->args[0]->type;
+                            fncall->type = fn->returntype;
                             fncall->tir_fn = fn;
                             return true;
                         case 1:
-                            MUST (builtin_unary_ops.find({ 
+                            MUST_OR_FAIL_JOB (builtin_unary_ops.find({ 
                                 fncall->op, 
                                 fncall->args[0]->type, 
                             }, &fn));

@@ -41,9 +41,6 @@ extern map<TypePair,    BuiltinCast>   builtin_casts;
 extern map<BinaryOpKey, TIR_Function*> builtin_binary_ops;
 extern map<UnaryOpKey,  TIR_Function*> builtin_unary_ops;
 
-
-extern TIR_Function add_u64_u64;
-
 bool number_literal_to_u64(AST_GlobalContext &global, AST_Value *src, AST_Value **dst);
 bool number_literal_to_u32(AST_GlobalContext &global, AST_Value *src, AST_Value **dst);
 bool number_literal_to_u16(AST_GlobalContext &global, AST_Value *src, AST_Value **dst);

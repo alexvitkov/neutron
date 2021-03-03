@@ -26,6 +26,8 @@ AST_PrimitiveType t_number_literal (PRIMITIVE_UNIQUE,  0, "number_literal");
 // variadic arguments are assumed to be of type any8
 AST_PrimitiveType t_any8 (PRIMITIVE_UNIQUE, 8, "any8");
 
+arr<AST_Type*> unsigned_types = { &t_u64, &t_u32, &t_u16, &t_u8 };
+arr<AST_Type*>   signed_types = { &t_i64, &t_i32, &t_i16, &t_i8 };
 
 
 struct GetTypeJob : Job {

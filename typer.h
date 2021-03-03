@@ -21,6 +21,9 @@ extern AST_PrimitiveType t_string_literal;
 extern AST_PrimitiveType t_number_literal;
 extern AST_PrimitiveType t_any8;
 
+extern arr<AST_Type*> unsigned_types;
+extern arr<AST_Type*>   signed_types;
+
 //AST_PointerType* get_pointer_type(AST_Type* pointed_type);
 //AST_ArrayType* get_array_type(AST_Type* base_type, u64 length);
 struct TypeCheckJob : Job {
