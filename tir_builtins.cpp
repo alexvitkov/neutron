@@ -25,9 +25,9 @@ map<TypePair, BuiltinCast>  builtin_casts;
 struct TIR_UnsignedBinOpBuilder : TIR_Builder {
     TIR_OpCode opcode;
 
-    TIR_UnsignedBinOpBuilder(TIR_OpCode opc) : opcode(opc) {}
+    TIR_UnsignedBinOpBuilder(TIR_OpCode opc) : TIR_Builder(false), opcode(opc) {}
 
-    void emit(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) override {
+    void emit1(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) override {
         AST_Type *lhs_type = args[0].type;
         AST_Type *rhs_type = args[1].type;
 
@@ -58,9 +58,51 @@ struct TIR_UnsignedBinOpBuilder : TIR_Builder {
             .opcode = (TIR_OpCode)(opcode), 
             .bin = { .dst = dst, .lhs = lhs, .rhs = rhs, }
         });
-        tirfn.emit({ .opcode = TOPC_RET, });
+        tirfn.emit({ .opcode = TOPC_RET });
     }
 };
+
+struct TIR_AssignmentBuilder : TIR_Builder {
+
+    TIR_AssignmentBuilder() : TIR_Builder(true) {};
+
+    TIR_Value emit2(TIR_Function &fn, arr<AST_Value*> &args, TIR_Value dst) override {
+        TIR_Value ptrloc;
+
+        AST_Value *lhs = args[0];
+        AST_Value *rhs = args[1];
+
+        if (get_location(fn, lhs, &ptrloc)) {
+            TIR_Value tmp = compile_node_rvalue(fn, rhs, {});
+
+            fn.emit({ 
+                .opcode = TOPC_STORE, 
+                .un = {
+                    .dst = ptrloc,
+                    .src = tmp,
+                }
+            });
+
+            if (dst) {
+                fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = tmp } });
+                return dst;
+            } else {
+                return tmp;
+            }
+        }
+        else {
+            TIR_Value lhsloc = compile_node_rvalue(fn, lhs, {});
+            TIR_Value valloc = compile_node_rvalue(fn, rhs, lhsloc);
+
+            if (dst) {
+                fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = valloc } });
+                return dst;
+            } else {
+                return ptrloc;
+            }
+        }
+    }
+} assignment_builder;
 
 
 template <typename T>
@@ -101,20 +143,22 @@ struct Initializer {
     }
 } _;
 
-TIR_Builder *get_builder(TokenType op, AST_Type *lhs, AST_Type *rhs) {
-    MUST (lhs IS AST_PRIMITIVE_TYPE);
-    MUST (rhs IS AST_PRIMITIVE_TYPE);
-
-    AST_PrimitiveType *plhs = (AST_PrimitiveType*)lhs;
-    AST_PrimitiveType *prhs = (AST_PrimitiveType*)rhs;
+TIR_Builder *get_builder(TokenType op, AST_Type *lhs, AST_Type *rhs, AST_Type **out) {
 
     switch (op) {
         case '=': {
-            NOT_IMPLEMENTED();
+            *out = lhs;
+            return &assignment_builder;
         }
 
         case '+': case '-': case '*': case '/': case '%':
         { 
+            MUST (lhs IS AST_PRIMITIVE_TYPE);
+            MUST (rhs IS AST_PRIMITIVE_TYPE);
+
+            AST_PrimitiveType *plhs = (AST_PrimitiveType*)lhs;
+            AST_PrimitiveType *prhs = (AST_PrimitiveType*)rhs;
+
             TIR_Builder *builder;
             if (binary_builders.find({ op, plhs, prhs }, &builder)) {
                 return builder;
@@ -133,7 +177,7 @@ TIR_Builder *get_builder(TokenType op, AST_Type *lhs, AST_Type *rhs) {
             if (plhs->kind == PRIMITIVE_UNSIGNED && prhs->kind == PRIMITIVE_UNSIGNED) {
                 opcode = (TIR_OpCode)(opcode | TOPC_UNSIGNED);
                 TIR_UnsignedBinOpBuilder *builder = new TIR_UnsignedBinOpBuilder(opcode);
-                builder->rettype = plhs->size > prhs->size ? plhs : prhs;
+                *out = plhs->size > prhs->size ? plhs : prhs;
                 binary_builders[{op, lhs, rhs}] = builder;
                 return builder;
             } else {

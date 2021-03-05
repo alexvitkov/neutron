@@ -508,6 +508,11 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
         case AST_FN_CALL: {
             AST_Call* fncall = (AST_Call*)node;
 
+            if (fncall->builder && fncall->builder->use_emit2) {
+                fncall->builder->emit2(fn, fncall->args, dst);
+                return dst;
+            }
+
             arr<TIR_Value> args;
 
             for (u32 i = 0; i < fncall->args.size; i++) {
@@ -522,7 +527,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             }
 
             if (fncall->builder) {
-                fncall->builder->emit(fn, args, dst);
+                fncall->builder->emit1(fn, args, dst);
                 return dst;
             }
 
@@ -578,43 +583,6 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             fn.writepoint = continuation;
             return {};
         }
-
-        /*
-        case AST_ASSIGNMENT: {
-            AST_BinaryOp *assign = (AST_BinaryOp*)node;
-            TIR_Value ptrloc;
-
-            if (get_location(fn, assign->lhs, &ptrloc)) {
-                TIR_Value tmp = compile_node_rvalue(fn, assign->rhs, {});
-
-                fn.emit({ 
-                    .opcode = TOPC_STORE, 
-                    .un = {
-                        .dst = ptrloc,
-                        .src = tmp,
-                    }
-                });
-
-                if (dst) {
-                    fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = tmp } });
-                    return dst;
-                } else {
-                    return tmp;
-                }
-            }
-            else {
-                TIR_Value lhsloc = compile_node_rvalue(fn, assign->lhs, {});
-                TIR_Value valloc = compile_node_rvalue(fn, assign->rhs, lhsloc);
-
-                if (dst) {
-                    fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = valloc } });
-                    return dst;
-                } else {
-                    return ptrloc;
-                }
-            }
-        }
-        */
 
         case AST_ADDRESS_OF: {
             AST_AddressOf *addrof = (AST_AddressOf*)node;

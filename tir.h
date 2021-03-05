@@ -245,8 +245,16 @@ struct TIR_Function {
 };
 
 struct TIR_Builder {
-    AST_Type *rettype;
-    virtual void emit(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) = 0;
+    bool use_emit2;
+
+    TIR_Builder(bool use_emit) : use_emit2(use_emit) {}
+
+    virtual void emit1(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) {
+        UNREACHABLE;
+    }
+    virtual TIR_Value emit2(TIR_Function &tirfn, arr<AST_Value*> &args, TIR_Value dst) {
+        UNREACHABLE;
+    }
 };
 
 
@@ -276,6 +284,8 @@ struct TIR_ExecutionJob : Job {
     virtual void on_complete(void *value) = 0;
 };
 
+TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst);
+bool get_location(TIR_Function &fn, AST_Value *val, TIR_Value *out);
 
 
 std::wostream& operator<< (std::wostream& o, TIR_Value loc);

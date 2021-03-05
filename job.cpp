@@ -201,12 +201,12 @@ bool ResolveJob::run(Message *msg) {
                             TIR_Builder *builder = get_builder(
                                 fncall->op, 
                                 fncall->args[0]->type, 
-                                fncall->args[1]->type 
+                                fncall->args[1]->type,
+                                &fncall->type
                             );
 
                             MUST_OR_FAIL_JOB (builder);
 
-                            fncall->type = builder->rettype;
                             fncall->builder = builder;
                             return true;
                         }

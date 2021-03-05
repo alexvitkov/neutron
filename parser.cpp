@@ -879,8 +879,8 @@ bool pop_operator(ParseExprState& state) {
         AST_Call *bin = state.ctx.alloc<AST_Call>(FNCALL_BINARY_OP, op.tok.type, nullptr, 2);
         bin->args.size = 2;
         ParseExprValue lhs, rhs;
-        rhs = state.pop_into(&bin->args[0]);
-        lhs = state.pop_into(&bin->args[1]);
+        rhs = state.pop_into(&bin->args[1]);
+        lhs = state.pop_into(&bin->args[0]);
         
         Location loc = {
             .file_id = lhs.loc.file_id,
