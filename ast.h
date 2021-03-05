@@ -68,11 +68,11 @@ struct AST_Call : AST_Value {
     BracketsKind  brackets;
     TokenType            op;
     AST_Value           *fn;
-    struct TIR_Function *tir_fn;
+    struct TIR_Builder  *builder;
     arr<AST_Value*> args;
 
     inline AST_Call(CallKind kind, TokenType op, AST_Value* fn, u32 args_reserve) 
-        : AST_Value(AST_FN_CALL, nullptr), kind(kind), op(op), fn(fn), args(args_reserve), tir_fn(nullptr) {}
+        : AST_Value(AST_FN_CALL, nullptr), kind(kind), op(op), fn(fn), args(args_reserve), builder(nullptr) {}
 };
 
 struct AST_PrimitiveType : AST_Type {
@@ -167,21 +167,47 @@ struct StructElement {
     u64 offset;
 };
 
-struct AST_Fn : AST_Value {
+struct AST_FnLike : AST_Value {
     const char* name;
-
     arr<const char*> argument_names;
-
     AST_Context block;
+
+    inline AST_FnLike(AST_NodeType nodetype, AST_Context* parent_ctx, const char* name) 
+        : AST_Value(nodetype, nullptr), block(parent_ctx), name(name)
+    {
+    }
+};
+
+struct AST_Fn : AST_FnLike {
+
     bool is_extern = false;
 
     inline AST_FnType *fntype() { return (AST_FnType*)type; };
 
     inline AST_Fn(AST_Context* parent_ctx, const char* name) 
-        : AST_Value(AST_FN, nullptr), block(parent_ctx), name(name) 
+        : AST_FnLike(AST_FN, parent_ctx, name)
     {
         block.fn = this;
     }
+};
+
+struct AST_Macro : AST_FnLike {
+    inline AST_Macro(AST_Context* parent_ctx, const char* name) 
+        : AST_FnLike(AST_MACRO, parent_ctx, name)
+    { 
+        block.fn = this;
+    }
+};
+
+struct AST_Emit : AST_Node {
+    AST_Node *node_to_emit;
+    inline AST_Emit() : AST_Node(AST_EMIT) {}
+};
+
+struct AST_Unquote : AST_Value {
+    AST_Value *value_to_unquote;
+    inline AST_Unquote(AST_Value *value_to_unquote) 
+        : AST_Value(AST_UNQUOTE, nullptr), value_to_unquote(value_to_unquote) {}
 };
 
 struct AST_Struct : AST_Type {
@@ -251,6 +277,7 @@ std::ostream& operator<< (std::ostream& o, AST_Node* node);
 
 void print(std::wostream& o, AST_Node* node, bool decl);
 void print(std::wostream& o, AST_Fn* node, bool decl);
+void print(std::wostream& o, AST_Macro* node, bool decl);
 void print(std::wostream& o, AST_Var* node, bool decl);
 void print(std::wostream& o, AST_Struct* node, bool decl);
 
@@ -275,5 +302,7 @@ std::wostream& operator<<(std::wostream& o, AST_AddressOf* node);
 std::wostream& operator<<(std::wostream& o, AST_UnresolvedId* node);
 std::wostream& operator<<(std::wostream& o, AST_StringLiteral* node);
 std::wostream& operator<<(std::wostream& o, AST_Typeof* node);
+std::wostream& operator<<(std::wostream& o, AST_Emit* node);
+std::wostream& operator<<(std::wostream& o, AST_Unquote* node);
 
 #endif // guard

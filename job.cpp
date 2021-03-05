@@ -196,19 +196,23 @@ bool ResolveJob::run(Message *msg) {
             } else {
                 
                 if (fncall->op) {
-                    TIR_Function *fn;
                     switch (fncall->args.size) {
-                        case 2:
-                            MUST_OR_FAIL_JOB (builtin_binary_ops.find({ 
+                        case 2: {
+                            TIR_Builder *builder = get_builder(
                                 fncall->op, 
                                 fncall->args[0]->type, 
                                 fncall->args[1]->type 
-                            }, &fn));
+                            );
 
-                            fncall->type = fn->returntype;
-                            fncall->tir_fn = fn;
+                            MUST_OR_FAIL_JOB (builder);
+
+                            fncall->type = builder->rettype;
+                            fncall->builder = builder;
                             return true;
-                        case 1:
+                        }
+                        case 1: {
+                            NOT_IMPLEMENTED();
+                            /*
                             MUST_OR_FAIL_JOB (builtin_unary_ops.find({ 
                                 fncall->op, 
                                 fncall->args[0]->type, 
@@ -217,6 +221,8 @@ bool ResolveJob::run(Message *msg) {
                             fncall->tir_fn = fn;
                             fncall->type = fncall->args[0]->type;
                             return true;
+                            */
+                        }
                         default:
                             UNREACHABLE;
                     }

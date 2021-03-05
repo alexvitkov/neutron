@@ -35,9 +35,9 @@
 #line 7 "/home/alex/src/neutron/keywords.gperf"
 struct tok { const char* name; TokenType type; };
 
-#define TOTAL_KEYWORDS 41
+#define TOTAL_KEYWORDS 44
 #define MIN_WORD_LENGTH 2
-#define MAX_WORD_LENGTH 6
+#define MAX_WORD_LENGTH 7
 #define MIN_HASH_VALUE 2
 #define MAX_HASH_VALUE 92
 /* maximum key range = 91, duplicates = 0 */
@@ -58,15 +58,15 @@ Perfect_Hash::hash (const char *str, size_t len)
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
-      93, 93, 93, 12, 93, 93, 93,  7, 40, 93,
-      93, 93,  2, 35, 93, 30, 30, 51, 93, 30,
-      93, 15, 93, 93,  0, 93, 55, 93, 93, 93,
+      93, 93, 93, 17, 93, 93, 93, 12, 40, 93,
+      93, 93,  7, 35, 93, 30, 30,  1, 93, 35,
+      93, 15, 93, 93,  0, 93, 31, 93, 93, 93,
       10,  5,  0, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
-      93, 93, 93, 93,  1, 93, 93,  0,  0, 93,
-      93, 10, 15, 93,  0, 10, 93, 93, 93, 93,
-      40, 30, 93, 93,  0,  5,  0, 35, 93,  0,
+      93, 93, 93, 93, 50, 93, 93,  0,  0, 93,
+      93,  0, 15, 93,  5, 10, 93, 93, 93,  0,
+      50, 40, 93, 93,  0,  5,  5, 35, 93,  0,
       93,  0, 93, 93, 25, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
       93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
@@ -91,103 +91,108 @@ Perfect_Hash::in_word_set (const char *str, size_t len)
   static struct tok wordlist[] =
     {
       {""}, {""},
-#line 32 "/home/alex/src/neutron/keywords.gperf"
-      {">>",     OP_SHIFTRIGHT},
-#line 45 "/home/alex/src/neutron/keywords.gperf"
-      {">>=",    OP_SHIFTRIGHTASSIGN},
-#line 23 "/home/alex/src/neutron/keywords.gperf"
-      {"true",   KW_TRUE},
-#line 26 "/home/alex/src/neutron/keywords.gperf"
-      {"while",  KW_WHILE},
-#line 28 "/home/alex/src/neutron/keywords.gperf"
-      {"typeof", KW_TYPEOF},
-#line 34 "/home/alex/src/neutron/keywords.gperf"
-      {">=",     OP_GREATEREQUALS},
-#line 47 "/home/alex/src/neutron/keywords.gperf"
-      {"^=",     OP_BITXORASSIGN},
-#line 41 "/home/alex/src/neutron/keywords.gperf"
-      {"*=",     OP_MULASSIGN},
-      {""},
-#line 21 "/home/alex/src/neutron/keywords.gperf"
-      {"struct", KW_STRUCT},
 #line 35 "/home/alex/src/neutron/keywords.gperf"
+      {">>",     OP_SHIFTRIGHT},
+#line 48 "/home/alex/src/neutron/keywords.gperf"
+      {">>=",    OP_SHIFTRIGHTASSIGN},
+#line 22 "/home/alex/src/neutron/keywords.gperf"
+      {"emit",   KW_EMIT},
+#line 21 "/home/alex/src/neutron/keywords.gperf"
+      {"macro",  KW_MACRO},
+#line 25 "/home/alex/src/neutron/keywords.gperf"
+      {"return", KW_RETURN},
+#line 37 "/home/alex/src/neutron/keywords.gperf"
+      {">=",     OP_GREATEREQUALS},
+#line 45 "/home/alex/src/neutron/keywords.gperf"
+      {"/=",     OP_DIVASSIGN},
+#line 26 "/home/alex/src/neutron/keywords.gperf"
+      {"true",   KW_TRUE},
+#line 29 "/home/alex/src/neutron/keywords.gperf"
+      {"while",  KW_WHILE},
+#line 31 "/home/alex/src/neutron/keywords.gperf"
+      {"typeof", KW_TYPEOF},
+#line 38 "/home/alex/src/neutron/keywords.gperf"
       {"==",     OP_DOUBLEEQUALS},
 #line 16 "/home/alex/src/neutron/keywords.gperf"
       {"i64",    KW_I64},
-#line 43 "/home/alex/src/neutron/keywords.gperf"
-      {"%=",    OP_MODASSIGN},
+#line 44 "/home/alex/src/neutron/keywords.gperf"
+      {"*=",     OP_MULASSIGN},
       {""},
-#line 22 "/home/alex/src/neutron/keywords.gperf"
-      {"return", KW_RETURN},
-#line 33 "/home/alex/src/neutron/keywords.gperf"
+#line 24 "/home/alex/src/neutron/keywords.gperf"
+      {"struct", KW_STRUCT},
+#line 36 "/home/alex/src/neutron/keywords.gperf"
       {"<=",     OP_LESSEREQUALS},
 #line 19 "/home/alex/src/neutron/keywords.gperf"
       {"f64",    KW_F64},
-#line 38 "/home/alex/src/neutron/keywords.gperf"
-      {"!=",     OP_NOTEQUALS},
-#line 24 "/home/alex/src/neutron/keywords.gperf"
+#line 46 "/home/alex/src/neutron/keywords.gperf"
+      {"%=",    OP_MODASSIGN},
+#line 27 "/home/alex/src/neutron/keywords.gperf"
       {"false",  KW_FALSE},
       {""},
-#line 31 "/home/alex/src/neutron/keywords.gperf"
+#line 34 "/home/alex/src/neutron/keywords.gperf"
       {"<<",     OP_SHIFTLEFT},
-#line 44 "/home/alex/src/neutron/keywords.gperf"
+#line 47 "/home/alex/src/neutron/keywords.gperf"
       {"<<=",    OP_SHIFTLEFTASSIGN},
-      {""}, {""}, {""},
-#line 25 "/home/alex/src/neutron/keywords.gperf"
+#line 41 "/home/alex/src/neutron/keywords.gperf"
+      {"!=",     OP_NOTEQUALS},
+      {""}, {""},
+#line 28 "/home/alex/src/neutron/keywords.gperf"
       {"if",     KW_IF},
 #line 15 "/home/alex/src/neutron/keywords.gperf"
       {"i32",    KW_I32 },
       {""}, {""}, {""},
-#line 48 "/home/alex/src/neutron/keywords.gperf"
+#line 51 "/home/alex/src/neutron/keywords.gperf"
       {"|=",     OP_BITORASSIGN},
 #line 18 "/home/alex/src/neutron/keywords.gperf"
       {"f32",    KW_F32},
-#line 17 "/home/alex/src/neutron/keywords.gperf"
-      {"bool",   KW_BOOL},
-      {""}, {""},
-#line 40 "/home/alex/src/neutron/keywords.gperf"
+      {""}, {""}, {""},
+#line 43 "/home/alex/src/neutron/keywords.gperf"
       {"-=",     OP_SUBASSIGN},
 #line 12 "/home/alex/src/neutron/keywords.gperf"
       {"u64",    KW_U64},
       {""}, {""}, {""},
-#line 39 "/home/alex/src/neutron/keywords.gperf"
+#line 42 "/home/alex/src/neutron/keywords.gperf"
       {"+=",     OP_ADDASSIGN},
+#line 13 "/home/alex/src/neutron/keywords.gperf"
+      {"i8",     KW_I8},
+#line 17 "/home/alex/src/neutron/keywords.gperf"
+      {"bool",   KW_BOOL},
+      {""}, {""},
+#line 49 "/home/alex/src/neutron/keywords.gperf"
+      {"&=",     OP_BITANDASSIGN},
 #line 14 "/home/alex/src/neutron/keywords.gperf"
       {"i16",    KW_I16 },
       {""}, {""}, {""},
-#line 46 "/home/alex/src/neutron/keywords.gperf"
-      {"&=",     OP_BITANDASSIGN},
-#line 27 "/home/alex/src/neutron/keywords.gperf"
-      {"for",    KW_FOR},
-      {""}, {""}, {""},
-#line 37 "/home/alex/src/neutron/keywords.gperf"
+#line 40 "/home/alex/src/neutron/keywords.gperf"
       {"||",     OP_OR},
 #line 11 "/home/alex/src/neutron/keywords.gperf"
       {"u32",    KW_U32 },
       {""}, {""}, {""},
-#line 20 "/home/alex/src/neutron/keywords.gperf"
-      {"fn",     KW_FN},
-#line 42 "/home/alex/src/neutron/keywords.gperf"
-      {"/=",     OP_DIVASSIGN},
-      {""}, {""}, {""},
+#line 50 "/home/alex/src/neutron/keywords.gperf"
+      {"^=",     OP_BITXORASSIGN},
 #line 30 "/home/alex/src/neutron/keywords.gperf"
+      {"for",    KW_FOR},
+      {""}, {""}, {""},
+#line 33 "/home/alex/src/neutron/keywords.gperf"
       {"--",     OP_MINUSMINUS},
-#line 49 "/home/alex/src/neutron/keywords.gperf"
+#line 52 "/home/alex/src/neutron/keywords.gperf"
       {"...",    OP_VARARGS},
       {""}, {""}, {""},
-#line 13 "/home/alex/src/neutron/keywords.gperf"
-      {"i8",     KW_I8},
+#line 20 "/home/alex/src/neutron/keywords.gperf"
+      {"fn",     KW_FN},
+#line 9 "/home/alex/src/neutron/keywords.gperf"
+      {"u8",     KW_U8},
+      {""}, {""}, {""},
+#line 32 "/home/alex/src/neutron/keywords.gperf"
+      {"++",     OP_PLUSPLUS},
 #line 10 "/home/alex/src/neutron/keywords.gperf"
       {"u16",    KW_U16 },
-      {""}, {""}, {""},
-#line 29 "/home/alex/src/neutron/keywords.gperf"
-      {"++",     OP_PLUSPLUS},
-      {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
-#line 36 "/home/alex/src/neutron/keywords.gperf"
+      {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
+#line 39 "/home/alex/src/neutron/keywords.gperf"
       {"&&",     OP_AND},
       {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
-#line 9 "/home/alex/src/neutron/keywords.gperf"
-      {"u8",     KW_U8}
+#line 23 "/home/alex/src/neutron/keywords.gperf"
+      {"unquote", KW_UNQUOTE}
     };
 
   if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)

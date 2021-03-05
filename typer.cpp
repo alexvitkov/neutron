@@ -317,7 +317,7 @@ bool TypeCheckJob::run(Message *msg) {
         }
 
         case AST_FN: {
-            AST_Fn* fn = (AST_Fn*)node;
+            AST_Fn *fn = (AST_Fn*)node;
 
             GetTypeJob gettype(ctx, fn);
             WAIT (gettype, GetTypeJob);
@@ -343,13 +343,20 @@ bool TypeCheckJob::run(Message *msg) {
             return true;
         }
 
+        case AST_MACRO: {
+            AST_Macro *macro = (AST_Macro*)node;
+
+            return true;
+        }
+
         case AST_VAR: {
-            AST_Var* var = (AST_Var*)node;
+            AST_Var *var = (AST_Var*)node;
             if (var->type) {
                 MUST_OR_FAIL_JOB (validate_type(ctx, &var->type));
             } else {
                 assert(var->argindex >= 0);
-                var->type = ctx.fn->fntype()->param_types[var->argindex];
+                assert(ctx.fn IS AST_FN);
+                var->type = ((AST_Fn*)ctx.fn)->fntype()->param_types[var->argindex];
             }
             return true;
         }

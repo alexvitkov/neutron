@@ -177,6 +177,9 @@ Location location_of(AST_Context& ctx, AST_Node** node) {
 struct TokenReader;
 void unexpected_token(AST_Context& ctx, Token actual, TokenType expected);
 
+AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl);
+AST_Macro* parse_macro(AST_Context& ctx, TokenReader& r);
+AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl);
 
 
 NumberData* parse_number(AST_Context& ctx, char** pos)  {
@@ -524,89 +527,150 @@ bool parse_type_list(AST_Context& ctx, TokenReader& r, TokenType delim, bucketed
 
 bool parse_block(AST_Context& block, TokenReader& r);
 
+
+enum ParseNodeRet {
+    PARSE_NODE_ERROR = 0,
+    PARSE_NODE_DONE,
+    PARSE_NODE_STMT,
+    PARSE_NODE_DECL,
+};
+
+ParseNodeRet parse_node(AST_Context &ctx, AST_Node **out, TokenReader &r, TokenType delim) {
+    switch (r.peek().type) {
+        case KW_FN: {
+            *out = parse_fn(ctx, r, true);
+            return PARSE_NODE_DECL;
+        }
+        case KW_MACRO: {
+            *out = parse_macro(ctx, r);
+            return PARSE_NODE_DECL;
+        }
+        case KW_STRUCT: {
+            *out = parse_struct(ctx, r, true);
+            return PARSE_NODE_DECL;
+        }
+        case KW_EMIT: {
+            if (!ctx.fn || !(ctx.fn IS AST_MACRO)) {
+                NOT_IMPLEMENTED("TODO ERROR");
+            }
+            r.pop();
+            AST_Emit *emit = ctx.alloc<AST_Emit>();
+            ParseNodeRet ret = parse_node(ctx, &emit->node_to_emit, r, TOK_NONE);
+
+            if (ret == PARSE_NODE_ERROR || ret == PARSE_NODE_DONE)
+                return PARSE_NODE_ERROR;
+
+            *out = emit;
+            return PARSE_NODE_STMT;
+        }
+        case KW_RETURN: {
+            Token return_tok = r.pop_full();
+
+            AST_Return *ret;
+            if (r.peek().type == TOK(';')) {
+                ret = ctx.alloc<AST_Return>(nullptr);
+            } else {
+                ret = ctx.alloc<AST_Return>(nullptr);
+                if (!parse_expr(ctx, &ret->value, r, {}))
+                    return PARSE_NODE_ERROR;
+            }
+
+            r.ctx.global.definition_locations[ret] = {
+                .file_id = r.sf.id,
+                .loc = {
+                    .start = return_tok.loc.start,
+                    .end = r.pos_in_file,
+                }
+            };
+
+            if (!r.expect(TOK(';')).type)
+                return PARSE_NODE_ERROR;
+            *out = ret;
+
+            return PARSE_NODE_STMT;
+        }
+        case KW_IF: {
+            Token if_tok = r.pop_full();
+
+            AST_If* ifs = ctx.alloc<AST_If>(&ctx);
+            if (!parse_expr(ctx, &ifs->condition, r, {}))
+                return PARSE_NODE_ERROR;
+
+            if (!parse_block(ifs->then_block, r))
+                return PARSE_NODE_ERROR;
+
+            r.ctx.global.definition_locations[ifs] = {
+                .file_id = r.sf.id,
+                .loc = {
+                    .start = if_tok.loc.start,
+                    .end = r.pos_in_file,
+                }
+            };
+
+            *out = ifs;
+            return PARSE_NODE_STMT;
+        }
+
+        case KW_WHILE: {
+            Token while_tok = r.pop_full();
+
+            AST_While* whiles = ctx.alloc<AST_While>(&ctx);
+            if (!parse_expr(ctx, &whiles->condition, r, {}))
+                return PARSE_NODE_ERROR;
+            if (!parse_block(whiles->block, r))
+                return PARSE_NODE_ERROR;
+
+            r.ctx.global.definition_locations[whiles] = {
+                .file_id = r.sf.id,
+                .loc = {
+                    .start = while_tok.loc.start,
+                    .end = r.pos_in_file,
+                }
+            };
+
+            *out = whiles;
+            return PARSE_NODE_STMT;
+        }
+
+        default: {
+            if (r.peek().type == delim) {
+                r.pop();
+                return PARSE_NODE_DONE;
+            }
+
+            if (!parse_expr(ctx, (AST_Value**)out, r, {}))
+                return PARSE_NODE_ERROR;
+            if (!r.expect(TOK(';')).type)
+                return PARSE_NODE_ERROR;
+
+            return PARSE_NODE_STMT;
+        }
+    }
+}
+
+
 bool parse_scope(AST_Context& block, TokenReader& r, TokenType delim) {
+    bool done;
     while (true) {
-        bool err = false;
-        if (parse_decl_statement(block, r, &err))
-            continue;
-        MUST (!err);
-
-        switch(r.peek().type) {
-            case KW_RETURN: {
-                Token return_tok = r.pop_full();
-
-                AST_Return *ret;
-                if (r.peek().type == TOK(';')) {
-                    ret = block.alloc<AST_Return>(nullptr);
-                } else {
-                    ret = block.alloc<AST_Return>(nullptr);
-                    MUST (parse_expr(block, &ret->value, r, {}));
-                }
-                block.statements.push(ret);
-
-                r.ctx.global.definition_locations[ret] = {
-                    .file_id = r.sf.id,
-                    .loc = {
-                        .start = return_tok.loc.start,
-                        .end = r.pos_in_file,
-                    }
-                };
-
-                MUST (r.expect(TOK(';')).type);
+        AST_Node *node;
+        switch (parse_node(block, &node, r, delim)) {
+            case PARSE_NODE_DONE: {
+                if (block.hanging_declarations == 0)
+                    block.close();
+                return true;
+            }
+            case PARSE_NODE_ERROR: {
+                return false;
+            }
+            case PARSE_NODE_STMT: {
+                block.statements.push(node);
                 break;
             }
-            case KW_IF: {
-                Token if_tok = r.pop_full();
-
-                AST_If* ifs = block.alloc<AST_If>(&block);
-                MUST (parse_expr(block, &ifs->condition, r, {}));
-                MUST (parse_block(ifs->then_block, r));
-                block.statements.push(ifs);
-
-                r.ctx.global.definition_locations[ifs] = {
-                    .file_id = r.sf.id,
-                    .loc = {
-                        .start = if_tok.loc.start,
-                        .end = r.pos_in_file,
-                    }
-                };
-
+            case PARSE_NODE_DECL: {
                 break;
             }
-            case KW_WHILE: {
-                Token while_tok = r.pop_full();
-
-                AST_While* whiles = block.alloc<AST_While>(&block);
-                MUST (parse_expr(block, &whiles->condition, r, {}));
-                MUST (parse_block(whiles->block, r));
-                block.statements.push(whiles);
-
-                r.ctx.global.definition_locations[whiles] = {
-                    .file_id = r.sf.id,
-                    .loc = {
-                        .start = while_tok.loc.start,
-                        .end = r.pos_in_file,
-                    }
-                };
-
-                break;
-            }
-
-            default: {
-                if (delim == r.peek().type) {
-                    r.pop();
-
-                    if (block.hanging_declarations == 0) {
-                        block.close();
-                    }
-                    return true;
-                }
-                AST_Node *& expr = block.statements.push(nullptr);
-                MUST (parse_expr(block, (AST_Value**)&expr, r, {}));
-                MUST (r.expect(TOK(';')).type);
-
-                break;
-            }
+            default:
+                UNREACHABLE;
         }
     }
 }
@@ -624,17 +688,13 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
     // has been peeked, no need for MUST check
     assert (fn_kw.type);
 
-    Token nameToken;
-    const char* name = nullptr;
-
+    Token nameToken = {};
     if (decl) {
         nameToken = r.expect_full(TOK_ID);
-        name = nameToken.name;
         MUST (nameToken.type);
-
     }
 
-    AST_Fn *fn = ctx.alloc<AST_Fn>(&ctx, name);
+    AST_Fn *fn = ctx.alloc<AST_Fn>(&ctx, nameToken.name);
     AST_FnType* temp_fn_type = ctx.alloc_temp<AST_FnType>(ctx.global.target.pointer_size);
     
     if (decl) {
@@ -719,6 +779,38 @@ AST_Fn* parse_fn(AST_Context& ctx, TokenReader& r, bool decl) {
 
     return fn;
 }
+
+
+AST_Macro* parse_macro(AST_Context& ctx, TokenReader& r) {
+    Token macro_kw = r.expect_full(KW_MACRO);
+
+    // parse_macro only ever gets called if the 'macro' keyword
+    // has been peeked, no need for MUST check
+    assert (macro_kw.type);
+
+    Token nameToken = r.expect_full(TOK_ID);
+    MUST (nameToken.type);
+
+    AST_Macro *macro = ctx.alloc<AST_Macro>(&ctx, nameToken.name);
+
+    MUST(parse_block(macro->block, r));
+
+    MUST(ctx.global.declare({ .name = macro->name }, macro, true));
+
+    ctx.global.definition_locations[macro] = {
+        .file_id = r.sf.id,
+        .loc = {
+           .start = macro_kw.loc.start,
+           .end = r.pos_in_file,
+        }
+    };
+
+    return macro;
+}
+
+
+
+
 
 struct ParseExprValue {
     AST_Value *val;
@@ -1136,27 +1228,6 @@ AST_Struct *parse_struct(AST_Context& ctx, TokenReader& r, bool decl) {
     MUST (parse_type_list(ctx, r, TOK('}'), &st->members));
 
     return declare_succeeded ? st : nullptr;
-}
-
-bool parse_decl_statement(AST_Context& ctx, TokenReader& r, bool* error) {
-    switch (r.peek().type) {
-        case KW_FN: {
-            if (!parse_fn(ctx, r, true)) {
-                *error = true;
-                return false;
-            }
-            return true;
-        }
-        case KW_STRUCT: {
-            if (!parse_struct(ctx, r, true)) {
-                *error = true;
-                return false;
-            }
-            return true;
-        }
-        default:
-            return false;
-    }
 }
 
 bool parse_source_file(AST_Context& global, SourceFile& sf) {

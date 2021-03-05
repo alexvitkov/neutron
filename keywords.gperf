@@ -18,6 +18,9 @@ bool,   KW_BOOL
 f32,    KW_F32
 f64,    KW_F64
 fn,     KW_FN
+macro,  KW_MACRO
+emit,   KW_EMIT
+unquote, KW_UNQUOTE
 struct, KW_STRUCT
 return, KW_RETURN
 true,   KW_TRUE

@@ -203,7 +203,6 @@ struct TIR_Context {
 
 void add_string_global(TIR_Context *tir_context, AST_Var *the_string_var, AST_StringLiteral *the_string_literal);
 
-
 struct TIR_Function {
     TIR_Context *tir_context;
     AST_Fn* ast_fn;
@@ -243,6 +242,11 @@ struct TIR_Function {
     void compile();
 
     void print();
+};
+
+struct TIR_Builder {
+    AST_Type *rettype;
+    virtual void emit(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) = 0;
 };
 
 

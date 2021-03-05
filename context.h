@@ -16,6 +16,7 @@ struct AST_Value;
 struct AST_UnresolvedId;
 struct AST_StringLiteral;
 struct AST_Fn; 
+struct AST_FnLike; 
 struct AST_Call;
 struct AST_FnType;
 struct AST_Type; 
@@ -59,7 +60,7 @@ struct AST_Context : AST_Node {
     AST_GlobalContext &global;
     AST_Context *parent;
 
-    AST_Fn* fn; // the function that this context is a part of
+    AST_FnLike* fn; // the function that this context is a part of
     arr<AST_Context*> children;
 
     AST_Context(AST_Context* parent);
@@ -192,7 +193,6 @@ struct AST_GlobalContext : AST_Context {
     // so we need those maps to make sure we don't create the same composite type twice.
     map<AST_FnType*, AST_FnType*> fn_types_hash; // TODO DS - thish should be a hashset
     map<AST_Type*, AST_PointerType*> pointer_types;
-
 
     arr<Job*> ready_jobs;
     map<u64, Job*> jobs_by_id;

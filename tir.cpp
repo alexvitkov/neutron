@@ -507,34 +507,29 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
 
         case AST_FN_CALL: {
             AST_Call* fncall = (AST_Call*)node;
-            
-            TIR_Function *tir_callee;
-            if (fncall->tir_fn) {
-                tir_callee = fncall->tir_fn;
-            } else {
-                AST_Fn *callee = (AST_Fn*)fncall->fn;
-                tir_callee = fn.tir_context->fns[callee];
-                assert(fncall->fn IS AST_FN);
-            }
 
             arr<TIR_Value> args;
 
             for (u32 i = 0; i < fncall->args.size; i++) {
-                AST_Type* param_type = &t_any8;
-                if (i < tir_callee->parameters.size)
-                    param_type = tir_callee->parameters[i].type;
-
-                TIR_Value  arg_dst = fn.alloc_temp(param_type);
                 TIR_Value arg;
 
                 if (fncall->args[i]->type IS AST_STRUCT) {
                     assert (get_location(fn, fncall->args[i], &arg));
-                }
-                else {
-                    arg = compile_node_rvalue(fn, fncall->args[i], arg_dst);
+                } else {
+                    arg = compile_node_rvalue(fn, fncall->args[i], {});
                 }
                 args.push(arg);
             }
+
+            if (fncall->builder) {
+                fncall->builder->emit(fn, args, dst);
+                return dst;
+            }
+
+            TIR_Function *tir_callee;
+            AST_Fn *callee = (AST_Fn*)fncall->fn;
+            tir_callee = fn.tir_context->fns[callee];
+            assert(fncall->fn IS AST_FN);
 
             if (!dst && fn.retval) {
                 dst = fn.alloc_temp(fn.retval.type);
@@ -543,16 +538,16 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             if (tir_callee->is_inline) {
                 InlineFnState state {
                     .fn     = fn,
-                    .callee = *tir_callee,
-                    .retval = dst,
-                    .args   = args,
+                        .callee = *tir_callee,
+                        .retval = dst,
+                        .args   = args,
                 };
                 inline_function(state);
             } else {
                 fn.emit({ 
-                    .opcode = TOPC_CALL, 
-                    .call = { .dst = dst, .fn = tir_callee, .args = args.release(), }
-                });
+                        .opcode = TOPC_CALL, 
+                        .call = { .dst = dst, .fn = tir_callee, .args = args.release(), }
+                        });
             }
 
             return dst;
@@ -738,8 +733,12 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             assert(type->kind == PRIMITIVE_UNSIGNED);
 
             TIR_Value val = { .valuespace = TVS_VALUE, .offset = num->u64_val, .type = num->type };
-            fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
-            return dst;
+
+            if (dst) {
+                fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
+                return dst;
+            }
+            return val;
         }
 
         case AST_NUMBER: {

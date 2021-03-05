@@ -3,9 +3,64 @@
 #include "typer.h"
 #include "tir.h"
 
-map<TypePair,    BuiltinCast>   builtin_casts;
-map<BinaryOpKey, TIR_Function*> builtin_binary_ops;
-map<UnaryOpKey,  TIR_Function*> builtin_unary_ops;
+struct UnaryOpKey {
+    TokenType op;
+    AST_Type *inner;
+};
+u32 map_hash(UnaryOpKey key) { return map_hash(key.inner) ^ key.op; }
+bool map_equals(UnaryOpKey a, UnaryOpKey b) { return a.inner == b.inner && a.op == b.op; }
+
+struct BinaryOpKey {
+    TokenType op;
+    AST_Type *lhs;
+    AST_Type *rhs;
+};
+u32 map_hash(BinaryOpKey key) { return map_hash(key.lhs) ^ (map_hash(key.rhs) << 1) ^ key.op; }
+bool map_equals(BinaryOpKey a, BinaryOpKey b) { return a.lhs == b.lhs && a.rhs == b.rhs && a.op == b.op; }
+map <BinaryOpKey, TIR_Builder*> binary_builders;
+
+map<TypePair, BuiltinCast>  builtin_casts;
+
+
+struct TIR_UnsignedBinOpBuilder : TIR_Builder {
+    TIR_OpCode opcode;
+
+    TIR_UnsignedBinOpBuilder(TIR_OpCode opc) : opcode(opc) {}
+
+    void emit(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) override {
+        AST_Type *lhs_type = args[0].type;
+        AST_Type *rhs_type = args[1].type;
+
+        TIR_Value lhs = { .valuespace = TVS_ARGUMENT, .offset = 0, .type = lhs_type };
+        TIR_Value rhs = { .valuespace = TVS_ARGUMENT, .offset = 1, .type = rhs_type };
+
+        tirfn.returntype = lhs_type->size > rhs_type->size ? lhs_type : rhs_type;
+
+        if (lhs_type->size < rhs_type->size) {
+            TIR_Value lhs_old = lhs;
+            lhs = tirfn.alloc_temp(rhs_type);
+
+            tirfn.emit({ 
+                .opcode = TOPC_ZEXT,
+                .un = { .dst = lhs, .src = lhs_old, }
+            });
+        } else if (rhs_type->size < lhs_type->size) {
+            TIR_Value rhs_old = rhs;
+            rhs = tirfn.alloc_temp(rhs_type);
+
+            tirfn.emit({ 
+                .opcode = TOPC_ZEXT,
+                .un = { .dst = rhs, .src = rhs_old, }
+            });
+        }
+
+        tirfn.emit({ 
+            .opcode = (TIR_OpCode)(opcode), 
+            .bin = { .dst = dst, .lhs = lhs, .rhs = rhs, }
+        });
+        tirfn.emit({ .opcode = TOPC_RET, });
+    }
+};
 
 
 template <typename T>
@@ -43,64 +98,51 @@ struct Initializer {
         builtin_casts.insert({ &t_number_literal, &t_u32 }, { number_literal_to_u32, 90 });
         builtin_casts.insert({ &t_number_literal, &t_u16 }, { number_literal_to_u16, 80 });
         builtin_casts.insert({ &t_number_literal, &t_u8  }, { number_literal_to_u8,  70 });
-
-        struct Pair { 
-            TokenType tok; 
-            TIR_OpCode opc; 
-        };
-
-        arr<Pair> opcodes = { 
-            { (TokenType)('+'), TOPC_ADD }, 
-            { (TokenType)('-'), TOPC_SUB }, 
-            { (TokenType)('*'), TOPC_MUL },
-            { (TokenType)('/'), TOPC_DIV }
-        };
-
-        for (Pair op : opcodes) {
-            for (AST_Type *t1 : unsigned_types) {
-                for (AST_Type *t2 : unsigned_types) {
-                    TIR_Function *tirfn = new TIR_Function {};
-                    tirfn->is_inline = true;
-
-                    TIR_Value lhs = { .valuespace = TVS_ARGUMENT, .offset = 0, .type = t1 };
-                    TIR_Value rhs = { .valuespace = TVS_ARGUMENT, .offset = 1, .type = t2 };
-                    tirfn->returntype = t1->size > t2->size ? t1 : t2;
-
-                    if (t1->size < t2->size) {
-                        tirfn->emit({ 
-                            .opcode = TOPC_ZEXT,
-                            .un = { 
-                                .dst = { .valuespace = TVS_TEMP,     .offset = 0, .type = t2 }, 
-                                .src = { .valuespace = TVS_ARGUMENT, .offset = 0, .type = t1 },
-                            }
-                        });
-                        tirfn->temps_count += 1;
-                        lhs = { .valuespace = TVS_TEMP, .offset = 0, .type = t2 };
-                    } else if (t2->size < t1->size) {
-                        tirfn->emit({ 
-                            .opcode = TOPC_ZEXT,
-                            .un = { 
-                                .dst = { .valuespace = TVS_TEMP,     .offset = 0, .type = t1 }, 
-                                .src = { .valuespace = TVS_ARGUMENT, .offset = 1, .type = t2 },
-                            }
-                        });
-                        tirfn->temps_count += 1;
-                        rhs = { .valuespace = TVS_TEMP, .offset = 0, .type = t1 };
-                    }
-
-                    tirfn->emit({ 
-                        .opcode = (TIR_OpCode)(op.opc | TOPC_UNSIGNED), 
-                        .bin = { 
-                            .dst = { .valuespace = TVS_RET_VALUE, .type = tirfn->returntype }, 
-                            .lhs = lhs,
-                            .rhs = rhs,
-                        }
-                    });
-                    tirfn->emit({ .opcode = TOPC_RET, });
-
-                    builtin_binary_ops.insert({ op.tok, t1, t2 }, tirfn);
-                }
-            }
-        }
     }
 } _;
+
+TIR_Builder *get_builder(TokenType op, AST_Type *lhs, AST_Type *rhs) {
+    MUST (lhs IS AST_PRIMITIVE_TYPE);
+    MUST (rhs IS AST_PRIMITIVE_TYPE);
+
+    AST_PrimitiveType *plhs = (AST_PrimitiveType*)lhs;
+    AST_PrimitiveType *prhs = (AST_PrimitiveType*)rhs;
+
+    switch (op) {
+        case '=': {
+            NOT_IMPLEMENTED();
+        }
+
+        case '+': case '-': case '*': case '/': case '%':
+        { 
+            TIR_Builder *builder;
+            if (binary_builders.find({ op, plhs, prhs }, &builder)) {
+                return builder;
+            }
+
+            TIR_OpCode opcode;
+            switch (op) {
+                case '+': opcode = TOPC_ADD; break;
+                case '-': opcode = TOPC_SUB; break;
+                case '*': opcode = TOPC_MUL; break;
+                case '/': opcode = TOPC_DIV; break;
+                case '%': opcode = TOPC_MOD; break;
+                default: UNREACHABLE;
+            }
+
+            if (plhs->kind == PRIMITIVE_UNSIGNED && prhs->kind == PRIMITIVE_UNSIGNED) {
+                opcode = (TIR_OpCode)(opcode | TOPC_UNSIGNED);
+                TIR_UnsignedBinOpBuilder *builder = new TIR_UnsignedBinOpBuilder(opcode);
+                builder->rettype = plhs->size > prhs->size ? plhs : prhs;
+                binary_builders[{op, lhs, rhs}] = builder;
+                return builder;
+            } else {
+                NOT_IMPLEMENTED();
+            }
+        }
+
+        default:
+            UNREACHABLE;
+    }
+}
+

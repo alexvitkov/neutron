@@ -62,6 +62,7 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
 
     switch (node->nodetype) {
         case AST_FN:             print(o, (AST_Fn*)node, decl); break;
+        case AST_MACRO:          print(o, (AST_Macro*)node, decl); break;
         case AST_VAR:            print(o, (AST_Var*)node, decl); break;
         case AST_STRUCT:         print(o, (AST_Struct*)node, decl); break;
 
@@ -83,6 +84,8 @@ void print(std::wostream& o, AST_Node* node, bool decl) {
         case AST_UNRESOLVED_ID:  o << (AST_UnresolvedId*)node; break;
         case AST_STRING_LITERAL: o << (AST_StringLiteral*)node; break;
         case AST_TYPEOF:         o << (AST_Typeof*)node; break;
+        case AST_EMIT:           o << (AST_Emit*)node; break;
+        case AST_UNQUOTE:        o << (AST_Unquote*)node; break;
         default:                 o << "NOPRINT[" << (int)node->nodetype << ']'; break;
     }
 }
@@ -131,6 +134,17 @@ void print(std::wostream& o, AST_Fn* fn, bool decl) {
     }
 }
 
+void print(std::wostream& o, AST_Macro* fn, bool decl) {
+    if (decl) {
+        o << "macro ";
+        if (fn->name)
+            o << fn->name;
+        o << " " << &fn->block;
+    } else {
+        o << fn->name;
+    }
+}
+
 std::wostream& operator<< (std::wostream& o, AST_PrimitiveType* node) {
     o << node->name;
     return o;
@@ -138,10 +152,7 @@ std::wostream& operator<< (std::wostream& o, AST_PrimitiveType* node) {
 
 void print(std::wostream& o, AST_Var* node, bool decl) {
     if (decl) {
-        o << "let " << (node->name ? node->name : "_") << ": " << node->type;
-        //if (node->initial_value)
-        //  o << " = "  << node->initial_value;
-        o << ";\n";
+        o << "" << (node->name ? node->name : "_") << ": " << node->type << ";\n";
     }
     else {
         if (node->name)
@@ -364,6 +375,16 @@ std::wostream& operator<<(std::wostream& o, AST_FnType* node) {
     if (node->param_types.size > 0)
         o << ")";
     o << "->" << node->returntype;
+    return o;
+}
+
+std::wostream& operator<<(std::wostream& o, AST_Emit* node) {
+    o << "emit " << node->node_to_emit;
+    return o;
+}
+
+std::wostream& operator<<(std::wostream& o, AST_Unquote* node) {
+    o << "(unquote " << node->value_to_unquote << ")";
     return o;
 }
 
