@@ -49,22 +49,25 @@ int main(int argc, const char** argv) {
         }
     }
 
-    JobGroup *all_tir_compiled_job = new JobGroup(global, L"all_tir_compiled");
+    JobGroup _all_tir_compiled_job (global, L"all_tir_compiled");
+    HeapJob *all_tir_compiled_job = _all_tir_compiled_job.heapify<JobGroup>();
     global.add_job(all_tir_compiled_job);
     
     TIR_Context tir_context { .global = global };
     global.tir_context = &tir_context;
 
     for (auto &decl : global.fns_to_declare) {
-        TypeCheckJob *j = new TypeCheckJob(decl.scope, decl.fn);
+        TypeCheckJob _j (decl.scope, decl.fn);
+        HeapJob *j = _j.heapify<TypeCheckJob>();
         global.add_job(j);
 
-        Job *j2 = tir_context.compile_fn(decl.fn, j);
+        HeapJob *j2 = tir_context.compile_fn(decl.fn, j);
         all_tir_compiled_job->add_dependency(j2);
     }
 
     for (auto &decl : global.declarations) {
-        TypeCheckJob *j = new TypeCheckJob(global, decl.value);
+        TypeCheckJob _j (global, decl.value);
+        HeapJob *j = _j.heapify<TypeCheckJob>();
         global.add_job(j);
 
         if (decl.value->nodetype == AST_VAR) {
@@ -74,14 +77,15 @@ int main(int argc, const char** argv) {
 
     // Execute the main function
     if (exec_main) {
-        MainExecJob *main_exec_job = new MainExecJob(&tir_context);
+        MainExecJob _main_exec_job (&tir_context);
+    HeapJob *main_exec_job = _main_exec_job.heapify<MainExecJob>();
         main_exec_job->add_dependency(all_tir_compiled_job);
         global.add_job(main_exec_job);
 
         for (auto& kvp : tir_context.fns) {
             if (kvp.key->name && !strcmp(kvp.key->name, "main")) {
                 arr<void*> _args;
-                main_exec_job->call(kvp.value, _args);
+                ((MainExecJob*)main_exec_job->job())->call(kvp.value, _args);
                 break;
             }
         }
@@ -92,16 +96,16 @@ int main(int argc, const char** argv) {
         wcout << red << global.jobs_count << " Jobs didn't complete:\n" << resetstyle;
 
         for (auto &kvp : global.jobs_by_id) {
-            if (!(kvp.value->flags & JOB_DONE)) {
-                if (!(kvp.value->flags & JOB_ERROR))
-                    wcout << "    - HANG " << kvp.value->get_name() << "\n";
+            if (!(kvp.value->job()->flags & JOB_DONE)) {
+                if (!(kvp.value->job()->flags & JOB_ERROR))
+                    wcout << "    - HANG " << kvp.value->job()->get_name() << "\n";
             }
         }
 
         for (auto &kvp : global.jobs_by_id) {
-            if (!(kvp.value->flags & JOB_DONE)) {
-                if ((kvp.value->flags & JOB_ERROR) == JOB_ERROR)
-                    wcout << red << "    - FAIL " << resetstyle << kvp.value->get_name() << "\n";
+            if (!(kvp.value->job()->flags & JOB_DONE)) {
+                if ((kvp.value->job()->flags & JOB_ERROR) == JOB_ERROR)
+                    wcout << red << "    - FAIL " << resetstyle << kvp.value->job()->get_name() << "\n";
             }
         }
 

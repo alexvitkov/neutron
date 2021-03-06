@@ -51,7 +51,7 @@ struct T2L_Context {
     llvm::IRBuilder<> builder;
 
     T2L_Context(TIR_Context& t_c);
-    void compile_all(Job *after);
+    void compile_all(HeapJob *after);
     const char* output_object();
 
     llvm::Type *get_llvm_type(AST_Type *type);

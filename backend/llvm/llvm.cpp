@@ -658,7 +658,7 @@ void insert_entry_boilerplate(T2L_Context& c, Function* l_main) {
     c.builder.CreateRetVoid();
 }
 
-void T2L_Context::compile_all(Job *after) {
+void T2L_Context::compile_all(HeapJob *after) {
     llvm::Function* llvm_main_fn;
 
     for (auto &kvp : tir_context.global_valmap) {

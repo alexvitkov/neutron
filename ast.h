@@ -41,7 +41,7 @@ struct AST_Type : AST_Value {
 struct AST_UnresolvedId : AST_Value {
     AST_Context &ctx;
     const char  *name;
-    ResolveJob  *job;
+    HeapJob     *job;
 
     inline AST_UnresolvedId(const char* typeName, AST_Context& ctx) 
         : AST_Value(AST_UNRESOLVED_ID, nullptr), name(typeName), ctx(ctx) 

@@ -147,7 +147,7 @@ bool GetTypeJob::run(Message *msg) {
             for (int i = 0; i < fncall->args.size; i++) {
                 // TODO TODO
                 GetTypeJob arg_gettype(ctx, fncall->args[i]);
-                WAIT (arg_gettype, GetTypeJob);
+                WAIT (arg_gettype, GetTypeJob, GetTypeJob);
             }
 
             ResolveJob resolve_fn_job(ctx, nullptr);
@@ -158,7 +158,7 @@ bool GetTypeJob::run(Message *msg) {
                 assert (fncall->fn   IS AST_UNRESOLVED_ID);
             }
 
-            WAIT (resolve_fn_job, ResolveJob,
+            WAIT (resolve_fn_job, GetTypeJob, ResolveJob,
                 heap_job->subscribe(MSG_NEW_DECLARATION);
                 heap_job->subscribe(MSG_SCOPE_CLOSED);
                 heap_job->subscribe(MSG_FN_MATCHED);
@@ -171,7 +171,7 @@ bool GetTypeJob::run(Message *msg) {
             AST_MemberAccess* ma = (AST_MemberAccess*)node;
 
             GetTypeJob type_job(ctx, ma->lhs);
-            WAIT (type_job, GetTypeJob);
+            WAIT (type_job, GetTypeJob, GetTypeJob);
 
             AST_Struct* s = (AST_Struct*)type_job.node->type;
             MUST_OR_FAIL_JOB (s);
@@ -199,7 +199,7 @@ bool GetTypeJob::run(Message *msg) {
             AST_Dereference* deref = (AST_Dereference*)node;
 
             GetTypeJob inner_type_job(ctx, deref->ptr);
-            WAIT (inner_type_job, GetTypeJob);
+            WAIT (inner_type_job, GetTypeJob, GetTypeJob);
 
             if (inner_type_job.node->type->nodetype != AST_POINTER_TYPE) {
                 error({
@@ -217,7 +217,7 @@ bool GetTypeJob::run(Message *msg) {
             AST_AddressOf* addrof = (AST_AddressOf*)node;
 
             GetTypeJob inner_type_job(ctx, addrof->inner);
-            WAIT (inner_type_job, GetTypeJob);
+            WAIT (inner_type_job, GetTypeJob, GetTypeJob);
 
             addrof->type = ctx.get_pointer_type(inner_type_job.node->type);
 
@@ -231,7 +231,8 @@ bool GetTypeJob::run(Message *msg) {
 
         case AST_UNRESOLVED_ID: {
             AST_UnresolvedId *unres = (AST_UnresolvedId*)node;
-            add_dependency(unres->job);
+            // TODO Duplicate
+            heapify<GetTypeJob>()->add_dependency(unres->job);
             return false;
         }
 
@@ -298,7 +299,7 @@ bool TypeCheckJob::run(Message *msg) {
                     AST_Var* var = (AST_Var*)decl.value;
 
                     TypeCheckJob var_typecheck(*block, var); 
-                    WAIT (var_typecheck, TypeCheckJob);
+                    WAIT (var_typecheck, TypeCheckJob, TypeCheckJob);
 
                     // TODO STRUCT
                     // Right now structures are always on the stack
@@ -311,7 +312,7 @@ bool TypeCheckJob::run(Message *msg) {
 
             for (const auto& stmt : block->statements) {
                 TypeCheckJob stmt_typecheck(*block, stmt); 
-                WAIT (stmt_typecheck, TypeCheckJob);
+                WAIT (stmt_typecheck, TypeCheckJob, TypeCheckJob);
             }
             return true;
         }
@@ -320,7 +321,7 @@ bool TypeCheckJob::run(Message *msg) {
             AST_Fn *fn = (AST_Fn*)node;
 
             GetTypeJob gettype(ctx, fn);
-            WAIT (gettype, GetTypeJob);
+            WAIT (gettype, TypeCheckJob, GetTypeJob);
 
             MUST_OR_FAIL_JOB (validate_fn_type(ctx, fn));
 
@@ -338,7 +339,7 @@ bool TypeCheckJob::run(Message *msg) {
             }
 
             TypeCheckJob fn_typecheck(fn->block, &fn->block); 
-            WAIT (fn_typecheck, TypeCheckJob);
+            WAIT (fn_typecheck, TypeCheckJob, TypeCheckJob);
 
             return true;
         }
@@ -371,7 +372,7 @@ bool TypeCheckJob::run(Message *msg) {
 
             if (ret->value) {
                 TypeCheckJob ret_typecheck(ctx, ret->value); 
-                WAIT (ret_typecheck, TypeCheckJob);
+                WAIT (ret_typecheck, TypeCheckJob, TypeCheckJob);
             }
 
             if (rettype != &t_void) {
@@ -381,7 +382,7 @@ bool TypeCheckJob::run(Message *msg) {
                 }
 
                 CastJob cast_job(&ctx, ret->value, rettype);
-                WAIT (cast_job, CastJob);
+                WAIT (cast_job, TypeCheckJob, CastJob);
 
                 ret->value = cast_job.result;
 
@@ -400,10 +401,10 @@ bool TypeCheckJob::run(Message *msg) {
             AST_If* ifs = (AST_If*)node;
 
             TypeCheckJob cond_typecheck(ctx, ifs->condition); 
-            WAIT (cond_typecheck, TypeCheckJob);
+            WAIT (cond_typecheck, TypeCheckJob, TypeCheckJob);
 
             TypeCheckJob then_typecheck(ctx, &ifs->then_block); 
-            WAIT (then_typecheck, TypeCheckJob);
+            WAIT (then_typecheck, TypeCheckJob, TypeCheckJob);
 
             return true;
         }
@@ -412,10 +413,10 @@ bool TypeCheckJob::run(Message *msg) {
             AST_While* whiles = (AST_While*)node;
 
             TypeCheckJob cond_typecheck(ctx, whiles->condition); 
-            WAIT (cond_typecheck, TypeCheckJob);
+            WAIT (cond_typecheck, TypeCheckJob, TypeCheckJob);
 
             TypeCheckJob block_typecheck(ctx, &whiles->block); 
-            WAIT (block_typecheck, TypeCheckJob);
+            WAIT (block_typecheck, TypeCheckJob, TypeCheckJob);
 
             return true;
         }
@@ -426,7 +427,7 @@ bool TypeCheckJob::run(Message *msg) {
 
             for (auto& member : s->members) {
                 TypeCheckJob block_typecheck(ctx, member.type); 
-                WAIT (block_typecheck, TypeCheckJob);
+                WAIT (block_typecheck, TypeCheckJob, TypeCheckJob);
 
                 u64 member_size = member.type->size;
 
@@ -458,14 +459,15 @@ bool TypeCheckJob::run(Message *msg) {
 
         case AST_UNRESOLVED_ID: {
             AST_UnresolvedId *id = (AST_UnresolvedId*)node;
-            add_dependency(id->job);
+            // TODO Duplicate
+            heapify<TypeCheckJob>()->add_dependency(id->job);
             return false;
         }
 
         default: {
             if (node->nodetype & AST_VALUE_BIT) {
                 GetTypeJob gettype(ctx, (AST_Value*)node);
-                WAIT (gettype, GetTypeJob);
+                WAIT (gettype, TypeCheckJob, GetTypeJob);
                 return true;
             }
             NOT_IMPLEMENTED();

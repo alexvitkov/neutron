@@ -826,7 +826,7 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
         arr<void*> _args;
         call(pseudo_fn, _args);
 
-        tir_context.global_initializer_running_jobs[tir_var.offset] = this;
+        // tir_context.global_initializer_running_jobs[tir_var.offset];
     }
 
     std::wstring get_name() override {
@@ -840,18 +840,20 @@ struct TIR_GlobalVarInitJob : TIR_ExecutionJob {
             = pack_into_const(value, ast_var->type);
 
         // TODO DS DELETE
-        tir_context->global_initializer_running_jobs[tir_var.offset] = nullptr;
+        tir_context->global_initializer_running_jobs[tir_var.offset] = heapify<TIR_GlobalVarInitJob>();
         tir_context->storage.global_values[tir_var.offset] = value;
 
         wcout.flush();
     }
 };
 
-Job *TIR_Context::compile_fn(AST_Fn *fn, Job *fn_typecheck_job) {
+HeapJob *TIR_Context::compile_fn(AST_Fn *fn, HeapJob *fn_typecheck_job) {
     TIR_Function* tir_fn = new TIR_Function(this, fn);
     fns.insert(fn, tir_fn);
 
-    TIR_FnCompileJob *compile_job = new TIR_FnCompileJob(tir_fn);
+    TIR_FnCompileJob _compile_job(tir_fn);
+    HeapJob *compile_job = _compile_job.heapify<TIR_FnCompileJob>();
+
     compile_job->add_dependency(fn_typecheck_job);
     tir_fn->tir_context->global.add_job(compile_job);
 
@@ -891,7 +893,8 @@ void TIR_Context::compile_all() {
             case AST_FN_CALL: {
                 NOT_IMPLEMENTED();
                 AST_Call *assignment = (AST_Call*)stmt;
-                Job *init = new TIR_GlobalVarInitJob(*this, assignment);
+                TIR_GlobalVarInitJob _init(*this, assignment);
+                HeapJob *init = _init.heapify<TIR_GlobalVarInitJob>();
                 global.add_job(init);
                 break;
             }
@@ -1066,11 +1069,13 @@ NextFrame:
                                 // If there's no value assigned to the global, look for a initial value.
                                 // The initial value is assigned via a job that may not be completed, 
                                 // so if the job isn't done we have to wait on it
-                                Job *job;
+                                HeapJob *job;
                                 if (tir_context->global_initializer_running_jobs.find(instr.un.src.offset, &job)) {
                                     // TODO DS DELETE
                                     assert(job);
-                                    this->add_dependency(job);
+                                    // TODO TODO 
+                                    // heapify<TIR_ExecutionJob>()->add_dependency(job);
+                                    NOT_IMPLEMENTED();
                                     return false;
                                 } else {
                                     UNREACHABLE;
@@ -1099,7 +1104,8 @@ NextFrame:
                         call(instr.call.fn, args);
 
                         if (instr.call.fn->blocks.size == 0) {
-                            add_dependency (instr.call.fn->compile_job);
+                            NOT_IMPLEMENTED();
+                            // heapify<TIR_ExecutionJob>()->add_dependency (instr.call.fn->compile_job);
                             return false;
                         }
 

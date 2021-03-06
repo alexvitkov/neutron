@@ -164,6 +164,6 @@ void AST_Context::close() {
 
 AST_GlobalContext::AST_GlobalContext() : AST_Context(nullptr), subscribers(MESSAGES_COUNT) {
     for (u32 i = 0; i < MESSAGES_COUNT; i++)
-        subscribers.push(arr<Job*>());
+        subscribers.push(arr<HeapJob*>());
 
 }

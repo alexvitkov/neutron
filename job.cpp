@@ -7,34 +7,35 @@
 #include <sstream>
 #include <iostream>
 
-void Job::add_dependency(Job* dependency) {
-    assert(!(dependency->flags & JOB_DONE));
+void HeapJob::add_dependency(HeapJob* dependency) {
+    assert(!(dependency->job()->flags & JOB_DONE));
 
-    if (dependency->flags & JOB_ERROR) {
-        set_error_flag();
+    if (dependency->job()->flags & JOB_ERROR) {
+        UNREACHABLE;
+        job()->set_error_flag();
         return;
     }
 
     dependencies_left++;
-    dependency->dependent_jobs.push(id);
+    dependency->dependent_jobs.push(job()->id);
     if (debug_jobs) {
-        wcout << get_name() << dim << " depends on " << resetstyle << dependency->get_name() << "\n";
+        wcout << job()->get_name() << dim << " depends on " << resetstyle << dependency->job()->get_name() << "\n";
         wcout.flush();
     }
 
 }
 
-void finish_job(AST_GlobalContext &global, Job *finished_job) {
+void finish_job(AST_GlobalContext &global, HeapJob *finished_job) {
     if (debug_jobs) {
-        wcout << dim << "Finished " << resetstyle << finished_job->get_name() << "\n";
+        wcout << dim << "Finished " << resetstyle << finished_job->job()->get_name() << "\n";
         wcout.flush();
     }
     global.jobs_count--;
-    finished_job->flags = (JobFlags)(finished_job->flags | JOB_DONE);
+    finished_job->job()->flags = (JobFlags)(finished_job->job()->flags | JOB_DONE);
 
     for (u64 dependent_job_id : finished_job->dependent_jobs) {
 
-        Job *dependent_job = global.jobs_by_id[dependent_job_id];
+        HeapJob *dependent_job = global.jobs_by_id[dependent_job_id];
 
         dependent_job->dependencies_left --;
         if (dependent_job->dependencies_left == 0)
@@ -47,16 +48,16 @@ Job::Job(AST_GlobalContext &global) : global(global) {
 }
 
 void AST_GlobalContext::send_message(Message *msg) {
-    arr<Job*>& receivers = subscribers[msg->msgtype];
+    arr<HeapJob*>& receivers = subscribers[msg->msgtype];
     if (debug_jobs) {
         wcout << dim << "Sending message " << resetstyle << msg->msgtype << "\n";
         wcout.flush();
     }
 
     for (u32 i = 0; i < receivers.size; ) {
-        if (receivers[i]->flags & JOB_DONE) {
+        if (receivers[i]->job()->flags & JOB_DONE) {
             receivers.delete_unordered(i);
-        } else if (receivers[i]->run(msg)) {
+        } else if (receivers[i]->job()->run(msg)) {
             finish_job(*this, receivers[i]);
             receivers.delete_unordered(i);
         } else {
@@ -67,17 +68,17 @@ void AST_GlobalContext::send_message(Message *msg) {
     }
 }
 
-void AST_GlobalContext::add_job(Job *job) {
+void AST_GlobalContext::add_job(HeapJob *job) {
     jobs_count ++;
-    jobs_by_id[job->id] = job;
+    jobs_by_id[job->job()->id] = job;
 
-    for (Job *j : ready_jobs) {
+    for (HeapJob *j : ready_jobs) {
         if (j == job)
             assert(!"Adding the same job twice");
     }
 
     if (debug_jobs) {
-        wcout << dim << "Adding " << resetstyle << job->id << ":" << job->get_name() << "\n";
+        wcout << dim << "Adding " << resetstyle << job->job()->id << ":" << job->job()->get_name() << "\n";
         wcout.flush();
     }
     ready_jobs.push(job);
@@ -85,20 +86,20 @@ void AST_GlobalContext::add_job(Job *job) {
 
 bool AST_GlobalContext::run_jobs() {
     while (ready_jobs.size) {
-        Job *job = ready_jobs.pop();
+        HeapJob *job = ready_jobs.pop();
 
-        if (job->dependencies_left != 0 || (job->flags & JOB_DONE))
+        if (job->dependencies_left != 0 || (job->job()->flags & (JOB_DONE | JOB_WAITING_MSG)))
             continue;
 
-        if (job->flags & JOB_ERROR) {
+        if (job->job()->flags & JOB_ERROR) {
             for (u64 dependent_job_id : job->dependent_jobs) {
-                Job *j = global.jobs_by_id[dependent_job_id]; 
-                j->set_error_flag();
+                HeapJob *j = global.jobs_by_id[dependent_job_id]; 
+                j->job()->set_error_flag();
             }
             continue;
         }
 
-        if (job->run(nullptr)) {
+        if (job->job()->run(nullptr)) {
             finish_job(*this, job);
         }
     }
@@ -109,9 +110,7 @@ bool AST_GlobalContext::run_jobs() {
 ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id) 
     : Job(ctx.global), unresolved_id(id), context(&ctx) 
 {
-    // TODO JOB 717 - we add a fake dependency to make sure the job doesnt get called
-    // we're actually waiting for a message
-    this->dependencies_left ++;
+    flags = (JobFlags)(flags | JOB_WAITING_MSG);
 }
 
 bool ResolveJob::spawn_match_job(AST_Fn *fn) {
@@ -133,7 +132,7 @@ bool ResolveJob::spawn_match_job(AST_Fn *fn) {
         AST_Type *argtype = fncall->args[i]->type;
 
         CastJob cast_job(context, fncall->args[i], paramtype);
-        CastJob *cast_heap_job = cast_job.run_stackjob<CastJob>();
+        HeapJob *cast_heap_job = cast_job.run_stackjob<CastJob>();
         if (cast_heap_job) {
             NOT_IMPLEMENTED();
             if (wait_group) {}
@@ -269,7 +268,7 @@ bool ResolveJob::run(Message *msg) {
                 // TODO 717
                 context = context->parent;
                 if (!context) {
-                    if (dependencies_left == 1) {
+                    if (flags & JOB_WAITING_MSG) {
                         if (this->fncall && this->prio > 0) {
                             for (int i = 0; i < fncall->args.size; i++)
                                 fncall->args[i] = new_args[i];
@@ -295,8 +294,6 @@ bool ResolveJob::run(Message *msg) {
                 return false;
 
             pending_matches --;
-
-            // wcout << "prio:" << match_msg->priority << "\n";
 
             if (prio < match_msg->priority) {
 
@@ -352,9 +349,13 @@ void Job::error(Error err) {
     print_err(global, err);
 
     set_error_flag();
-    for (u64 dependent_job_id : dependent_jobs) {
-        Job *job = global.jobs_by_id[dependent_job_id];
-        job->set_error_flag();
+
+    HeapJob *this_on_heap;
+    if (global.jobs_by_id.find(id, &this_on_heap)) {
+        for (u64 dependent_job_id : this_on_heap->dependent_jobs) {
+            HeapJob *job = global.jobs_by_id[dependent_job_id];
+            job->job()->set_error_flag();
+        }
     }
 }
 
@@ -368,12 +369,12 @@ std::wstring JobGroup::get_name() {
     return L"JobGroup<" + name + L">";
 }
 
-void Job::subscribe(MessageType msgtype) {
+void HeapJob::subscribe(MessageType msgtype) {
     if (debug_jobs) {
-        wcout << get_name() << dim << " subscribed to " << resetstyle << msgtype << "\n";
+        wcout << job()->get_name() << dim << " subscribed to " << resetstyle << msgtype << "\n";
         wcout.flush();
     }
-    global.subscribers[msgtype].push(this);
+    job()->global.subscribers[msgtype].push(this);
 }
 
 std::wstring ResolveJob::get_name() {

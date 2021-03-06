@@ -8,6 +8,7 @@
 #include <atomic>
 
 struct Job;
+struct HeapJob;
 struct CastJob;
 struct AST_Context;
 struct AST_GlobalContext;
@@ -156,6 +157,7 @@ enum JobFlags : u32 {
     JOB_DONE  = 0x01,
     JOB_ERROR = 0x02,
     JOB_SOFT  = 0x04,
+    JOB_WAITING_MSG = 0x08,
 };
 
 
@@ -194,30 +196,35 @@ struct AST_GlobalContext : AST_Context {
     map<AST_FnType*, AST_FnType*> fn_types_hash; // TODO DS - thish should be a hashset
     map<AST_Type*, AST_PointerType*> pointer_types;
 
-    arr<Job*> ready_jobs;
-    map<u64, Job*> jobs_by_id;
+    arr<HeapJob*> ready_jobs;
+    map<u64, HeapJob*> jobs_by_id;
 
     // subscribers[MSG_NEW_DECLARATION] are all the jobs waiting on MSG_NEW_DECLARATION
-    arr<arr<Job*>> subscribers;
+    arr<arr<HeapJob*>> subscribers;
     u32 jobs_count; std::atomic<int> next_job_id = { 1 };
 
 
     AST_GlobalContext();
 
-    void add_job(Job *job);
+    void add_job(HeapJob *job);
     bool run_jobs();
     void send_message(Message *msg);
+};
+
+struct HeapJob {
+    inline Job *job() { return (Job*)_the_job; };
+    u32 dependencies_left = 0;
+    arr<u64> dependent_jobs;
+    char _the_job[0];
+
+    void subscribe(MessageType msgtype); // TODO this won't scale - MessageType is too coarse
+    void add_dependency(HeapJob* dependency);
 };
 
 struct Job {
     u64 id;
     AST_GlobalContext &global;
-    arr<u64> dependent_jobs;
-    u32 dependencies_left = 0;
     JobFlags flags = (JobFlags)0;
-
-    void add_dependency(Job* dependency);
-    void subscribe(MessageType msgtype); // TODO this won't scale - MessageType is too coarse
 
     Job(AST_GlobalContext &global);
     void error(Error err);
@@ -225,6 +232,22 @@ struct Job {
     // returns true if the job is finished after the run call returns
     virtual bool run(Message *msg) = 0;
     virtual std::wstring get_name() = 0;
+
+
+    template <typename JobT>
+    HeapJob *heapify() {
+        HeapJob *heap_job;
+
+        if (!global.jobs_by_id.find(id, &heap_job)) {
+            heap_job = (HeapJob*)malloc(sizeof(HeapJob) + sizeof(JobT));
+            new (heap_job) HeapJob();
+            new (heap_job->job()) (JobT) (std::move(*(JobT*)this));
+            global.jobs_by_id[id] = heap_job;
+        }
+
+        return heap_job;
+    }
+
 
     // Jobs can often be completed immediately
     // so allocating them on the heap often doesn't make sense.
@@ -234,7 +257,7 @@ struct Job {
     // added to the job queue. in that case, the pointer on the heap is returned
     // so you can wait on it
     template <typename JobT>
-    JobT *run_stackjob() {
+    HeapJob *run_stackjob() {
        if (run(nullptr)) {
            flags = (JobFlags)(flags | JOB_DONE);
            return nullptr;
@@ -244,7 +267,7 @@ struct Job {
            return nullptr;
        }
 
-       JobT *heap_job = new JobT(std::move(*(JobT*)this));
+       HeapJob *heap_job = heapify<JobT>();
        global.add_job(heap_job);
 
        return heap_job;
@@ -301,11 +324,12 @@ Location location_of(AST_Context& ctx, AST_Node** node);
 bool parse_all(AST_Context& global);
 bool parse_source_file(AST_Context& global, SourceFile& sf);
 
-#define WAIT(job, jobtype, ...)                      \
+#define WAIT(job, mytype, jobtype, ...)              \
     {                                                \
-        Job *heap_job = job.run_stackjob<jobtype>(); \
+        HeapJob *heap_job = job.run_stackjob<jobtype>(); \
         if (heap_job) {                              \
-            add_dependency(heap_job);                \
+            HeapJob *this_heap_job = heapify<mytype>();  \
+            this_heap_job->add_dependency(heap_job); \
             __VA_ARGS__                              \
             return false;                            \
         } else if (job.flags & JOB_ERROR) {          \
