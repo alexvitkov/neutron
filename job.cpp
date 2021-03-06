@@ -47,8 +47,7 @@ Job::Job(AST_GlobalContext &global) : global(global) {
     id = global.next_job_id++;
 }
 
-void AST_GlobalContext::send_message(Message *msg) {
-    arr<HeapJob*>& receivers = subscribers[msg->msgtype];
+void AST_GlobalContext::send_message(arr<HeapJob*> &receivers, Message *msg) {
     if (debug_jobs) {
         wcout << dim << "Sending message " << resetstyle << msg->msgtype << "\n";
         wcout.flush();
@@ -113,50 +112,81 @@ ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id)
     flags = (JobFlags)(flags | JOB_WAITING_MSG);
 }
 
-bool ResolveJob::spawn_match_job(AST_Fn *fn) {
-    AST_FnType *fntype = fn->fntype();
 
-    MUST (fntype->param_types.size >= fncall->args.size);
+struct MatchCallJob : Job {
+    AST_Context *context;
+    AST_Fn      *fn;
+    AST_Call    *fncall;
 
-    if (!fntype->is_variadic)
-        MUST (fntype->param_types.size == fncall->args.size);
+    u64 parent_job;
 
-    int prio = 1000;
-    arr<AST_Value*> casted_args(fncall->args.size);
-    casted_args.size = fncall->args.size;
+    inline MatchCallJob(AST_Context *ctx, AST_Fn *fn, AST_Call *call) 
+        : Job(ctx->global), context(ctx), fn(fn), fncall(call) {}
 
-    JobGroup *wait_group = nullptr;
+    bool run(Message *msg) override {
+        AST_FnType *fntype = fn->fntype();
 
-    for (u32 i = 0; i < fntype->param_types.size; i++) {
-        AST_Type *paramtype = fntype->param_types[i];
-        AST_Type *argtype = fncall->args[i]->type;
+        MUST (fntype->param_types.size >= fncall->args.size);
 
-        CastJob cast_job(context, fncall->args[i], paramtype);
-        HeapJob *cast_heap_job = cast_job.run_stackjob<CastJob>();
-        if (cast_heap_job) {
-            NOT_IMPLEMENTED();
-            if (wait_group) {}
-        } else if (cast_job.flags & JOB_DONE) {
-            casted_args[i] = cast_job.result;
-            continue;
+        if (!fntype->is_variadic)
+            MUST (fntype->param_types.size == fncall->args.size);
+
+        int prio = 1000;
+        arr<AST_Value*> casted_args(fncall->args.size);
+        casted_args.size = fncall->args.size;
+
+        JobGroup *wait_group = nullptr;
+
+        for (u32 i = 0; i < fntype->param_types.size; i++) {
+            AST_Type *paramtype = fntype->param_types[i];
+            AST_Type *argtype = fncall->args[i]->type;
+
+            CastJob cast_job(context, fncall->args[i], paramtype);
+            HeapJob *cast_heap_job = cast_job.run_stackjob<CastJob>();
+            if (cast_heap_job) {
+                NOT_IMPLEMENTED();
+                if (wait_group) {}
+            } else if (cast_job.flags & JOB_DONE) {
+                casted_args[i] = cast_job.result;
+                continue;
+            }
+            return false;
         }
-        return false;
+
+
+        MatchCallJobOverMessage matched_msg;
+        matched_msg.msgtype = MSG_FN_MATCHED;
+        matched_msg.priority = prio;
+        matched_msg.fncall = fncall;
+        matched_msg.fn = fn;
+
+        for (u32 i = 0; i < fncall->args.size; i++)
+            matched_msg.casted_args.push(casted_args[i]);
+
+        HeapJob *pp;
+        assert(global.jobs_by_id.find(parent_job, &pp));
+
+        arr<HeapJob*> p = { pp };
+
+        global.send_message(p, &matched_msg);
+        return true;
+            
     }
 
-    pending_matches ++;
+    std::wstring get_name() override {
+        return L"MatchCallJob";
+    }
+};
 
-    MatchCallJobOverMessage matched_msg;
-    matched_msg.msgtype = MSG_FN_MATCHED;
-    matched_msg.priority = prio;
-    matched_msg.fncall = fncall;
-    matched_msg.fn = fn;
 
-    for (u32 i = 0; i < fncall->args.size; i++)
-        matched_msg.casted_args.push(casted_args[i]);
-
-    global.send_message(&matched_msg);
+bool ResolveJob::spawn_match_job(AST_Fn *fn) {
+    pending_matches++;
+    MatchCallJob the_job(context, fn, this->fncall);
+    the_job.parent_job = id;
+    WAIT(the_job, ResolveJob, MatchCallJob);
     return true;
 }
+
 
 DeclarationKey ResolveJob::get_decl_key() {
     DeclarationKey key = {};
@@ -181,6 +211,16 @@ bool key_compatible(DeclarationKey &lhs, DeclarationKey &rhs) {
     MUST (rhs.name);
     MUST (!strcmp(lhs.name, rhs.name));
     return true;
+}
+
+bool ResolveJob::jump_to_parent_scope() {
+    context = context->parent;
+    if (context) {
+        context->subscribers.push(heapify<ResolveJob>());
+        return true;
+    } else {
+        return false;
+    }
 }
 
 bool ResolveJob::run(Message *msg) {
@@ -232,7 +272,7 @@ bool ResolveJob::run(Message *msg) {
                         spawn_match_job((AST_Fn*)kvp.value);
 
             }
-        } while (context->closed && (context = context->parent));
+        } while (context->closed && (jump_to_parent_scope()));
 
         if (!context) {
             assert (pending_matches == 0);
@@ -265,8 +305,7 @@ bool ResolveJob::run(Message *msg) {
 
             ScopeClosedMessage *sc = (ScopeClosedMessage*)msg;
             if (sc->scope == context) {
-                // TODO 717
-                context = context->parent;
+                jump_to_parent_scope();
                 if (!context) {
                     if (flags & JOB_WAITING_MSG) {
                         if (this->fncall && this->prio > 0) {
@@ -314,7 +353,7 @@ bool ResolveJob::run(Message *msg) {
 
             if (pending_matches == 0) {
                 if (context && context->closed) {
-                    context = context->parent;
+                    jump_to_parent_scope();
                     if (context) {
                         assert(!run(nullptr));
                         return false;
@@ -367,14 +406,6 @@ bool JobGroup::run(Message *msg) {
 }
 std::wstring JobGroup::get_name() {
     return L"JobGroup<" + name + L">";
-}
-
-void HeapJob::subscribe(MessageType msgtype) {
-    if (debug_jobs) {
-        wcout << job()->get_name() << dim << " subscribed to " << resetstyle << msgtype << "\n";
-        wcout.flush();
-    }
-    job()->global.subscribers[msgtype].push(this);
 }
 
 std::wstring ResolveJob::get_name() {

@@ -62,7 +62,7 @@ bool AST_Context::declare(DeclarationKey key, AST_Node* value, bool sendmsg) {
         msg.key     = key;
         msg.node    = value;
 
-        global.send_message(&msg);
+        global.send_message(subscribers, &msg);
     }
 
     return true;
@@ -159,11 +159,8 @@ void AST_Context::close() {
     msg.msgtype = MSG_SCOPE_CLOSED;
     msg.scope = this;
     closed = true;
-    global.send_message(&msg);
+    global.send_message(subscribers, &msg);
 }
 
-AST_GlobalContext::AST_GlobalContext() : AST_Context(nullptr), subscribers(MESSAGES_COUNT) {
-    for (u32 i = 0; i < MESSAGES_COUNT; i++)
-        subscribers.push(arr<HeapJob*>());
-
+AST_GlobalContext::AST_GlobalContext() : AST_Context(nullptr) {
 }

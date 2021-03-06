@@ -72,6 +72,9 @@ struct AST_Context : AST_Node {
     bool declare(DeclarationKey key, AST_Node* value, bool sendmsg);
     void error(Error err);
 
+    // those will receive message for new declarations & scope closed
+    arr<HeapJob*> subscribers;
+
     template <typename T, typename ... Ts>
     T* alloc(Ts &&...args);
 
@@ -199,16 +202,14 @@ struct AST_GlobalContext : AST_Context {
     arr<HeapJob*> ready_jobs;
     map<u64, HeapJob*> jobs_by_id;
 
-    // subscribers[MSG_NEW_DECLARATION] are all the jobs waiting on MSG_NEW_DECLARATION
-    arr<arr<HeapJob*>> subscribers;
-    u32 jobs_count; std::atomic<int> next_job_id = { 1 };
-
+    u32 jobs_count; 
+    std::atomic<int> next_job_id = { 1 };
 
     AST_GlobalContext();
 
     void add_job(HeapJob *job);
     bool run_jobs();
-    void send_message(Message *msg);
+    void send_message(arr<HeapJob*>& jobs, Message *msg);
 };
 
 struct HeapJob {
@@ -217,7 +218,6 @@ struct HeapJob {
     arr<u64> dependent_jobs;
     char _the_job[0];
 
-    void subscribe(MessageType msgtype); // TODO this won't scale - MessageType is too coarse
     void add_dependency(HeapJob* dependency);
 };
 
@@ -310,6 +310,8 @@ struct ResolveJob : Job {
 
     bool spawn_match_job(AST_Fn *fn);
     DeclarationKey get_decl_key();
+
+    bool jump_to_parent_scope();
 };
 
 struct JobGroup : Job {

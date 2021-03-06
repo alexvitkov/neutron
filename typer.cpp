@@ -159,9 +159,7 @@ bool GetTypeJob::run(Message *msg) {
             }
 
             WAIT (resolve_fn_job, GetTypeJob, ResolveJob,
-                heap_job->subscribe(MSG_NEW_DECLARATION);
-                heap_job->subscribe(MSG_SCOPE_CLOSED);
-                heap_job->subscribe(MSG_FN_MATCHED);
+                ctx.subscribers.push(heap_job);
             );
 
             return fncall->type;
