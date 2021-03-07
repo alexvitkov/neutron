@@ -217,6 +217,11 @@ struct HeapJob {
     char _the_job[0];
 };
 
+enum RunJobResult {
+    RUN_FAIL = 0,
+    RUN_DONE,
+    RUN_AGAIN
+};
 
 struct Job {
     u64 id;
@@ -305,7 +310,7 @@ struct Job {
     }
 
     inline void job_done() {
-        flags = (JobFlags)(flags | JOB_DONE);
+        flags = (JobFlags)((flags | JOB_DONE) & ~JOB_WAITING_MSG);
     }
 };
 
@@ -343,7 +348,7 @@ struct ResolveJob : Job {
     DeclarationKey get_decl_key();
 
     bool jump_to_parent_scope_if_needed();
-    bool read_scope();
+    RunJobResult read_scope();
 
 };
 

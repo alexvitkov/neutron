@@ -59,13 +59,16 @@ void AST_GlobalContext::send_message(arr<HeapJob*> &receivers, Message *msg) {
     for (u32 i = 0; i < receivers.size; ) {
         if (receivers[i]->job()->flags & JOB_DONE) {
             receivers.delete_unordered(i);
-        } else if (receivers[i]->job()->run(msg)) {
-            finish_job(*this, receivers[i]);
-            receivers.delete_unordered(i);
         } else {
-            // delete_unordered places the last job at the index of the old
-            // element, so we don't increment 'i' if we've called it
-            i++;
+            auto asdf = receivers[i]->job()->run(msg);
+            if (asdf) {
+                finish_job(*this, receivers[i]);
+                receivers.delete_unordered(i);
+            } else {
+                // delete_unordered places the last job at the index of the old
+                // element, so we don't increment 'i' if we've called it
+                i++;
+            }
         }
     }
 }
@@ -154,7 +157,9 @@ struct MatchCallJob : Job {
 
                 CastJob cast_job(context, fncall->args[i], paramtype, [](Job *self, Job *parent) {
                     MatchCallJob *p = (MatchCallJob*)parent;
+                    CastJob *c = (CastJob*)self;
                     p->casted_args[(u64)self->input] = (AST_Value*)self->result;
+                    p->prio += c->prio;
                 });
 
                 cast_job.input = (void*)(u64)i;
@@ -208,9 +213,11 @@ bool ResolveJob::spawn_match_job(AST_Fn *fn) {
     });
 
     the_job.input = 0;
-    run_child<ResolveJob, MatchCallJob>(the_job);
+    if (run_child<ResolveJob, MatchCallJob>(the_job))
+        return true;
+
     the_job.input = (void*)1;
-    return true;
+    return false;
 }
 
 
@@ -239,35 +246,8 @@ bool key_compatible(DeclarationKey &lhs, DeclarationKey &rhs) {
     return true;
 }
 
-bool ResolveJob::read_scope() {
-    if (!context) {
-        if (unresolved_id) {
-            // TODO ERROR
-            set_error_flag();
-            return false;
-        } else if (prio > 0) {
-            for (int i = 0; i < fncall->args.size; i++)
-                fncall->args[i] = new_args[i];
-            fncall->fn = new_fn;
-            fncall->type = ((AST_FnType*)fncall->fn->type)->returntype;
-            job_done();
-            return true;
-        } else {
-            // TODO ERROR
-            set_error_flag();
-            return false;
-        }
-    }
-         
-    context->subscribers.push(heapify<ResolveJob>());
-
-    if (unresolved_id) {
-        AST_Node *decl;
-        MUST (context->declarations.find({ .name = (*unresolved_id)->name }, &decl));
-        *(AST_Node**)unresolved_id = decl;
-        job_done();
-        return true;
-    } else if (fncall->op) {
+RunJobResult ResolveJob::read_scope() {
+    if (fncall->op) {
         switch (fncall->args.size) {
             case 2: {
                 TIR_Builder *builder = get_builder(
@@ -278,37 +258,93 @@ bool ResolveJob::read_scope() {
                 );
                 if (!builder) {
                     set_error_flag();
-                    return false;
+                    return RUN_FAIL;
                 }
                 fncall->builder = builder;
                 job_done();
-                return true;
+                return RUN_DONE;
             }
             case 1: { NOT_IMPLEMENTED(); }
             default: UNREACHABLE;
         }
-    } else {
-        DeclarationKey key = get_decl_key();
+    }    
 
-        for (auto &kvp : context->declarations)
-            if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
-                spawn_match_job((AST_Fn*)kvp.value);
-
-        return false;
+    if (!context) {
+        if (unresolved_id) {
+            // TODO ERROR
+            set_error_flag();
+            return RUN_FAIL;
+        } else if (prio > 0) {
+            for (int i = 0; i < fncall->args.size; i++)
+                fncall->args[i] = new_args[i];
+            fncall->fn = new_fn;
+            fncall->type = ((AST_FnType*)fncall->fn->type)->returntype;
+            job_done();
+            return RUN_DONE;
+        } else {
+            // TODO ERROR
+            set_error_flag();
+            return RUN_FAIL;
+        }
     }
+
+    if (unresolved_id) {
+        AST_Node *decl;
+        if (context->declarations.find({ .name = (*unresolved_id)->name }, &decl)) {
+            *(AST_Node**)unresolved_id = decl;
+            job_done();
+            return RUN_DONE;
+        }   
+
+        if (context->closed) {
+            context = context->parent;
+            return read_scope();
+        } else {
+            context->subscribers.push(heapify<ResolveJob>());
+            return RUN_AGAIN;
+        }
+    }
+
+    else {
+        bool heaped = false;
+        ResolveJob *self = this;
+        DeclarationKey key = self->get_decl_key();
+
+        for (auto &kvp : self->context->declarations)
+            if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
+                if (!self->spawn_match_job((AST_Fn*)kvp.value) && !heaped) {
+                    heaped = true;
+                    self = (ResolveJob*)heapify<ResolveJob>()->job();
+                }
+        
+        if (self->context) {
+            if (pending_matches == 0 && self->context->closed) {
+                self->context = self->context->parent;
+                return self->read_scope();
+            }
+
+            if (!self->context->closed) {
+                context->subscribers.push(heapify<ResolveJob>());
+            }
+        } else {
+            return self->read_scope();
+        }
+    }
+    return RUN_AGAIN;
 }
 
 
 bool ResolveJob::run(Message *msg) {
+    ResolveJob *self = (ResolveJob*)this;
     if (!msg) {
-        do {
-            if (read_scope())
+        switch (self->read_scope()) {
+            case RUN_DONE:
                 return true;
-            if (flags & JOB_ERROR)
+            case RUN_FAIL:
                 return false;
-        } while (context && context->closed && (context = context->parent));
-
-        return flags & JOB_DONE;
+            case RUN_AGAIN:
+                return false;
+        }
     }
 
     switch (msg->msgtype) {
@@ -337,7 +373,13 @@ bool ResolveJob::run(Message *msg) {
             MUST (sc->scope == context);
 
             context = context->parent;
-            return read_scope();
+            switch (read_scope()) {
+                case RUN_DONE:
+                    return true;
+                case RUN_AGAIN:
+                case RUN_FAIL:
+                    return false;
+            }
         }
 
         default:
