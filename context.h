@@ -9,6 +9,8 @@
 
 struct Job;
 struct HeapJob;
+typedef void (*JobOnCompleteCallback)(Job *self, Job *parent);
+
 struct CastJob;
 struct AST_Context;
 struct AST_GlobalContext;
@@ -149,13 +151,6 @@ struct DependencyFinishedMessage : Message {
     Job *dependency;
 };
 
-struct MatchCallJobOverMessage : Message {
-    int priority;
-    AST_Call *fncall;
-    AST_Fn   *fn;
-    arr<AST_Value*> casted_args;
-};
-
 enum JobFlags : u32 {
     JOB_DONE  = 0x01,
     JOB_ERROR = 0x02,
@@ -216,14 +211,19 @@ struct HeapJob {
     inline Job *job() { return (Job*)_the_job; };
     u32 dependencies_left = 0;
     arr<u64> dependent_jobs;
-    char _the_job[0];
 
     void add_dependency(HeapJob* dependency);
+
+    char _the_job[0];
 };
+
 
 struct Job {
     u64 id;
+    void *input, *result;
+
     AST_GlobalContext &global;
+    JobOnCompleteCallback on_complete = nullptr;
     JobFlags flags = (JobFlags)0;
 
     Job(AST_GlobalContext &global);
@@ -259,6 +259,9 @@ struct Job {
     template <typename JobT>
     HeapJob *run_stackjob() {
        if (run(nullptr)) {
+           if (on_complete) {
+               on_complete(this, nullptr);
+           }
            flags = (JobFlags)(flags | JOB_DONE);
            return nullptr;
        }
@@ -273,8 +276,36 @@ struct Job {
        return heap_job;
     }
 
+    template <typename MyT, typename ChildT>
+    bool run_child(ChildT &child) {
+       if (child.run(nullptr)) {
+           if (child.on_complete) {
+               child.on_complete(&child, this);
+           }
+           child.flags = (JobFlags)(flags | JOB_DONE);
+           return true;
+       }
+
+       if (child.flags & JOB_ERROR) {
+           set_error_flag();
+           return false;
+       }
+
+       HeapJob *child_heap_job = child.template heapify<ChildT>();
+       HeapJob *this_heap_hob  = heapify<MyT>();
+       this_heap_hob->add_dependency(child_heap_job);
+       global.add_job(this_heap_hob);
+
+       return false;
+    }
+
+
     inline void set_error_flag() {
         flags = (JobFlags)(flags | JOB_ERROR);
+    }
+
+    inline void job_done() {
+        flags = (JobFlags)(flags | JOB_DONE);
     }
 };
 
@@ -311,7 +342,9 @@ struct ResolveJob : Job {
     bool spawn_match_job(AST_Fn *fn);
     DeclarationKey get_decl_key();
 
-    bool jump_to_parent_scope();
+    bool jump_to_parent_scope_if_needed();
+    bool read_scope();
+
 };
 
 struct JobGroup : Job {

@@ -26,6 +26,9 @@ void HeapJob::add_dependency(HeapJob* dependency) {
 }
 
 void finish_job(AST_GlobalContext &global, HeapJob *finished_job) {
+    if (finished_job->job()->on_complete) {
+        finished_job->job()->on_complete(finished_job->job(), nullptr);
+    }
     if (debug_jobs) {
         wcout << dim << "Finished " << resetstyle << finished_job->job()->get_name() << "\n";
         wcout.flush();
@@ -117,60 +120,52 @@ struct MatchCallJob : Job {
     AST_Context *context;
     AST_Fn      *fn;
     AST_Call    *fncall;
+    int          prio;
+
+    arr<AST_Value*> casted_args;
 
     u64 parent_job;
 
-    inline MatchCallJob(AST_Context *ctx, AST_Fn *fn, AST_Call *call) 
-        : Job(ctx->global), context(ctx), fn(fn), fncall(call) {}
+    inline MatchCallJob(AST_Context *ctx, AST_Fn *fn, AST_Call *call, JobOnCompleteCallback on_complete) 
+        : Job(ctx->global), 
+          context(ctx), 
+          fn(fn), 
+          fncall(call), 
+          casted_args(fncall->args.size)
+    {
+        casted_args.size = fncall->args.size;
+        this->on_complete = on_complete;
+        prio = 0;
+    }
 
     bool run(Message *msg) override {
         AST_FnType *fntype = fn->fntype();
 
         MUST (fntype->param_types.size >= fncall->args.size);
-
         if (!fntype->is_variadic)
             MUST (fntype->param_types.size == fncall->args.size);
 
-        int prio = 1000;
-        arr<AST_Value*> casted_args(fncall->args.size);
-        casted_args.size = fncall->args.size;
+        if (prio == 0) {
+            prio = 1000;
+            bool wait = false;
+            for (u32 i = 0; i < fntype->param_types.size; i++) {
+                AST_Type *paramtype = fntype->param_types[i];
+                AST_Type *argtype = fncall->args[i]->type;
 
-        JobGroup *wait_group = nullptr;
+                CastJob cast_job(context, fncall->args[i], paramtype, [](Job *self, Job *parent) {
+                    MatchCallJob *p = (MatchCallJob*)parent;
+                    p->casted_args[(u64)self->input] = (AST_Value*)self->result;
+                });
 
-        for (u32 i = 0; i < fntype->param_types.size; i++) {
-            AST_Type *paramtype = fntype->param_types[i];
-            AST_Type *argtype = fncall->args[i]->type;
-
-            CastJob cast_job(context, fncall->args[i], paramtype);
-            HeapJob *cast_heap_job = cast_job.run_stackjob<CastJob>();
-            if (cast_heap_job) {
-                NOT_IMPLEMENTED();
-                if (wait_group) {}
-            } else if (cast_job.flags & JOB_DONE) {
-                casted_args[i] = cast_job.result;
-                continue;
+                cast_job.input = (void*)(u64)i;
+                if (!run_child<MatchCallJob, CastJob>(cast_job))
+                    wait = true;
             }
-            return false;
-        }
-
-
-        MatchCallJobOverMessage matched_msg;
-        matched_msg.msgtype = MSG_FN_MATCHED;
-        matched_msg.priority = prio;
-        matched_msg.fncall = fncall;
-        matched_msg.fn = fn;
-
-        for (u32 i = 0; i < fncall->args.size; i++)
-            matched_msg.casted_args.push(casted_args[i]);
-
-        HeapJob *pp;
-        assert(global.jobs_by_id.find(parent_job, &pp));
-
-        arr<HeapJob*> p = { pp };
-
-        global.send_message(p, &matched_msg);
+            if (wait)
+                return false;
+        } 
+        
         return true;
-            
     }
 
     std::wstring get_name() override {
@@ -181,9 +176,40 @@ struct MatchCallJob : Job {
 
 bool ResolveJob::spawn_match_job(AST_Fn *fn) {
     pending_matches++;
-    MatchCallJob the_job(context, fn, this->fncall);
-    the_job.parent_job = id;
-    WAIT(the_job, ResolveJob, MatchCallJob);
+
+    MatchCallJob the_job(context, fn, this->fncall, [](Job *_self, Job *_parent) {
+        MatchCallJob *self = (MatchCallJob*)_self;
+        ResolveJob *parent = (ResolveJob*)_parent;
+
+        parent->pending_matches --;
+
+        if (parent->prio < self->prio) {
+            if (!parent->new_args.size) {
+                parent->new_args.realloc(parent->fncall->args.size);
+                parent->new_args.size = (parent->fncall->args.size);
+            }
+            for (int i = 0; i < parent->fncall->args.size; i++)
+                parent->new_args[i] = self->casted_args[i];
+
+            parent->new_fn = self->fn;
+            parent->prio   = self->prio;
+
+        } else if (parent->prio == self->prio) {
+            // TODO ERROR
+            NOT_IMPLEMENTED();
+        }
+
+        if (parent->pending_matches == 0) {
+            if (parent->context && parent->context->closed) {
+                parent->context = parent->context->parent;
+                parent->read_scope();
+            }
+        }
+    });
+
+    the_job.input = 0;
+    run_child<ResolveJob, MatchCallJob>(the_job);
+    the_job.input = (void*)1;
     return true;
 }
 
@@ -213,72 +239,76 @@ bool key_compatible(DeclarationKey &lhs, DeclarationKey &rhs) {
     return true;
 }
 
-bool ResolveJob::jump_to_parent_scope() {
-    context = context->parent;
-    if (context) {
-        context->subscribers.push(heapify<ResolveJob>());
+bool ResolveJob::read_scope() {
+    if (!context) {
+        if (unresolved_id) {
+            // TODO ERROR
+            set_error_flag();
+            return false;
+        } else if (prio > 0) {
+            for (int i = 0; i < fncall->args.size; i++)
+                fncall->args[i] = new_args[i];
+            fncall->fn = new_fn;
+            fncall->type = ((AST_FnType*)fncall->fn->type)->returntype;
+            job_done();
+            return true;
+        } else {
+            // TODO ERROR
+            set_error_flag();
+            return false;
+        }
+    }
+         
+    context->subscribers.push(heapify<ResolveJob>());
+
+    if (unresolved_id) {
+        AST_Node *decl;
+        MUST (context->declarations.find({ .name = (*unresolved_id)->name }, &decl));
+        *(AST_Node**)unresolved_id = decl;
+        job_done();
         return true;
+    } else if (fncall->op) {
+        switch (fncall->args.size) {
+            case 2: {
+                TIR_Builder *builder = get_builder(
+                    fncall->op, 
+                    fncall->args[0]->type, 
+                    fncall->args[1]->type,
+                    &fncall->type
+                );
+                if (!builder) {
+                    set_error_flag();
+                    return false;
+                }
+                fncall->builder = builder;
+                job_done();
+                return true;
+            }
+            case 1: { NOT_IMPLEMENTED(); }
+            default: UNREACHABLE;
+        }
     } else {
+        DeclarationKey key = get_decl_key();
+
+        for (auto &kvp : context->declarations)
+            if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
+                spawn_match_job((AST_Fn*)kvp.value);
+
         return false;
     }
 }
 
+
 bool ResolveJob::run(Message *msg) {
     if (!msg) {
-        DeclarationKey key = get_decl_key();
-        do { 
-            if (unresolved_id) {
-                AST_Node *decl;
-                MUST (context->declarations.find({ .name = (*unresolved_id)->name }, &decl));
-                *(AST_Node**)unresolved_id = decl;
+        do {
+            if (read_scope())
                 return true;
-            } else {
-                
-                if (fncall->op) {
-                    switch (fncall->args.size) {
-                        case 2: {
-                            TIR_Builder *builder = get_builder(
-                                fncall->op, 
-                                fncall->args[0]->type, 
-                                fncall->args[1]->type,
-                                &fncall->type
-                            );
+            if (flags & JOB_ERROR)
+                return false;
+        } while (context && context->closed && (context = context->parent));
 
-                            MUST_OR_FAIL_JOB (builder);
-
-                            fncall->builder = builder;
-                            return true;
-                        }
-                        case 1: {
-                            NOT_IMPLEMENTED();
-                            /*
-                            MUST_OR_FAIL_JOB (builtin_unary_ops.find({ 
-                                fncall->op, 
-                                fncall->args[0]->type, 
-                            }, &fn));
-
-                            fncall->tir_fn = fn;
-                            fncall->type = fncall->args[0]->type;
-                            return true;
-                            */
-                        }
-                        default:
-                            UNREACHABLE;
-                    }
-                }
-
-                for (auto &kvp : context->declarations)
-                    if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
-                        spawn_match_job((AST_Fn*)kvp.value);
-
-            }
-        } while (context->closed && (jump_to_parent_scope()));
-
-        if (!context) {
-            assert (pending_matches == 0);
-            set_error_flag();
-        }
-        return false;
+        return flags & JOB_DONE;
     }
 
     switch (msg->msgtype) {
@@ -299,84 +329,17 @@ bool ResolveJob::run(Message *msg) {
                 }
             }
         }
+
         case MSG_SCOPE_CLOSED: {
-            if (pending_matches > 0)
-                return false;
-
             ScopeClosedMessage *sc = (ScopeClosedMessage*)msg;
-            if (sc->scope == context) {
-                jump_to_parent_scope();
-                if (!context) {
-                    if (flags & JOB_WAITING_MSG) {
-                        if (this->fncall && this->prio > 0) {
-                            for (int i = 0; i < fncall->args.size; i++)
-                                fncall->args[i] = new_args[i];
-                            fncall->fn = new_fn;
-                            fncall->type = ((AST_FnType*)fncall->fn->type)->returntype;
-                            return true;
-                        }
-                        error({ .code = ERR_NOT_DEFINED, .nodes = { unresolved_id ? (AST_Value*)*unresolved_id : fncall } });
-                        return false;
-                    } else {
-                        return false;
-                    }
-                } else {
-                    return run(nullptr);
-                }
-            }
-            return false;
+
+            MUST (pending_matches == 0);
+            MUST (sc->scope == context);
+
+            context = context->parent;
+            return read_scope();
         }
 
-        case MSG_FN_MATCHED: {
-            MatchCallJobOverMessage *match_msg = (MatchCallJobOverMessage*)msg;
-            if (match_msg->fncall != fncall)
-                return false;
-
-            pending_matches --;
-
-            if (prio < match_msg->priority) {
-
-                if (prio == 0)
-                    new_args.realloc(fncall->args.size);
-
-                prio = match_msg->priority;
-
-                for (int i = 0; i < fncall->args.size; i++)
-                    new_args[i] = match_msg->casted_args[i];
-
-                new_fn = match_msg->fn;
-
-            } else if (prio == match_msg->priority) {
-                // TODO ERROR
-                NOT_IMPLEMENTED();
-            }
-
-            if (pending_matches == 0) {
-                if (context && context->closed) {
-                    jump_to_parent_scope();
-                    if (context) {
-                        assert(!run(nullptr));
-                        return false;
-                    }
-                }
-                if (!context) {
-                    if (prio > 0) {
-                        for (int i = 0; i < fncall->args.size; i++)
-                            fncall->args[i] = new_args[i];
-                        fncall->fn = new_fn;
-                        fncall->type = ((AST_FnType*)fncall->fn->type)->returntype;
-                        return true;
-                    } else {
-                        // TODO ERROR
-                        NOT_IMPLEMENTED();
-                    }
-                } else {
-                    return false;
-                }
-            }
-
-            return false;
-        }
         default:
             UNREACHABLE;
     }

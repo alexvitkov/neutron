@@ -10,11 +10,10 @@
 
 struct CastJob : Job {
     AST_Value *src;
-    AST_Value *result;
     AST_Type  *dsttype;
     int prio;
 
-    CastJob(AST_Context *ctx, AST_Value *value, AST_Type *dsttype);
+    CastJob(AST_Context *ctx, AST_Value *value, AST_Type *dsttype, JobOnCompleteCallback on_complete);
     bool run(Message *msg) override;
     std::wstring get_name() override;
 };

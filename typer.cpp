@@ -379,10 +379,10 @@ bool TypeCheckJob::run(Message *msg) {
                     return false;
                 }
 
-                CastJob cast_job(&ctx, ret->value, rettype);
+                CastJob cast_job(&ctx, ret->value, rettype, nullptr);
                 WAIT (cast_job, TypeCheckJob, CastJob);
 
-                ret->value = cast_job.result;
+                ret->value = (AST_Value*)cast_job.result;
 
                 return true;
             } else if (ret->value) {
