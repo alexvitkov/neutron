@@ -27,14 +27,14 @@ struct TIR_UnsignedBinOpBuilder : TIR_Builder {
 
     TIR_UnsignedBinOpBuilder(TIR_OpCode opc) : TIR_Builder(false), opcode(opc) {}
 
-    void emit1(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) override {
+    TIR_Value emit1(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) override {
         AST_Type *lhs_type = args[0].type;
         AST_Type *rhs_type = args[1].type;
 
-        TIR_Value lhs = { .valuespace = TVS_ARGUMENT, .offset = 0, .type = lhs_type };
-        TIR_Value rhs = { .valuespace = TVS_ARGUMENT, .offset = 1, .type = rhs_type };
+        TIR_Value lhs = args[0];
+        TIR_Value rhs = args[1];
 
-        tirfn.returntype = lhs_type->size > rhs_type->size ? lhs_type : rhs_type;
+        // tirfn.returntype = lhs_type->size > rhs_type->size ? lhs_type : rhs_type;
 
         if (lhs_type->size < rhs_type->size) {
             TIR_Value lhs_old = lhs;
@@ -54,11 +54,16 @@ struct TIR_UnsignedBinOpBuilder : TIR_Builder {
             });
         }
 
+        if (!dst) {
+            dst = tirfn.alloc_temp(lhs_type);
+        }
+
         tirfn.emit({ 
             .opcode = (TIR_OpCode)(opcode), 
             .bin = { .dst = dst, .lhs = lhs, .rhs = rhs, }
         });
-        tirfn.emit({ .opcode = TOPC_RET });
+        // tirfn.emit({ .opcode = TOPC_RET });
+        return dst;
     }
 };
 
@@ -161,6 +166,7 @@ TIR_Builder *get_builder(TokenType op, AST_Type *lhs, AST_Type *rhs, AST_Type **
 
             TIR_Builder *builder;
             if (binary_builders.find({ op, plhs, prhs }, &builder)) {
+                *out = plhs->size > prhs->size ? plhs : prhs;
                 return builder;
             }
 

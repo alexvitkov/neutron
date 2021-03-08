@@ -249,7 +249,7 @@ struct TIR_Builder {
 
     TIR_Builder(bool use_emit) : use_emit2(use_emit) {}
 
-    virtual void emit1(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) {
+    virtual TIR_Value emit1(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) {
         UNREACHABLE;
     }
     virtual TIR_Value emit2(TIR_Function &tirfn, arr<AST_Value*> &args, TIR_Value dst) {

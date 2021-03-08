@@ -527,7 +527,7 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             }
 
             if (fncall->builder) {
-                fncall->builder->emit1(fn, args, dst);
+                dst = fncall->builder->emit1(fn, args, dst);
                 return dst;
             }
 

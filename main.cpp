@@ -98,14 +98,14 @@ int main(int argc, const char** argv) {
         for (auto &kvp : global.jobs_by_id) {
             if (!(kvp.value->job()->flags & JOB_DONE)) {
                 if (!(kvp.value->job()->flags & JOB_ERROR))
-                    wcout << "    - HANG " << kvp.value->job()->get_name() << "\n";
+                    wcout << "    - HANG " << kvp.value->job()-> id << ": " << kvp.value->job()->get_name() << "\n";
             }
         }
 
         for (auto &kvp : global.jobs_by_id) {
             if (!(kvp.value->job()->flags & JOB_DONE)) {
                 if ((kvp.value->job()->flags & JOB_ERROR) == JOB_ERROR)
-                    wcout << red << "    - FAIL " << resetstyle << kvp.value->job()->get_name() << "\n";
+                    wcout << red << "    - FAIL " << kvp.value->job()-> id << ": " << resetstyle << kvp.value->job()->get_name() << "\n";
             }
         }
 

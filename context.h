@@ -263,45 +263,58 @@ struct Job {
     // so you can wait on it
     template <typename JobT>
     HeapJob *run_stackjob() {
-       if (run(nullptr)) {
-           if (on_complete) {
-               on_complete(this, nullptr);
-           }
-           flags = (JobFlags)(flags | JOB_DONE);
-           return nullptr;
-       }
+        if (run(nullptr)) {
+            if (debug_jobs)
+                wcout << dim << "Finished stackjob " << resetstyle << get_name() << "\n";
+            if (on_complete) {
+                on_complete(this, nullptr);
+            }
+            flags = (JobFlags)(flags | JOB_DONE);
+            return nullptr;
+        }
 
-       if (flags & JOB_ERROR) {
-           return nullptr;
-       }
+        if (flags & JOB_ERROR) {
+            return nullptr;
+        }
 
-       HeapJob *heap_job = heapify<JobT>();
-       global.add_job(heap_job);
+        HeapJob *heap_job = heapify<JobT>();
+        global.add_job(heap_job);
 
-       return heap_job;
+        return heap_job;
     }
 
     template <typename MyT, typename ChildT>
     bool run_child(ChildT &child) {
-       if (child.run(nullptr)) {
-           if (child.on_complete) {
-               child.on_complete(&child, this);
-           }
-           child.flags = (JobFlags)(flags | JOB_DONE);
-           return true;
-       }
+        if (child.run(nullptr)) {
+            if (debug_jobs) {
 
-       if (child.flags & JOB_ERROR) {
-           set_error_flag();
-           return false;
-       }
+                HeapJob *hj;
+                if (global.jobs_by_id.find(child.id, &hj)) {
+                    wcout << red << "Stackjob finished but was already heapified:" << resetstyle << child.get_name() << "\n";
+                    wcout.flush();
+                    assert(!"ASDFASASFAFSFA");
+                }
 
-       HeapJob *child_heap_job = child.template heapify<ChildT>();
-       HeapJob *this_heap_hob  = heapify<MyT>();
-       this_heap_hob->add_dependency(child_heap_job);
-       global.add_job(this_heap_hob);
+                wcout << dim << "Finished stackjob " << resetstyle << child.get_name() << "\n";
+            }
+            if (child.on_complete) {
+                child.on_complete(&child, this);
+            }
+            child.flags = (JobFlags)(flags | JOB_DONE);
+            return true;
+        }
 
-       return false;
+        if (child.flags & JOB_ERROR) {
+            set_error_flag();
+            return false;
+        }
+
+        HeapJob *child_heap_job = child.template heapify<ChildT>();
+        HeapJob *this_heap_hob  = heapify<MyT>();
+        this_heap_hob->add_dependency(child_heap_job);
+        global.add_job(this_heap_hob);
+
+        return false;
     }
 
 
@@ -365,17 +378,17 @@ bool parse_all(AST_Context& global);
 bool parse_source_file(AST_Context& global, SourceFile& sf);
 
 #define WAIT(job, mytype, jobtype, ...)              \
-    {                                                \
-        HeapJob *heap_job = job.run_stackjob<jobtype>(); \
-        if (heap_job) {                              \
-            HeapJob *this_heap_job = heapify<mytype>();  \
-            this_heap_job->add_dependency(heap_job); \
-            __VA_ARGS__                              \
-            return false;                            \
-        } else if (job.flags & JOB_ERROR) {          \
-            set_error_flag();                        \
-            return false;                            \
-        }                                            \
-    }
+{                                                \
+    HeapJob *heap_job = job.run_stackjob<jobtype>(); \
+    if (heap_job) {                              \
+        HeapJob *this_heap_job = heapify<mytype>();  \
+        this_heap_job->add_dependency(heap_job); \
+        __VA_ARGS__                              \
+        return false;                            \
+    } else if (job.flags & JOB_ERROR) {          \
+        set_error_flag();                        \
+        return false;                            \
+    }                                            \
+}
 
 #endif // guard

@@ -11,7 +11,6 @@ void HeapJob::add_dependency(HeapJob* dependency) {
     assert(!(dependency->job()->flags & JOB_DONE));
 
     if (dependency->job()->flags & JOB_ERROR) {
-        UNREACHABLE;
         job()->set_error_flag();
         return;
     }
@@ -113,7 +112,7 @@ bool AST_GlobalContext::run_jobs() {
 }
 
 ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id) 
-    : Job(ctx.global), unresolved_id(id), context(&ctx) 
+    : Job(ctx.global), unresolved_id(id), context(&ctx) , fncall(nullptr)
 {
     flags = (JobFlags)(flags | JOB_WAITING_MSG);
 }
@@ -247,7 +246,7 @@ bool key_compatible(DeclarationKey &lhs, DeclarationKey &rhs) {
 }
 
 RunJobResult ResolveJob::read_scope() {
-    if (fncall->op) {
+    if (fncall && fncall->op) {
         switch (fncall->args.size) {
             case 2: {
                 TIR_Builder *builder = get_builder(

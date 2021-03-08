@@ -162,7 +162,7 @@ bool GetTypeJob::run(Message *msg) {
                 ctx.subscribers.push(heap_job);
             );
 
-            return fncall->type;
+            return true;
         }
 
         case AST_MEMBER_ACCESS: {
