@@ -833,8 +833,8 @@ struct ParseExprState {
         *out = val.val;
 
         if (val.val IS AST_UNRESOLVED_ID) {
-            ResolveJob _resolve_job(ctx, (AST_UnresolvedId**)out);
-            HeapJob *resolve_job = _resolve_job.heapify<ResolveJob>();
+            IdResolveJob _resolve_job(ctx, (AST_UnresolvedId**)out);
+            HeapJob *resolve_job = _resolve_job.heapify<CallResolveJob>();
 
             ((AST_UnresolvedId*)val.val)->job = resolve_job;
 

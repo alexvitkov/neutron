@@ -13,6 +13,7 @@ struct NumberData {
 
     void convert_base(u16 new_base);
     u8 divide(u16 divisor);
+    void add(NumberData &other);
     bool is_zero();
 };
 

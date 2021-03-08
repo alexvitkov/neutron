@@ -341,9 +341,17 @@ T* AST_Context::alloc_temp(Ts &&...args) {
     return buf;
 }
 
-
-struct ResolveJob : Job {
+struct IdResolveJob : Job {
     AST_UnresolvedId **unresolved_id;
+    AST_Context       *context;
+
+    IdResolveJob(AST_Context &ctx, AST_UnresolvedId **id);
+
+    bool run(Message *msg) override;
+    std::wstring get_name() override;
+};
+
+struct CallResolveJob : Job {
     AST_Call          *fncall;
     AST_Context       *context;
 
@@ -353,7 +361,7 @@ struct ResolveJob : Job {
     arr<AST_Value*> new_args;
     AST_Fn         *new_fn;
 
-    ResolveJob(AST_Context &ctx, AST_UnresolvedId **id);
+    CallResolveJob(AST_Context &ctx, AST_Call *call);
     bool run(Message *msg) override;
     std::wstring get_name() override;
 

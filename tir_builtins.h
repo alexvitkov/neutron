@@ -24,10 +24,5 @@ struct TIR_Builder *get_builder(TokenType op, AST_Type *lhs, AST_Type *rhs, AST_
 
 extern map<TypePair, BuiltinCast>  builtin_casts;
 
-// bool number_literal_to_u64(AST_GlobalContext &global, AST_Value *src, AST_Value **dst);
-// bool number_literal_to_u32(AST_GlobalContext &global, AST_Value *src, AST_Value **dst);
-// bool number_literal_to_u16(AST_GlobalContext &global, AST_Value *src, AST_Value **dst);
-// bool number_literal_to_u8 (AST_GlobalContext &global, AST_Value *src, AST_Value **dst);
-
 
 #endif // guard

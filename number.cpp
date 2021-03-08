@@ -33,6 +33,33 @@ u8 NumberData::divide(u16 divisor) {
     return acc;
 }
 
+void NumberData::add(NumberData &other) {
+    convert_base(other.base);
+
+    if (other.digits.size < digits.size) {
+        u32 d1 = digits.size - 1;
+        u32 d2 = other.digits.size - 1;
+
+        bool carry = false;
+        while (d2 >= 0) {
+            u16 asdf = digits[d1] + other.digits[d2];
+
+            asdf += carry;
+
+            if (asdf > base) {
+                asdf -= base;
+                carry = true;
+            }
+            digits[d1] = asdf;
+
+            d1--;
+            d2--;
+        }
+    } else {
+        NOT_IMPLEMENTED();
+    }
+}
+
 std::wostream& operator<< (std::wostream& o, NumberData* number) {
     switch (number->base) {
         case 0:  o << "0b"; break;

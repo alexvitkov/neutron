@@ -111,8 +111,14 @@ bool AST_GlobalContext::run_jobs() {
     return jobs_count == 0;
 }
 
-ResolveJob::ResolveJob(AST_Context &ctx, AST_UnresolvedId **id) 
-    : Job(ctx.global), unresolved_id(id), context(&ctx) , fncall(nullptr)
+CallResolveJob::CallResolveJob(AST_Context &ctx, AST_Call *call) 
+    : Job(ctx.global), context(&ctx) , fncall(call)
+{
+    flags = (JobFlags)(flags | JOB_WAITING_MSG);
+}
+
+IdResolveJob::IdResolveJob(AST_Context &ctx, AST_UnresolvedId **id) 
+    : Job(ctx.global), context(&ctx) , unresolved_id(id)
 {
     flags = (JobFlags)(flags | JOB_WAITING_MSG);
 }
@@ -178,12 +184,12 @@ struct MatchCallJob : Job {
 };
 
 
-bool ResolveJob::spawn_match_job(AST_Fn *fn) {
+bool CallResolveJob::spawn_match_job(AST_Fn *fn) {
     pending_matches++;
 
     MatchCallJob the_job(context, fn, this->fncall, [](Job *_self, Job *_parent) {
         MatchCallJob *self = (MatchCallJob*)_self;
-        ResolveJob *parent = (ResolveJob*)_parent;
+        CallResolveJob *parent = (CallResolveJob*)_parent;
 
         parent->pending_matches --;
 
@@ -212,7 +218,7 @@ bool ResolveJob::spawn_match_job(AST_Fn *fn) {
     });
 
     the_job.input = 0;
-    if (run_child<ResolveJob, MatchCallJob>(the_job))
+    if (run_child<CallResolveJob, MatchCallJob>(the_job))
         return true;
 
     the_job.input = (void*)1;
@@ -220,20 +226,13 @@ bool ResolveJob::spawn_match_job(AST_Fn *fn) {
 }
 
 
-DeclarationKey ResolveJob::get_decl_key() {
+DeclarationKey CallResolveJob::get_decl_key() {
     DeclarationKey key = {};
-
-    if (fncall) {
-        if (fncall->fn) {
-            key.name = ((AST_UnresolvedId*)fncall->fn)->name;
-        } else {
-            assert (fncall->op);
-            key.op = fncall->op;
-        }
+    if (fncall->fn) {
+        key.name = ((AST_UnresolvedId*)fncall->fn)->name;
     } else {
-        assert(unresolved_id);
-        assert((*unresolved_id) IS AST_UNRESOLVED_ID);
-        key.name = (*unresolved_id)->name;
+        assert (fncall->op);
+        key.op = fncall->op;
     }
     return key;
 }
@@ -245,7 +244,7 @@ bool key_compatible(DeclarationKey &lhs, DeclarationKey &rhs) {
     return true;
 }
 
-RunJobResult ResolveJob::read_scope() {
+RunJobResult CallResolveJob::read_scope() {
     if (fncall && fncall->op) {
         switch (fncall->args.size) {
             case 2: {
@@ -269,11 +268,7 @@ RunJobResult ResolveJob::read_scope() {
     }    
 
     if (!context) {
-        if (unresolved_id) {
-            // TODO ERROR
-            set_error_flag();
-            return RUN_FAIL;
-        } else if (prio > 0) {
+        if (prio > 0) {
             for (int i = 0; i < fncall->args.size; i++)
                 fncall->args[i] = new_args[i];
             fncall->fn = new_fn;
@@ -287,33 +282,17 @@ RunJobResult ResolveJob::read_scope() {
         }
     }
 
-    if (unresolved_id) {
-        AST_Node *decl;
-        if (context->declarations.find({ .name = (*unresolved_id)->name }, &decl)) {
-            *(AST_Node**)unresolved_id = decl;
-            job_done();
-            return RUN_DONE;
-        }   
-
-        if (context->closed) {
-            context = context->parent;
-            return read_scope();
-        } else {
-            context->subscribers.push(heapify<ResolveJob>());
-            return RUN_AGAIN;
-        }
-    }
 
     else {
         bool heaped = false;
-        ResolveJob *self = this;
+        CallResolveJob *self = this;
         DeclarationKey key = self->get_decl_key();
 
         for (auto &kvp : self->context->declarations)
             if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
                 if (!self->spawn_match_job((AST_Fn*)kvp.value) && !heaped) {
                     heaped = true;
-                    self = (ResolveJob*)heapify<ResolveJob>()->job();
+                    self = (CallResolveJob*)heapify<CallResolveJob>()->job();
                 }
         
         if (self->context) {
@@ -323,7 +302,7 @@ RunJobResult ResolveJob::read_scope() {
             }
 
             if (!self->context->closed) {
-                context->subscribers.push(heapify<ResolveJob>());
+                context->subscribers.push(heapify<CallResolveJob>());
             }
         } else {
             return self->read_scope();
@@ -332,9 +311,56 @@ RunJobResult ResolveJob::read_scope() {
     return RUN_AGAIN;
 }
 
+bool IdResolveJob::run(Message *msg) {
+Top:
+    if (!msg) {
+        if (!context) {
+            // TODO ERROR
+            set_error_flag();
+            return false;
+        }
 
-bool ResolveJob::run(Message *msg) {
-    ResolveJob *self = (ResolveJob*)this;
+        AST_Node *decl;
+        if (context->declarations.find({ .name = (*unresolved_id)->name }, &decl)) {
+            *(AST_Node**)unresolved_id = decl;
+            return true;
+        }   
+
+        if (context->closed) {
+            context = context->parent;
+            return run(nullptr);
+        } else {
+            context->subscribers.push(heapify<CallResolveJob>());
+            return RUN_AGAIN;
+        }
+    }
+
+    switch (msg->msgtype) {
+        case MSG_NEW_DECLARATION: {
+            NewDeclarationMessage *nd = (NewDeclarationMessage*)msg;
+            assert (nd->context == context);
+
+            if (nd->key.name && !strcmp(nd->key.name, (*unresolved_id)->name)) {
+                *(AST_Node**)unresolved_id = nd->node;
+                return true;
+            }
+            return false;
+        }
+        case MSG_SCOPE_CLOSED: {
+            ScopeClosedMessage *sc = (ScopeClosedMessage*)msg;
+            assert(sc->scope == context);
+            context = context->parent;
+
+            msg = nullptr;
+            goto Top;
+        }
+        default:
+            UNREACHABLE;
+    }
+}
+
+bool CallResolveJob::run(Message *msg) {
+    CallResolveJob *self = (CallResolveJob*)this;
     if (!msg) {
         switch (self->read_scope()) {
             case RUN_DONE:
@@ -354,14 +380,9 @@ bool ResolveJob::run(Message *msg) {
             DeclarationKey key = get_decl_key();
 
             if (key_compatible(key, decl->key)) {
-                if (unresolved_id) {
-                    *(AST_Node**)unresolved_id = decl->node;
-                    return true;
-                } else {
-                    if (decl->node IS AST_FN)
-                        spawn_match_job((AST_Fn*)decl->node);
-                    return false;
-                }
+                if (decl->node IS AST_FN)
+                    spawn_match_job((AST_Fn*)decl->node);
+                return false;
             }
         }
 
@@ -408,18 +429,20 @@ JobGroup::JobGroup(AST_GlobalContext &ctx, std::wstring name)
 bool JobGroup::run(Message *msg) {
     return !msg;
 }
+
 std::wstring JobGroup::get_name() {
     return L"JobGroup<" + name + L">";
 }
 
-std::wstring ResolveJob::get_name() {
+std::wstring IdResolveJob::get_name() {
     std::wostringstream stream;
+    stream << "IdResolveJob<" << unresolved_id << L">";
+    return stream.str();
+}
 
-    if (unresolved_id) {
-        stream << "ResolveJob<" << (*unresolved_id)->name << L">";
-    } else {
-        stream << "ResolveJob<" << fncall << L">";
-    }
+std::wstring CallResolveJob::get_name() {
+    std::wostringstream stream;
+    stream << "ResolveJob<" << fncall << L">";
     return stream.str();
 }
 

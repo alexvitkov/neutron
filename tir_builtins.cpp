@@ -34,8 +34,6 @@ struct TIR_UnsignedBinOpBuilder : TIR_Builder {
         TIR_Value lhs = args[0];
         TIR_Value rhs = args[1];
 
-        // tirfn.returntype = lhs_type->size > rhs_type->size ? lhs_type : rhs_type;
-
         if (lhs_type->size < rhs_type->size) {
             TIR_Value lhs_old = lhs;
             lhs = tirfn.alloc_temp(rhs_type);
@@ -62,7 +60,6 @@ struct TIR_UnsignedBinOpBuilder : TIR_Builder {
             .opcode = (TIR_OpCode)(opcode), 
             .bin = { .dst = dst, .lhs = lhs, .rhs = rhs, }
         });
-        // tirfn.emit({ .opcode = TOPC_RET });
         return dst;
     }
 };

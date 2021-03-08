@@ -150,7 +150,7 @@ bool GetTypeJob::run(Message *msg) {
                 WAIT (arg_gettype, GetTypeJob, GetTypeJob);
             }
 
-            ResolveJob resolve_fn_job(ctx, nullptr);
+            CallResolveJob resolve_fn_job(ctx, nullptr);
             resolve_fn_job.fncall = fncall;
 
             if (fncall->fn) {
@@ -158,7 +158,7 @@ bool GetTypeJob::run(Message *msg) {
                 assert (fncall->fn   IS AST_UNRESOLVED_ID);
             }
 
-            WAIT (resolve_fn_job, GetTypeJob, ResolveJob,
+            WAIT (resolve_fn_job, GetTypeJob, CallResolveJob,
                 ctx.subscribers.push(heap_job);
             );
 
