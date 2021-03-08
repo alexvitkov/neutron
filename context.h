@@ -344,7 +344,7 @@ struct JobGroup : Job {
     std::wstring name;
 
     bool run(Message *msg) override;
-    JobGroup(AST_GlobalContext &ctx, std::wstring name);
+    JobGroup(AST_GlobalContext &ctx, JobOnCompleteCallback on_complete);
     std::wstring get_name() override;
 };
 

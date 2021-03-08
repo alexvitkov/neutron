@@ -10,11 +10,6 @@ struct UnaryOpKey {
 u32 map_hash(UnaryOpKey key) { return map_hash(key.inner) ^ key.op; }
 bool map_equals(UnaryOpKey a, UnaryOpKey b) { return a.inner == b.inner && a.op == b.op; }
 
-struct BinaryOpKey {
-    TokenType op;
-    AST_Type *lhs;
-    AST_Type *rhs;
-};
 u32 map_hash(BinaryOpKey key) { return map_hash(key.lhs) ^ (map_hash(key.rhs) << 1) ^ key.op; }
 bool map_equals(BinaryOpKey a, BinaryOpKey b) { return a.lhs == b.lhs && a.rhs == b.rhs && a.op == b.op; }
 map <BinaryOpKey, TIR_Builder*> binary_builders;
@@ -22,39 +17,19 @@ map <BinaryOpKey, TIR_Builder*> binary_builders;
 map<TypePair, BuiltinCast>  builtin_casts;
 
 
-struct TIR_UnsignedBinOpBuilder : TIR_Builder {
+struct TIR_CommonBinOpBuilder : TIR_Builder {
     TIR_OpCode opcode;
 
-    TIR_UnsignedBinOpBuilder(TIR_OpCode opc) : TIR_Builder(false), opcode(opc) {}
+    TIR_CommonBinOpBuilder(TIR_OpCode opc) : TIR_Builder(false), opcode(opc) {}
 
     TIR_Value emit1(TIR_Function &tirfn, arr<TIR_Value> &args, TIR_Value dst) override {
-        AST_Type *lhs_type = args[0].type;
-        AST_Type *rhs_type = args[1].type;
-
         TIR_Value lhs = args[0];
         TIR_Value rhs = args[1];
 
-        if (lhs_type->size < rhs_type->size) {
-            TIR_Value lhs_old = lhs;
-            lhs = tirfn.alloc_temp(rhs_type);
+        assert(lhs.type == rhs.type);
 
-            tirfn.emit({ 
-                .opcode = TOPC_ZEXT,
-                .un = { .dst = lhs, .src = lhs_old, }
-            });
-        } else if (rhs_type->size < lhs_type->size) {
-            TIR_Value rhs_old = rhs;
-            rhs = tirfn.alloc_temp(rhs_type);
-
-            tirfn.emit({ 
-                .opcode = TOPC_ZEXT,
-                .un = { .dst = rhs, .src = rhs_old, }
-            });
-        }
-
-        if (!dst) {
-            dst = tirfn.alloc_temp(lhs_type);
-        }
+        if (!dst)
+            dst = tirfn.alloc_temp(lhs.type);
 
         tirfn.emit({ 
             .opcode = (TIR_OpCode)(opcode), 
@@ -117,6 +92,7 @@ inline bool number_literal_to_unsigned(AST_GlobalContext &global, AST_Value *src
         return false;
     }
 
+    // TODO LOCATION
     AST_SmallNumber *sn = global.alloc<AST_SmallNumber>(t);
     sn->u64_val = num;
     *dst = sn;
@@ -136,60 +112,63 @@ bool number_literal_to_u8(AST_GlobalContext &global, AST_Value *src, AST_Value *
     return number_literal_to_unsigned<u8>(global, src, dst, &t_u8);
 }
 
+bool zext_to_u16(AST_GlobalContext &global, AST_Value *src, AST_Value **dst) {
+    *dst = global.alloc<AST_ZeroExtend>(src, &t_u16);
+    return true;
+}
+bool zext_to_u32(AST_GlobalContext &global, AST_Value *src, AST_Value **dst) {
+    *dst = global.alloc<AST_ZeroExtend>(src, &t_u32);
+    return true;
+}
+bool zext_to_u64(AST_GlobalContext &global, AST_Value *src, AST_Value **dst) {
+    *dst = global.alloc<AST_ZeroExtend>(src, &t_u64);
+    return true;
+}
+
 struct Initializer {
     Initializer() {
         builtin_casts.insert({ &t_number_literal, &t_u64 }, { number_literal_to_u64, 100 });
         builtin_casts.insert({ &t_number_literal, &t_u32 }, { number_literal_to_u32, 90 });
         builtin_casts.insert({ &t_number_literal, &t_u16 }, { number_literal_to_u16, 80 });
         builtin_casts.insert({ &t_number_literal, &t_u8  }, { number_literal_to_u8,  70 });
+
+        builtin_casts.insert({ &t_u8,  &t_u16 }, { zext_to_u16,  80  });
+        builtin_casts.insert({ &t_u8,  &t_u32 }, { zext_to_u32,  90  });
+        builtin_casts.insert({ &t_u8,  &t_u64 }, { zext_to_u64,  100 });
+        builtin_casts.insert({ &t_u16, &t_u32 }, { zext_to_u32,  90  });
+        builtin_casts.insert({ &t_u16, &t_u64 }, { zext_to_u64,  100 });
+        builtin_casts.insert({ &t_u32, &t_u64 }, { zext_to_u64,  100 });
+
+        struct OperatorOpcode {
+            TokenType op;
+            TIR_OpCode opcode;
+        };
+
+        arr<OperatorOpcode> opcs = {
+            { (TokenType)'+', TOPC_ADD },
+            { (TokenType)'-', TOPC_SUB },
+            { (TokenType)'*', TOPC_MUL },
+            { (TokenType)'/', TOPC_DIV },
+            { (TokenType)'%', TOPC_MOD },
+        };
+
+        TIR_Builder *builder;
+
+        for (auto &p : opcs) {
+            for (AST_Type * t : unsigned_types) {
+                TIR_OpCode opcode = (TIR_OpCode)(p.opcode | TOPC_UNSIGNED);
+                TIR_CommonBinOpBuilder *builder = new TIR_CommonBinOpBuilder(opcode);
+                builder->rettype = t;
+                binary_builders[{p.op, t, t}] = builder;
+            }
+
+            for (AST_Type * t : signed_types) {
+                TIR_OpCode opcode = (TIR_OpCode)(p.opcode | TOPC_SIGNED);
+                TIR_CommonBinOpBuilder *builder = new TIR_CommonBinOpBuilder(opcode);
+                builder->rettype = t;
+                binary_builders[{p.op, t, t}] = builder;
+            }
+        }
+
     }
 } _;
-
-TIR_Builder *get_builder(TokenType op, AST_Type *lhs, AST_Type *rhs, AST_Type **out) {
-
-    switch (op) {
-        case '=': {
-            *out = lhs;
-            return &assignment_builder;
-        }
-
-        case '+': case '-': case '*': case '/': case '%':
-        { 
-            MUST (lhs IS AST_PRIMITIVE_TYPE);
-            MUST (rhs IS AST_PRIMITIVE_TYPE);
-
-            AST_PrimitiveType *plhs = (AST_PrimitiveType*)lhs;
-            AST_PrimitiveType *prhs = (AST_PrimitiveType*)rhs;
-
-            TIR_Builder *builder;
-            if (binary_builders.find({ op, plhs, prhs }, &builder)) {
-                *out = plhs->size > prhs->size ? plhs : prhs;
-                return builder;
-            }
-
-            TIR_OpCode opcode;
-            switch (op) {
-                case '+': opcode = TOPC_ADD; break;
-                case '-': opcode = TOPC_SUB; break;
-                case '*': opcode = TOPC_MUL; break;
-                case '/': opcode = TOPC_DIV; break;
-                case '%': opcode = TOPC_MOD; break;
-                default: UNREACHABLE;
-            }
-
-            if (plhs->kind == PRIMITIVE_UNSIGNED && prhs->kind == PRIMITIVE_UNSIGNED) {
-                opcode = (TIR_OpCode)(opcode | TOPC_UNSIGNED);
-                TIR_UnsignedBinOpBuilder *builder = new TIR_UnsignedBinOpBuilder(opcode);
-                *out = plhs->size > prhs->size ? plhs : prhs;
-                binary_builders[{op, lhs, rhs}] = builder;
-                return builder;
-            } else {
-                NOT_IMPLEMENTED();
-            }
-        }
-
-        default:
-            UNREACHABLE;
-    }
-}
-

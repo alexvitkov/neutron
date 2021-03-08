@@ -246,6 +246,7 @@ struct TIR_Function {
 
 struct TIR_Builder {
     bool use_emit2;
+    AST_Type *rettype;
 
     TIR_Builder(bool use_emit) : use_emit2(use_emit) {}
 

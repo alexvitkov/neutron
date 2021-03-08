@@ -20,9 +20,16 @@ struct BuiltinCast {
     int priority;
 };
 
-struct TIR_Builder *get_builder(TokenType op, AST_Type *lhs, AST_Type *rhs, AST_Type **out);
-
 extern map<TypePair, BuiltinCast>  builtin_casts;
 
+struct BinaryOpKey {
+    TokenType op;
+    AST_Type *lhs;
+    AST_Type *rhs;
+};
+
+u32 map_hash(BinaryOpKey key);
+bool map_equals(BinaryOpKey a, BinaryOpKey b);
+extern map <BinaryOpKey, struct TIR_Builder*> binary_builders;
 
 #endif // guard

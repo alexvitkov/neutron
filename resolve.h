@@ -34,12 +34,22 @@ struct CallResolveJob : Job {
     RunJobResult read_scope();
 };
 
+
+
+
 struct OpResolveJob : Job {
     AST_Call          *fncall;
+
+    AST_Value *new_lhs, *new_rhs;
+    struct TIR_Builder *new_builder;
+    int prio = 0;
+    int pending_matches = 0;
 
     OpResolveJob(AST_GlobalContext &global, AST_Call *call);
     bool run(Message *msg) override;
     std::wstring get_name() override;
+
+    RunJobResult try_binary_builder(struct TIR_Builder *builder, AST_Type *target_type, bool cast_rhs);
 };
 
 

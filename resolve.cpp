@@ -1,10 +1,33 @@
 #include "ast.h"
 #include "resolve.h"
 #include "cast.h"
+#include "tir.h"
 #include "tir_builtins.h"
 
 #include <iostream>
 #include <sstream>
+
+
+
+CallResolveJob::CallResolveJob(AST_Context &ctx, AST_Call *call) 
+    : Job(ctx.global), context(&ctx) , fncall(call)
+{
+    flags = (JobFlags)(flags | JOB_WAITING_MSG);
+}
+
+IdResolveJob::IdResolveJob(AST_Context &ctx, AST_UnresolvedId **id) 
+    : Job(ctx.global), context(&ctx) , unresolved_id(id)
+{
+    flags = (JobFlags)(flags | JOB_WAITING_MSG);
+}
+
+OpResolveJob::OpResolveJob(AST_GlobalContext &ctx, AST_Call *call) 
+    : Job(ctx), fncall(call)
+{
+    flags = (JobFlags)(flags | JOB_WAITING_MSG);
+}
+
+
 
 struct MatchCallJob : Job {
     AST_Context *context;
@@ -66,23 +89,6 @@ struct MatchCallJob : Job {
 };
 
 
-CallResolveJob::CallResolveJob(AST_Context &ctx, AST_Call *call) 
-    : Job(ctx.global), context(&ctx) , fncall(call)
-{
-    flags = (JobFlags)(flags | JOB_WAITING_MSG);
-}
-
-IdResolveJob::IdResolveJob(AST_Context &ctx, AST_UnresolvedId **id) 
-    : Job(ctx.global), context(&ctx) , unresolved_id(id)
-{
-    flags = (JobFlags)(flags | JOB_WAITING_MSG);
-}
-
-OpResolveJob::OpResolveJob(AST_GlobalContext &ctx, AST_Call *call) 
-    : Job(ctx), fncall(call)
-{
-    flags = (JobFlags)(flags | JOB_WAITING_MSG);
-}
 
 bool CallResolveJob::spawn_match_job(AST_Fn *fn) {
     pending_matches++;
@@ -160,31 +166,27 @@ RunJobResult CallResolveJob::read_scope() {
         }
     }
 
+    bool heaped = false;
+    CallResolveJob *self = this;
+    DeclarationKey key = self->get_decl_key();
 
-    else {
-        bool heaped = false;
-        CallResolveJob *self = this;
-        DeclarationKey key = self->get_decl_key();
-
-        for (auto &kvp : self->context->declarations)
-            if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
-                if (!self->spawn_match_job((AST_Fn*)kvp.value) && !heaped) {
-                    heaped = true;
-                    self = (CallResolveJob*)heapify<CallResolveJob>()->job();
-                }
-        
-        if (self->context) {
-            if (pending_matches == 0 && self->context->closed) {
-                self->context = self->context->parent;
-                return self->read_scope();
+    for (auto &kvp : self->context->declarations)
+        if (kvp.value IS AST_FN && key_compatible(key, kvp.key))
+            if (!self->spawn_match_job((AST_Fn*)kvp.value) && !heaped) {
+                heaped = true;
+                self = (CallResolveJob*)heapify<CallResolveJob>()->job();
             }
-
-            if (!self->context->closed) {
-                context->subscribers.push(heapify<CallResolveJob>());
-            }
-        } else {
+    
+    if (self->context) {
+        if (pending_matches == 0 && self->context->closed) {
+            self->context = self->context->parent;
             return self->read_scope();
         }
+        if (!self->context->closed) {
+            context->subscribers.push(heapify<CallResolveJob>());
+        }
+    } else {
+        return self->read_scope();
     }
     return RUN_AGAIN;
 }
@@ -285,20 +287,84 @@ bool CallResolveJob::run(Message *msg) {
     }
 }
 
+RunJobResult OpResolveJob::try_binary_builder(TIR_Builder *builder, AST_Type *targettype, bool cast_rhs) {
+
+    struct Data {
+        bool cast_rhs;
+        AST_Value *other;
+        TIR_Builder *builder;
+    };
+
+    pending_matches ++;
+    CastJob the_cast(&global, fncall->args[cast_rhs ? 1 : 0], targettype, [](Job *_self, Job *_parent) {
+
+        CastJob *self = (CastJob*)_self;
+        OpResolveJob *parent = (OpResolveJob*)_parent;
+        Data *data = (Data*)self->input;
+
+        if (self->prio > parent->prio) {
+            parent->prio = self->prio;
+
+            if (data->cast_rhs) {
+                parent->new_lhs = data->other;
+                parent->new_rhs = (AST_Value*)self->result;
+            }
+        }
+
+        parent->pending_matches --;
+        if (parent->pending_matches == 0) {
+            // TODO check if global si clsoed for new declarations
+            if (!parent->prio) {
+                parent->set_error_flag();
+                return;
+            } else {
+                parent->fncall->type = data->builder->rettype;
+                parent->fncall->builder = data->builder;
+            }
+        }
+
+    });
+
+    // TODO LEAK
+    Data *asdf = new Data();
+    the_cast.input = asdf;
+    asdf->cast_rhs = cast_rhs;
+    asdf->other = this->fncall->args[cast_rhs ? 0 : 1];
+    asdf->builder = builder;
+
+    bool r = run_child<CastJob>(the_cast);
+    return RUN_AGAIN;
+}
+
 bool OpResolveJob::run(Message *msg) {
     if (!msg) {
         switch (fncall->args.size) {
             case 2: {
-                TIR_Builder *builder = get_builder(
-                    fncall->op, 
-                    fncall->args[0]->type, 
-                    fncall->args[1]->type,
-                    &fncall->type
-                );
-                if (!builder) {
-                    set_error_flag();
-                    return RUN_FAIL;
+                TIR_Builder *builder = nullptr;
+
+                if (binary_builders.find( 
+                    { fncall->op, fncall->args[0]->type, fncall->args[1]->type }, 
+                    &builder)) 
+                {
+                    fncall->builder = builder;
+                    fncall->type = builder->rettype;
                 }
+
+                if (!builder) {
+                    // TODO this is slow
+                    for (auto & b : binary_builders) {
+                        if (b.key.op != fncall->op)
+                            continue;
+                        if (b.key.lhs != fncall->args[0]->type && b.key.rhs != fncall->args[1]->type)
+                            continue;
+
+                        if (b.key.lhs == fncall->args[0]->type)
+                            try_binary_builder(b.value, b.key.rhs, true);
+                        else
+                            try_binary_builder(b.value, b.key.lhs, false);
+                    }
+                }
+
                 fncall->builder = builder;
                 job_done();
                 return RUN_DONE;
@@ -307,7 +373,14 @@ bool OpResolveJob::run(Message *msg) {
             default: UNREACHABLE;
         }
     }
-    NOT_IMPLEMENTED();
+
+    switch (msg->msgtype) {
+        case MSG_SCOPE_CLOSED: {
+            NOT_IMPLEMENTED();
+        }
+        default:
+            UNREACHABLE;
+    }
 };
 
 

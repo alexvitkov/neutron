@@ -249,6 +249,13 @@ struct AST_Dereference : AST_Value {
         : AST_Value(AST_DEREFERENCE, nullptr), ptr(ptr) {}
 };
 
+struct AST_ZeroExtend : AST_Value {
+    AST_Value *inner;
+
+    inline AST_ZeroExtend(AST_Value* ptr, AST_Type *type) 
+        : AST_Value(AST_ZEROEXTEND, type), inner(ptr) {}
+};
+
 struct AST_Typeof : AST_Value {
     AST_Value *inner;
     inline AST_Typeof(AST_Value* inner) 

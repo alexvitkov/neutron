@@ -131,8 +131,9 @@ void Job::error(Error err) {
     }
 }
 
-JobGroup::JobGroup(AST_GlobalContext &ctx, std::wstring name) 
-    : Job(ctx), name(name) { }
+JobGroup::JobGroup(AST_GlobalContext &ctx, JobOnCompleteCallback on_complete) : Job(ctx) {
+    this->on_complete = on_complete;
+}
 
 bool JobGroup::run(Message *msg) {
     return !msg;

@@ -49,7 +49,7 @@ int main(int argc, const char** argv) {
         }
     }
 
-    JobGroup _all_tir_compiled_job (global, L"all_tir_compiled");
+    JobGroup _all_tir_compiled_job (global, nullptr);
     HeapJob *all_tir_compiled_job = _all_tir_compiled_job.heapify<JobGroup>();
     global.add_job(all_tir_compiled_job);
     
