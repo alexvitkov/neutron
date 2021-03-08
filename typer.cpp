@@ -150,17 +150,23 @@ bool GetTypeJob::run(Message *msg) {
                 WAIT (arg_gettype, GetTypeJob, GetTypeJob);
             }
 
-            CallResolveJob resolve_fn_job(ctx, nullptr);
-            resolve_fn_job.fncall = fncall;
+            if (fncall->op) {
+                OpResolveJob resolve_fn_job(ctx.global, fncall);
+                resolve_fn_job.fncall = fncall;
+                
+                WAIT (resolve_fn_job, GetTypeJob, CallResolveJob,
+                    ctx.subscribers.push(heap_job);
+                );
+            } else {
+                assert(fncall->fn IS AST_UNRESOLVED_ID);
 
-            if (fncall->fn) {
-                assert (fncall->kind == FNCALL_REGULAR_FN);
-                assert (fncall->fn   IS AST_UNRESOLVED_ID);
+                CallResolveJob resolve_fn_job(ctx, fncall);
+                resolve_fn_job.fncall = fncall;
+                
+                WAIT (resolve_fn_job, GetTypeJob, CallResolveJob,
+                    ctx.subscribers.push(heap_job);
+                );
             }
-
-            WAIT (resolve_fn_job, GetTypeJob, CallResolveJob,
-                ctx.subscribers.push(heap_job);
-            );
 
             return true;
         }

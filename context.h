@@ -370,7 +370,14 @@ struct CallResolveJob : Job {
 
     bool jump_to_parent_scope_if_needed();
     RunJobResult read_scope();
+};
 
+struct OpResolveJob : Job {
+    AST_Call          *fncall;
+
+    OpResolveJob(AST_GlobalContext &global, AST_Call *call);
+    bool run(Message *msg) override;
+    std::wstring get_name() override;
 };
 
 struct JobGroup : Job {

@@ -123,6 +123,11 @@ IdResolveJob::IdResolveJob(AST_Context &ctx, AST_UnresolvedId **id)
     flags = (JobFlags)(flags | JOB_WAITING_MSG);
 }
 
+OpResolveJob::OpResolveJob(AST_GlobalContext &ctx, AST_Call *call) 
+    : Job(ctx), fncall(call)
+{
+    flags = (JobFlags)(flags | JOB_WAITING_MSG);
+}
 
 struct MatchCallJob : Job {
     AST_Context *context;
@@ -182,7 +187,6 @@ struct MatchCallJob : Job {
         return L"MatchCallJob";
     }
 };
-
 
 bool CallResolveJob::spawn_match_job(AST_Fn *fn) {
     pending_matches++;
@@ -245,28 +249,6 @@ bool key_compatible(DeclarationKey &lhs, DeclarationKey &rhs) {
 }
 
 RunJobResult CallResolveJob::read_scope() {
-    if (fncall && fncall->op) {
-        switch (fncall->args.size) {
-            case 2: {
-                TIR_Builder *builder = get_builder(
-                    fncall->op, 
-                    fncall->args[0]->type, 
-                    fncall->args[1]->type,
-                    &fncall->type
-                );
-                if (!builder) {
-                    set_error_flag();
-                    return RUN_FAIL;
-                }
-                fncall->builder = builder;
-                job_done();
-                return RUN_DONE;
-            }
-            case 1: { NOT_IMPLEMENTED(); }
-            default: UNREACHABLE;
-        }
-    }    
-
     if (!context) {
         if (prio > 0) {
             for (int i = 0; i < fncall->args.size; i++)
@@ -407,6 +389,34 @@ bool CallResolveJob::run(Message *msg) {
     }
 }
 
+bool OpResolveJob::run(Message *msg) {
+    if (!msg) {
+        switch (fncall->args.size) {
+            case 2: {
+                TIR_Builder *builder = get_builder(
+                    fncall->op, 
+                    fncall->args[0]->type, 
+                    fncall->args[1]->type,
+                    &fncall->type
+                );
+                if (!builder) {
+                    set_error_flag();
+                    return RUN_FAIL;
+                }
+                fncall->builder = builder;
+                job_done();
+                return RUN_DONE;
+            }
+            case 1: { NOT_IMPLEMENTED(); }
+            default: UNREACHABLE;
+        }
+    }
+    NOT_IMPLEMENTED();
+};
+
+
+
+
 void Job::error(Error err) {
     wcout << "Error from job " << get_name() << ":\n";
     global.error(err);
@@ -443,6 +453,12 @@ std::wstring IdResolveJob::get_name() {
 std::wstring CallResolveJob::get_name() {
     std::wostringstream stream;
     stream << "ResolveJob<" << fncall << L">";
+    return stream.str();
+}
+
+std::wstring OpResolveJob::get_name() {
+    std::wostringstream stream;
+    stream << "OpResolveJob<" << fncall << L">";
     return stream.str();
 }
 
