@@ -4,6 +4,7 @@
 #include "typer.h"
 #include "cmdargs.h"
 #include "typer.h"
+#include "resolve.h"
 
 #include "keywords.gperf.gen.h"
 

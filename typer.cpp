@@ -2,6 +2,8 @@
 #include "ast.h"
 #include "error.h"
 #include "cast.h"
+#include "resolve.h"
+
 #include <sstream>
 
 AST_PrimitiveType t_bool (PRIMITIVE_BOOL,     1, "bool");

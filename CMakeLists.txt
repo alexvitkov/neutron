@@ -25,6 +25,7 @@ set(NEUTRON_SOURCE_FILES
     cast.h      cast.cpp
 	cmdargs.h   cmdargs.cpp
 	typer.h     typer.cpp
+    resolve.h   resolve.cpp
     tir.h       tir.cpp
                 util_common.cpp
     tir_builtins.h      tir_builtins.cpp

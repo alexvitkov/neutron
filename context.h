@@ -11,7 +11,6 @@ struct Job;
 struct HeapJob;
 typedef void (*JobOnCompleteCallback)(Job *self, Job *parent);
 
-struct CastJob;
 struct AST_Context;
 struct AST_GlobalContext;
 
@@ -54,7 +53,6 @@ struct Namespace {
     bool finished_with_declarations;
 };
 
-typedef bool (*CastJobMethod) (CastJob *self);
 
 struct AST_Context : AST_Node {
     map<DeclarationKey, AST_Node*> declarations;
@@ -341,44 +339,6 @@ T* AST_Context::alloc_temp(Ts &&...args) {
     return buf;
 }
 
-struct IdResolveJob : Job {
-    AST_UnresolvedId **unresolved_id;
-    AST_Context       *context;
-
-    IdResolveJob(AST_Context &ctx, AST_UnresolvedId **id);
-
-    bool run(Message *msg) override;
-    std::wstring get_name() override;
-};
-
-struct CallResolveJob : Job {
-    AST_Call          *fncall;
-    AST_Context       *context;
-
-    int pending_matches = 0;
-    int prio = 0;
-
-    arr<AST_Value*> new_args;
-    AST_Fn         *new_fn;
-
-    CallResolveJob(AST_Context &ctx, AST_Call *call);
-    bool run(Message *msg) override;
-    std::wstring get_name() override;
-
-    bool spawn_match_job(AST_Fn *fn);
-    DeclarationKey get_decl_key();
-
-    bool jump_to_parent_scope_if_needed();
-    RunJobResult read_scope();
-};
-
-struct OpResolveJob : Job {
-    AST_Call          *fncall;
-
-    OpResolveJob(AST_GlobalContext &global, AST_Call *call);
-    bool run(Message *msg) override;
-    std::wstring get_name() override;
-};
 
 struct JobGroup : Job {
     std::wstring name;
