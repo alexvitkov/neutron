@@ -73,7 +73,7 @@ struct MatchCallJob : Job {
                 });
 
                 cast_job.input = (void*)(u64)i;
-                if (!run_child<MatchCallJob, CastJob>(cast_job))
+                if (!run_child<MatchCallJob, CastJob>(cast_job, true)) // TODO kill the other cast jobs if this fails
                     wait = true;
             }
             if (wait)
@@ -124,7 +124,7 @@ bool CallResolveJob::spawn_match_job(AST_Fn *fn) {
     });
 
     the_job.input = 0;
-    if (run_child<CallResolveJob, MatchCallJob>(the_job))
+    if (run_child<CallResolveJob, MatchCallJob>(the_job, false)) // TODO JOB
         return true;
 
     the_job.input = (void*)1;
@@ -297,30 +297,24 @@ RunJobResult OpResolveJob::try_binary_builder(TIR_Builder *builder, AST_Type *ta
 
     pending_matches ++;
     CastJob the_cast(&global, fncall->args[cast_rhs ? 1 : 0], targettype, [](Job *_self, Job *_parent) {
-
         CastJob *self = (CastJob*)_self;
         OpResolveJob *parent = (OpResolveJob*)_parent;
         Data *data = (Data*)self->input;
 
         if (self->prio > parent->prio) {
             parent->prio = self->prio;
+            parent->new_builder = data->builder;
 
-            if (data->cast_rhs) {
-                parent->new_lhs = data->other;
-                parent->new_rhs = (AST_Value*)self->result;
-            }
+            parent->new_lhs = (AST_Value*)self->result;
+            parent->new_rhs = data->other;
+            if (data->cast_rhs)
+                std::swap(parent->new_lhs, parent->new_rhs);
         }
 
         parent->pending_matches --;
         if (parent->pending_matches == 0) {
-            // TODO check if global si clsoed for new declarations
-            if (!parent->prio) {
-                parent->set_error_flag();
-                return;
-            } else {
-                parent->fncall->type = data->builder->rettype;
-                parent->fncall->builder = data->builder;
-            }
+            // TODO check if global is clsoed for new declarations
+            parent->finish();
         }
 
     });
@@ -332,8 +326,23 @@ RunJobResult OpResolveJob::try_binary_builder(TIR_Builder *builder, AST_Type *ta
     asdf->other = this->fncall->args[cast_rhs ? 0 : 1];
     asdf->builder = builder;
 
-    bool r = run_child<CastJob>(the_cast);
+    bool r = run_child<CastJob>(the_cast, false); // TODO JOB
     return RUN_AGAIN;
+}
+
+
+RunJobResult OpResolveJob::finish() {
+    if (prio) {
+        fncall->args[0] = new_lhs;
+        fncall->args[1] = new_rhs;
+        fncall->type    = new_builder->rettype;
+        fncall->builder = new_builder;
+        job_done();
+        return RUN_DONE;
+    } else {
+        set_error_flag();
+        return RUN_FAIL;
+    }
 }
 
 bool OpResolveJob::run(Message *msg) {
@@ -348,9 +357,12 @@ bool OpResolveJob::run(Message *msg) {
                 {
                     fncall->builder = builder;
                     fncall->type = builder->rettype;
+                    job_done();
+                    return RUN_DONE;
                 }
 
                 if (!builder) {
+                    pending_matches++; // WORKAROUND
                     // TODO this is slow
                     for (auto & b : binary_builders) {
                         if (b.key.op != fncall->op)
@@ -363,11 +375,11 @@ bool OpResolveJob::run(Message *msg) {
                         else
                             try_binary_builder(b.value, b.key.lhs, false);
                     }
+                    pending_matches--;
                 }
 
-                fncall->builder = builder;
-                job_done();
-                return RUN_DONE;
+                RunJobResult rr = finish();
+                return rr == RUN_DONE;
             }
             case 1: { NOT_IMPLEMENTED(); }
             default: UNREACHABLE;

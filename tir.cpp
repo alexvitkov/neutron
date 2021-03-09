@@ -532,9 +532,10 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             }
 
             TIR_Function *tir_callee;
+            assert(fncall->fn);
+            assert(fncall->fn IS AST_FN);
             AST_Fn *callee = (AST_Fn*)fncall->fn;
             tir_callee = fn.tir_context->fns[callee];
-            assert(fncall->fn IS AST_FN);
 
             if (!dst && fn.retval) {
                 dst = fn.alloc_temp(fn.retval.type);
@@ -705,14 +706,27 @@ TIR_Value compile_node_rvalue(TIR_Function& fn, AST_Node* node, TIR_Value dst) {
             if (dst) {
                 fn.emit({ .opcode = TOPC_MOV, .un = { .dst = dst, .src = val } });
                 return dst;
+            } else {
+                return val;
             }
-            return val;
+        }
+
+        case AST_ZEROEXTEND: {
+            AST_ZeroExtend *z = (AST_ZeroExtend*)node;
+            if (!dst)
+                dst = fn.alloc_temp(z->type);
+
+            TIR_Value src = compile_node_rvalue(fn, z->inner, {});
+            fn.emit({ .opcode = TOPC_ZEXT, .un = { .dst = dst, .src = src } });
+
+            return dst;
         }
 
         case AST_NUMBER: {
             // number literals should be converted to AST_SMALL_NUMBERs
             UNREACHABLE;
         }
+
 
         default:
             UNREACHABLE;
@@ -854,7 +868,7 @@ HeapJob *TIR_Context::compile_fn(AST_Fn *fn, HeapJob *fn_typecheck_job) {
     TIR_FnCompileJob _compile_job(tir_fn);
     HeapJob *compile_job = _compile_job.heapify<TIR_FnCompileJob>();
 
-    compile_job->add_dependency(fn_typecheck_job);
+    compile_job->add_dependency(fn_typecheck_job, true);
     tir_fn->tir_context->global.add_job(compile_job);
 
     tir_fn->compile_job = compile_job;

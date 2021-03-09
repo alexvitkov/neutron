@@ -7,21 +7,26 @@
 #include <sstream>
 #include <iostream>
 
-void HeapJob::add_dependency(HeapJob* dependency) {
+void HeapJob::add_dependency(HeapJob* dependency, bool fail_parent) {
     assert(!(dependency->job()->flags & JOB_DONE));
 
     if (dependency->job()->flags & JOB_ERROR) {
-        job()->set_error_flag();
-        return;
+        if (fail_parent) {
+            job()->set_error_flag();
+            return;
+        }
     }
 
     dependencies_left++;
     dependency->dependent_jobs.push(job()->id);
     if (debug_jobs) {
-        wcout << job()->get_name() << dim << " depends on " << resetstyle << dependency->job()->get_name() << "\n";
+        wcout << job()->get_name() << dim << (fail_parent ? " depends on " : " soft-depends on ") << resetstyle << dependency->job()->get_name() << "\n";
         wcout.flush();
     }
 
+    if (fail_parent) {
+        dependency->job()->flags = (JobFlags)(dependency->job()->flags | JOB_SOFT);
+    }
 }
 
 void finish_job(AST_GlobalContext &global, HeapJob *finished_job) {
@@ -96,9 +101,13 @@ bool AST_GlobalContext::run_jobs() {
             continue;
 
         if (job->job()->flags & JOB_ERROR) {
-            for (u64 dependent_job_id : job->dependent_jobs) {
-                HeapJob *j = global.jobs_by_id[dependent_job_id]; 
-                j->job()->set_error_flag();
+            if (job->job()->flags & JOB_SOFT) {
+
+            } else {
+                for (u64 dependent_job_id : job->dependent_jobs) {
+                    HeapJob *j = global.jobs_by_id[dependent_job_id]; 
+                    j->job()->set_error_flag();
+                }
             }
             continue;
         }

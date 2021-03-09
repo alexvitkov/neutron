@@ -210,7 +210,7 @@ struct HeapJob {
     u32 dependencies_left = 0;
     arr<u64> dependent_jobs;
 
-    void add_dependency(HeapJob* dependency);
+    void add_dependency(HeapJob* dependency, bool fail_parent);
 
     char _the_job[0];
 };
@@ -282,19 +282,19 @@ struct Job {
     }
 
     template <typename MyT, typename ChildT>
-    bool run_child(ChildT &child) {
+    bool run_child(ChildT &child, bool fail_parent) {
         if (child.run(nullptr)) {
-            if (debug_jobs) {
 
+            if (debug_jobs) {
                 HeapJob *hj;
                 if (global.jobs_by_id.find(child.id, &hj)) {
                     wcout << red << "Stackjob finished but was already heapified:" << resetstyle << child.get_name() << "\n";
                     wcout.flush();
                     assert(!"ASDFASASFAFSFA");
                 }
-
                 wcout << dim << "Finished stackjob " << resetstyle << child.get_name() << "\n";
             }
+
             if (child.on_complete) {
                 child.on_complete(&child, this);
             }
@@ -303,13 +303,17 @@ struct Job {
         }
 
         if (child.flags & JOB_ERROR) {
-            set_error_flag();
-            return false;
+            if (fail_parent) {
+                set_error_flag();
+                return false;
+            } else {
+                return true;
+            }
         }
 
         HeapJob *child_heap_job = child.template heapify<ChildT>();
         HeapJob *this_heap_hob  = heapify<MyT>();
-        this_heap_hob->add_dependency(child_heap_job);
+        this_heap_hob->add_dependency(child_heap_job, fail_parent);
         global.add_job(this_heap_hob);
 
         return false;
@@ -357,7 +361,7 @@ bool parse_source_file(AST_Context& global, SourceFile& sf);
     HeapJob *heap_job = job.run_stackjob<jobtype>(); \
     if (heap_job) {                              \
         HeapJob *this_heap_job = heapify<mytype>();  \
-        this_heap_job->add_dependency(heap_job); \
+        this_heap_job->add_dependency(heap_job, true); \
         __VA_ARGS__                              \
         return false;                            \
     } else if (job.flags & JOB_ERROR) {          \

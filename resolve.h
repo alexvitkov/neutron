@@ -50,6 +50,7 @@ struct OpResolveJob : Job {
     std::wstring get_name() override;
 
     RunJobResult try_binary_builder(struct TIR_Builder *builder, AST_Type *target_type, bool cast_rhs);
+    RunJobResult finish();
 };
 
 

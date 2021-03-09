@@ -62,7 +62,7 @@ int main(int argc, const char** argv) {
         global.add_job(j);
 
         HeapJob *j2 = tir_context.compile_fn(decl.fn, j);
-        all_tir_compiled_job->add_dependency(j2);
+        all_tir_compiled_job->add_dependency(j2, true);
     }
 
     for (auto &decl : global.declarations) {
@@ -78,8 +78,8 @@ int main(int argc, const char** argv) {
     // Execute the main function
     if (exec_main) {
         MainExecJob _main_exec_job (&tir_context);
-    HeapJob *main_exec_job = _main_exec_job.heapify<MainExecJob>();
-        main_exec_job->add_dependency(all_tir_compiled_job);
+        HeapJob *main_exec_job = _main_exec_job.heapify<MainExecJob>();
+        main_exec_job->add_dependency(all_tir_compiled_job, true);
         global.add_job(main_exec_job);
 
         for (auto& kvp : tir_context.fns) {

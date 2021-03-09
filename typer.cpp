@@ -238,7 +238,7 @@ bool GetTypeJob::run(Message *msg) {
         case AST_UNRESOLVED_ID: {
             AST_UnresolvedId *unres = (AST_UnresolvedId*)node;
             // TODO Duplicate
-            heapify<GetTypeJob>()->add_dependency(unres->job);
+            heapify<GetTypeJob>()->add_dependency(unres->job, true);
             return false;
         }
 
@@ -466,7 +466,7 @@ bool TypeCheckJob::run(Message *msg) {
         case AST_UNRESOLVED_ID: {
             AST_UnresolvedId *id = (AST_UnresolvedId*)node;
             // TODO Duplicate
-            heapify<TypeCheckJob>()->add_dependency(id->job);
+            heapify<TypeCheckJob>()->add_dependency(id->job, true);
             return false;
         }
 
